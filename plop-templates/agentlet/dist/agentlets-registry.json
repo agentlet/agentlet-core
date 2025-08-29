@@ -1,0 +1,5 @@
+[{
+    "name": "{{name}}",
+    "url": "http://localhost:8080/module-bundle.js",
+    "module": "{{camelCase name}}AgentletModule"
+}]
