@@ -1,0 +1,93 @@
+{
+  "manifest_version": 3,
+  "name": "Agentlet Core",
+  "version": "1.0.0",
+  "description": "AI-powered bookmarklet system with extensible plugin architecture for enhanced web productivity",
+  "author": "Agentlet Core Team",
+  "homepage_url": "https://github.com/agentlet/agentlet-core",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "tabs",
+    "contextMenus"
+  ],
+  
+  "optional_permissions": [
+    "history",
+    "bookmarks",
+    "downloads"
+  ],
+  
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": false
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Agentlet Core",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "agentlet-core.js",
+        "modules/*.js",
+        "assets/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  
+  "options_page": "options.html",
+  
+  "commands": {
+    "toggle-agentlet": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Toggle Agentlet Core interface"
+    },
+    "activate-ai-assistant": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+I",
+        "mac": "Command+Shift+I"
+      },
+      "description": "Activate AI assistant"
+    }
+  },
+  
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-ancestors 'none';"
+  }
+}

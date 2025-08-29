@@ -1,0 +1,84 @@
+{
+  "name": "agentlet-core",
+  "version": "1.0.0",
+  "description": "Core framework for AI-powered bookmarklet system with extensible plugin architecture",
+  "main": "src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "require": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "node tools/dev-server.js",
+    "demo": "npm run build && npm run dev",
+    "examples": "npm run demo",
+    "start": "npm run demo",
+    "build": "node tools/build.js",
+    "build:core": "node tools/build.js --target=core",
+    "build:bookmarklet": "node tools/build.js --target=bookmarklet",
+    "build:extension": "node tools/build.js --target=extension",
+    "package:extension": "node tools/build.js --target=extension --package",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:scaffold": "node tools/test-scaffold.js",
+    "test:examples": "playwright test --config=tests/examples/playwright.config.js",
+    "test:examples:visible": "playwright test --config=tests/examples/playwright.config.js --headed",
+    "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",
+    "lint": "eslint src/",
+    "create-module": "node tools/create-module.js",
+    "scaffold:agentlet": "plop agentlet",
+    "scaffold:agentlet:defaults": "plop agentlet --defaults",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "bookmarklet",
+    "browser extension",
+    "agents",
+    "ai",
+    "automation",
+    "plugin-system"
+  ],
+  "author": "Agentlet Core Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentlet/agentlet-core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agentlet/agentlet-core/issues"
+  },
+  "homepage": "https://github.com/agentlet/agentlet-core#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "html2canvas": "^1.4.1",
+    "jquery": "^3.7.1",
+    "pdfjs-dist": "^5.4.54",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/plugin-proposal-class-properties": "^7.18.6",
+    "@babel/preset-env": "^7.28.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.54.1",
+    "adm-zip": "^0.5.10",
+    "babel-jest": "^30.0.5",
+    "esbuild": "^0.25.8",
+    "eslint": "^9.32.0",
+    "husky": "^9.1.7",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "nodemon": "^3.0.2",
+    "plop": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

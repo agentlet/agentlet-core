@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-column layout test - Agentlet core example</title>
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <style>
+        /* Two-column layout specific styles */
+        .two-column-container {
+            display: flex;
+            gap: 20px;
+            max-width: 100%;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .left-column {
+            flex: 1;
+            min-width: 0; /* Prevent flex item from overflowing */
+            padding-right: 10px;
+            /* Allow natural scrolling */
+        }
+        
+        .right-column {
+            flex: 1;
+            min-width: 0; /* Prevent flex item from overflowing */
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            /* Fixed positioning for sticky behavior */
+            position: sticky;
+            top: 20px;
+            height: calc(100vh - 40px); /* Full height minus padding */
+            overflow-y: auto; /* Allow scrolling within right column if needed */
+        }
+        
+        .console-section {
+            background: #1a1a1a;
+            color: #00ff00;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            padding: 15px;
+            border-radius: 5px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 20px;
+            /* Smooth scrolling */
+            scroll-behavior: smooth;
+        }
+        
+        .status-section {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+        
+        .status-section.success {
+            border-left-color: #28a745;
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-section.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-section.warning {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .two-column-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .left-column {
+                padding: 10px;
+            }
+            
+            .right-column {
+                position: relative; /* Disable sticky on mobile */
+                height: auto;
+                padding: 10px;
+            }
+            
+            .console-section {
+                height: 200px;
+            }
+        }
+        
+        /* Override container styles for full width */
+        .container {
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .controls button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .controls button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        
+        .controls button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .input-group {
+            margin: 10px 0;
+        }
+        
+        .input-group label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        
+        .input-group input, .input-group select {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Controls and Content -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../../">Examples</a> → <a href="../">01-basics</a> → new-layout
+                </div>
+
+                <h1>🎛️ Two-column layout test</h1>
+                
+                <p>This is a test of the new two-column layout where console output and status messages appear in the right column for easier tracking.</p>
+
+                <div class="example-section">
+                    <h3>What this layout provides:</h3>
+                    <ul>
+                        <li>50/50 split between controls and console output</li>
+                        <li>Real-time console tracking on the right</li>
+                        <li>Status messages integrated in the right column</li>
+                        <li>Responsive design for mobile devices</li>
+                        <li>Full-width utilization for better workspace</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Setup</h4>
+                    <div class="input-group">
+                        <label for="apiKey">OpenAI API Key:</label>
+                        <input type="password" id="apiKey" placeholder="sk-..." style="width: 250px;">
+                        <button onclick="setApiKey()">💾 Set API Key</button>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <h4>Test Controls</h4>
+                    <button onclick="initAgentlet()">🚀 Initialize Agentlet</button>
+                    <button onclick="testBasicFunction()">🧪 Test Basic Function</button>
+                    <button onclick="testWithDelay()">⏰ Test with Delay</button>
+                    <button onclick="simulateError()">❌ Simulate Error</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>📄 Sample Content for Testing</h3>
+                    <div id="sampleContent" style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                        <h4>📊 Sample Data</h4>
+                        <p><strong>Test Form:</strong></p>
+                        <form id="testForm">
+                            <input type="text" placeholder="Sample input field" style="margin: 5px 0; padding: 5px; width: 200px;">
+                            <select style="margin: 5px; padding: 5px;">
+                                <option value="option1">Option 1</option>
+                                <option value="option2">Option 2</option>
+                            </select>
+                            <button type="button" onclick="extractForm()">Extract Form Data</button>
+                        </form>
+                        
+                        <p><strong>Sample Table:</strong></p>
+                        <table border="1" style="border-collapse: collapse; margin: 10px 0;">
+                            <thead>
+                                <tr><th>Name</th><th>Value</th><th>Type</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Item 1</td><td>100</td><td>Product</td></tr>
+                                <tr><td>Item 2</td><td>250</td><td>Service</td></tr>
+                                <tr><td>Item 3</td><td>75</td><td>Product</td></tr>
+                            </tbody>
+                        </table>
+                        <button onclick="extractTable()">Extract Table Data</button>
+                    </div>
+                </div>
+
+                <div class="example-section">
+                    <h3>📜 Code Examples</h3>
+                    <div class="code-block">
+                        <h4>Basic Agentlet Initialization</h4>
+                        <pre><code>// Initialize Agentlet Core
+const agentlet = new AgentletCore({
+    debugMode: true,
+    startMinimized: false
+});
+
+await agentlet.init();
+console.log('Agentlet initialized!');</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">📟 Console Output</h3>
+                    <button onclick="clearConsole()" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+                
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Ready to test the new layout. Click "Initialize Agentlet" to start.
+                </div>
+                
+                <h3>📈 Statistics</h3>
+                <div id="stats" style="font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                    <div>Messages logged: <span id="messageCount">0</span></div>
+                    <div>Errors: <span id="errorCount">0</span></div>
+                    <div>Warnings: <span id="warningCount">0</span></div>
+                    <div>Last action: <span id="lastAction">None</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let agentletInstance = null;
+        let messageCount = 0;
+        let errorCount = 0;
+        let warningCount = 0;
+        
+        // Configure Agentlet before loading
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: false,
+            pdfWorkerUrl: '/dist/pdf.worker.min.js'
+        };
+
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
+            
+            console.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            console.scrollTop = console.scrollHeight;
+            
+            messageCount++;
+            if (type === 'error') errorCount++;
+            if (type === 'warning') warningCount++;
+            
+            updateStats();
+        }
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status-section ${type}`;
+            
+            document.getElementById('lastAction').textContent = message;
+        }
+        
+        function updateStats() {
+            document.getElementById('messageCount').textContent = messageCount;
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('warningCount').textContent = warningCount;
+        }
+
+        function setApiKey() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) {
+                log('Please enter an API key', 'error');
+                updateStatus('Please enter an API key', 'error');
+                return;
+            }
+            
+            log(`API key set (${apiKey.substring(0, 8)}...)`, 'success');
+            updateStatus('API key configured successfully', 'success');
+            
+            // Clear the input for security
+            document.getElementById('apiKey').value = '';
+        }
+
+        async function initAgentlet() {
+            try {
+                log('Starting Agentlet Core initialization...', 'info');
+                updateStatus('Loading Agentlet Core...', 'info');
+
+                // Simulate loading
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                log('Agentlet Core loaded successfully', 'success');
+                updateStatus('Agentlet Core initialized!', 'success');
+                
+                // Simulate some initialization steps
+                log('Setting up PDF.js worker...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                log('PDF.js worker configured', 'success');
+                
+                log('Initializing AI manager...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                log('AI manager ready', 'success');
+                
+                log('✅ Agentlet Core fully initialized!', 'success');
+                updateStatus('Ready for testing!', 'success');
+                
+            } catch (error) {
+                log(`Initialization failed: ${error.message}`, 'error');
+                updateStatus('Initialization failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testBasicFunction() {
+            log('Running basic function test...', 'info');
+            updateStatus('Testing basic functionality...', 'info');
+            
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            log('Basic function test completed successfully', 'success');
+            updateStatus('Basic test passed!', 'success');
+        }
+
+        async function testWithDelay() {
+            log('Starting delayed test...', 'info');
+            updateStatus('Running test with delay...', 'info');
+            
+            for (let i = 1; i <= 5; i++) {
+                await new Promise(resolve => setTimeout(resolve, 600));
+                log(`Step ${i}/5 completed`, 'info');
+            }
+            
+            log('Delayed test completed', 'success');
+            updateStatus('Delayed test finished!', 'success');
+        }
+
+        function simulateError() {
+            log('Simulating error condition...', 'warning');
+            updateStatus('Simulating error...', 'warning');
+            
+            setTimeout(() => {
+                log('Error: Something went wrong in the simulation', 'error');
+                updateStatus('Error occurred during simulation', 'error');
+            }, 1000);
+        }
+
+        function extractForm() {
+            log('Extracting form data...', 'info');
+            updateStatus('Extracting form data...', 'info');
+            
+            const form = document.getElementById('testForm');
+            const inputs = form.querySelectorAll('input, select');
+            
+            inputs.forEach((input, index) => {
+                log(`Field ${index + 1}: ${input.tagName.toLowerCase()} - value: "${input.value || 'empty'}"`, 'info');
+            });
+            
+            log('Form extraction completed', 'success');
+            updateStatus('Form data extracted successfully', 'success');
+        }
+
+        function extractTable() {
+            log('Extracting table data...', 'info');
+            updateStatus('Extracting table data...', 'info');
+            
+            const table = document.querySelector('table');
+            const rows = table.querySelectorAll('tbody tr');
+            
+            rows.forEach((row, index) => {
+                const cells = row.querySelectorAll('td');
+                const rowData = Array.from(cells).map(cell => cell.textContent).join(' | ');
+                log(`Row ${index + 1}: ${rowData}`, 'info');
+            });
+            
+            log('Table extraction completed', 'success');
+            updateStatus('Table data extracted successfully', 'success');
+        }
+
+        function clearConsole() {
+            document.getElementById('console').textContent = '';
+            messageCount = 0;
+            errorCount = 0;
+            warningCount = 0;
+            updateStats();
+            updateStatus('Console cleared', 'info');
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Two-column layout test page loaded', 'success');
+            updateStatus('Ready to test new layout', 'info');
+        });
+    </script>
+</body>
+</html>

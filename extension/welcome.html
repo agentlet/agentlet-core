@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Agentlet Core</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .hero {
+            text-align: center;
+            color: white;
+            padding: 60px 0;
+        }
+        
+        .logo {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .hero p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 15px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        .features {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin: 40px 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        
+        .features h2 {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #333;
+            font-size: 32px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+        
+        .feature {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .feature h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .feature p {
+            color: #666;
+        }
+        
+        .getting-started {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 40px;
+            margin: 40px 0;
+        }
+        
+        .getting-started h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .step {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .settings-link {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .btn-secondary {
+            display: inline-block;
+            background: #6c757d;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-1px);
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 40px 0;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <div class="logo">🤖</div>
+            <h1>Welcome to Agentlet Core</h1>
+            <p>Your AI-powered web automation companion is now installed!</p>
+            <a href="#" id="get-started-btn" class="cta-button">Get Started</a>
+        </div>
+        
+        <div class="features">
+            <h2>Features</h2>
+            <div class="feature-grid">
+                <div class="feature">
+                    <div class="feature-icon">🧠</div>
+                    <h3>AI-Powered Assistance</h3>
+                    <p>Intelligent automation that understands context and adapts to different websites</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔌</div>
+                    <h3>Extensible Modules</h3>
+                    <p>Plugin architecture allows custom modules for specific websites and use cases</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Fast & Lightweight</h3>
+                    <p>Minimal performance impact with efficient resource usage and smart loading</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Privacy-Focused</h3>
+                    <p>Local processing with optional cloud features and transparent data handling</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Smart Selection</h3>
+                    <p>Advanced element selection with visual feedback and precise targeting</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📊</div>
+                    <h3>Analytics & Insights</h3>
+                    <p>Detailed page analysis and actionable insights for better web interaction</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="getting-started">
+            <h2>Getting Started</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Navigate to Any Website</h3>
+                    <p>Open any webpage where you want to use Agentlet Core</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Click the Extension Icon</h3>
+                    <p>Click the 🤖 icon in your browser toolbar or use Ctrl+Shift+A</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Activate on Page</h3>
+                    <p>Click "Activate on Page" to inject Agentlet Core into the current website</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Start Automating</h3>
+                    <p>Use the AI assistant and available modules to automate your tasks</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-link">
+            <a href="#" id="settings-btn" class="btn-secondary">Configure Settings</a>
+        </div>
+        
+        <div class="footer">
+            <p>Agentlet Core v1.0.0 - Built for productivity and powered by AI</p>
+            <p>For support and documentation, visit our website</p>
+        </div>
+    </div>
+    
+    <script src="welcome.js"></script>
+</body>
+</html>

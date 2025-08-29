@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Integration Demo - Agentlet Core Example</title>
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <!-- html2canvas for screenshot functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Note: PDF.js is bundled with Agentlet Core, no need to load it separately -->
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../../">Examples</a> → <a href="../">05-ai</a> → demo
+                </div>
+
+                <h1>🤖 AI Integration Demo - Agentlet Core</h1>
+                
+                <p>This example demonstrates the powerful AI integration capabilities in Agentlet Core with OpenAI API support.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>OpenAI API key configuration via environment variables</li>
+                        <li>Text-based AI prompts and responses</li>
+                        <li>Multimodal AI with images and screenshots</li>
+                        <li>PDF document analysis with automatic conversion</li>
+                        <li>Full page screenshot analysis capabilities</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>🚀 Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
+                    <button onclick="openAIConfigDialog()" id="configBtn">🔑 AI Configuration</button>
+                    <button onclick="checkAIStatus()" id="statusBtn">Check AI Status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>💬 AI Text Prompts</h4>
+                    <button id="textPromptBtn" onclick="testTextPrompt()">💬 Test Text Prompt</button>
+                    <button id="customPromptBtn" onclick="testCustomPrompt()">✏️ Custom Prompt</button>
+                </div>
+
+                <div class="controls">
+                    <h4>🖼️ Multimodal AI (Images)</h4>
+                    <button id="imagePromptBtn" onclick="testImagePrompt()">🖼️ Analyze Sample Content</button>
+                    <button id="fullPageBtn" onclick="testFullPageAnalysis()">📄 Analyze Full Page</button>
+                    <button id="elementBtn" onclick="testElementCapture()">🎯 Analyze Chart Element</button>
+                </div>
+
+                <div class="controls">
+                    <h4>📄 PDF Analysis</h4>
+                    <div class="input-group">
+                        <label for="pdfFile">Upload PDF:</label>
+                        <input type="file" id="pdfFile" accept=".pdf" style="margin-left: 10px;">
+                    </div>
+                    <button id="pdfPromptBtn" onclick="testPDFPrompt()">📄 Analyze PDF Document</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>📄 Sample Content for AI Analysis</h3>
+                    <div id="sampleContent" style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                        <h5>📊 Quarterly Sales Report</h5>
+                        <p><strong>Q1 2024 Performance:</strong></p>
+                        <ul>
+                            <li>Revenue: $1.2M (+15% YoY)</li>
+                            <li>New Customers: 450 (+22% YoY)</li>
+                            <li>Customer Retention: 89%</li>
+                            <li>Top Product: Premium Software Package (35% of sales)</li>
+                        </ul>
+                        <p><strong>Key Insights:</strong> Strong growth in enterprise segment, mobile app downloads increased 40%.</p>
+                        
+                        <!-- Simple chart representation -->
+                        <div style="margin-top: 15px;">
+                            <canvas id="sampleChart" width="300" height="150" style="border: 1px solid #ddd;"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-section">
+                    <h3>📜 AI Integration API Reference:</h3>
+                    <div class="code-block">
+                        <h4>Basic Configuration</h4>
+                        <pre><code class="language-javascript">// Set API key via environment variables
+window.agentlet.env.OPENAI_API_KEY = 'sk-...';
+window.agentlet.env.OPENAI_MODEL = 'gpt-4o-mini';
+
+// Refresh AI manager to pick up new settings
+window.agentlet.ai.refresh();
+
+// Check if AI is available
+if (window.agentlet.ai.isAvailable()) {
+    console.log('AI is ready!');
+}</code></pre>
+                        
+                        <h4>Text Prompts</h4>
+                        <pre><code class="language-javascript">// Simple text prompt
+const response = await window.agentlet.ai.sendPrompt(
+    "Analyze this quarterly report and provide 3 key insights."
+);
+
+// Custom configuration
+const response = await window.agentlet.ai.sendPrompt(
+    "Summarize this in bullet points:",
+    [], // No images
+    {
+        model: 'gpt-4o',
+        temperature: 0.3,
+        maxTokens: 150
+    }
+);</code></pre>
+
+                        <h4>Multimodal (Images)</h4>
+                        <pre><code class="language-javascript">// Capture screenshot and send to AI
+const screenshot = await window.agentlet.utils.ScreenCapture.captureAsDataURL(
+    document.getElementById('sampleContent')
+);
+
+const analysis = await window.agentlet.ai.sendPrompt(
+    "What do you see in this image? Analyze the data.",
+    [screenshot] // Array of base64 images
+);</code></pre>
+
+                        <h4>PDF Analysis</h4>
+                        <pre><code class="language-javascript">// Analyze PDF document (auto-converts to images)
+const fileInput = document.getElementById('pdfFile');
+const analysis = await window.agentlet.ai.sendPromptWithPDF(
+    "Analyze this PDF document. Summarize key points.",
+    fileInput.files[0], // PDF File object
+    {
+        pdfOptions: {
+            scale: 1.5,
+            maxPages: 10,
+            format: 'image/png'
+        },
+        showInConsole: true
+    }
+);
+
+// Or convert PDF to images first
+const images = await window.agentlet.ai.convertPDFToImages(file);</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+                
+                <!-- Simple thumbnails section just below console -->
+                <div id="thumbnailsSection" style="margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 4px; min-height: 20px; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.1em;">🖼️</span>
+                    <div id="thumbnails" style="display: flex; flex-wrap: wrap; gap: 5px; flex: 1;"></div>
+                </div>
+                
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize Agentlet Core" to start the AI demo.
+                </div>
+                
+                <h3>🤖 AI Activity</h3>
+                <div class="stats-section" id="aiStats">
+                    <div>AI available: <span id="aiAvailable">No</span></div>
+                    <div>Prompts sent: <span id="promptsSent">0</span></div>
+                    <div>Images analyzed: <span id="imagesAnalyzed">0</span></div>
+                    <div>PDFs processed: <span id="pdfsProcessed">0</span></div>
+                    <div>Current model: <span id="currentModel">None</span></div>
+                    <div>Last prompt type: <span id="lastPromptType">None</span></div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../../shared/console-utils.js"></script>
+
+    <script>
+        let agentletInstance = null;
+        let promptsSent = 0;
+        let imagesAnalyzed = 0;
+        let pdfsProcessed = 0;
+        let lastPromptType = 'None';
+        let currentModel = 'None';
+        
+        // Configure Agentlet before loading
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: true,  // Start with panel minimized
+            pdfWorkerUrl: '/dist/pdf.worker.min.js'  // Use local PDF worker file
+        };
+
+        // Update AI stats display
+        function updateAIStats() {
+            const elements = {
+                aiAvailable: document.getElementById('aiAvailable'),
+                promptsSent: document.getElementById('promptsSent'),
+                imagesAnalyzed: document.getElementById('imagesAnalyzed'),
+                pdfsProcessed: document.getElementById('pdfsProcessed'),
+                currentModel: document.getElementById('currentModel'),
+                lastPromptType: document.getElementById('lastPromptType')
+            };
+
+            if (elements.aiAvailable) {
+                const available = !!(window.agentlet && window.agentlet.ai && window.agentlet.ai.isAvailable());
+                elements.aiAvailable.textContent = available ? 'Yes' : 'No';
+            }
+            
+            if (elements.promptsSent) {
+                elements.promptsSent.textContent = promptsSent;
+            }
+            
+            if (elements.imagesAnalyzed) {
+                elements.imagesAnalyzed.textContent = imagesAnalyzed;
+            }
+            
+            if (elements.pdfsProcessed) {
+                elements.pdfsProcessed.textContent = pdfsProcessed;
+            }
+            
+            if (elements.currentModel) {
+                elements.currentModel.textContent = currentModel;
+            }
+            
+            if (elements.lastPromptType) {
+                elements.lastPromptType.textContent = lastPromptType;
+            }
+        }
+
+        function trackAIActivity(type, imageCount = 0, pdfCount = 0) {
+            promptsSent++;
+            imagesAnalyzed += imageCount;
+            pdfsProcessed += pdfCount;
+            lastPromptType = type;
+            updateAIStats();
+            log(`🤖 ${type} AI request completed`, 'success');
+        }
+        
+        // Debug PDF worker configuration
+        console.log('🔍 DEBUG: Initial agentletConfig.pdfWorkerUrl:', window.agentletConfig.pdfWorkerUrl);
+        
+        // Monitor PDF.js GlobalWorkerOptions changes
+        let pdfWorkerCheckInterval;
+        function startPDFWorkerMonitoring() {
+            console.log('🔍 DEBUG: Starting PDF worker monitoring...');
+            pdfWorkerCheckInterval = setInterval(() => {
+                if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+                    console.log('🔍 DEBUG: PDF.js GlobalWorkerOptions.workerSrc:', window.pdfjsLib.GlobalWorkerOptions.workerSrc);
+                    console.log('🔍 DEBUG: Current page location:', window.location.href);
+                    console.log('🔍 DEBUG: Resolved worker URL would be:', new URL(window.pdfjsLib.GlobalWorkerOptions.workerSrc || './pdf.worker.min.js', window.location.href).href);
+                    clearInterval(pdfWorkerCheckInterval);
+                }
+            }, 100);
+            
+            // Stop monitoring after 10 seconds
+            setTimeout(() => {
+                if (pdfWorkerCheckInterval) {
+                    clearInterval(pdfWorkerCheckInterval);
+                    console.log('🔍 DEBUG: PDF worker monitoring stopped');
+                }
+            }, 10000);
+        }
+        
+        startPDFWorkerMonitoring();
+
+        async function openAIConfigDialog() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('configBtn', true);
+                
+                // Create custom dialog content for AI configuration
+                const dialogContent = `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #333;">🤖 OpenAI Configuration</h3>
+                        <p>Configure your OpenAI API settings for AI features.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="dialogApiKey" style="display: block; margin-bottom: 5px; font-weight: bold;">API Key:</label>
+                        <input type="password" id="dialogApiKey" placeholder="sk-..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <small style="color: #666; font-size: 0.9em;">Your OpenAI API key (starts with "sk-")</small>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="dialogModel" style="display: block; margin-bottom: 5px; font-weight: bold;">Model:</label>
+                        <select id="dialogModel" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="gpt-4">gpt-4</option>
+                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                        </select>
+                        <small style="color: #666; font-size: 0.9em;">Choose the OpenAI model to use</small>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                        <button id="saveConfigBtn" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">💾 Save Configuration</button>
+                        <button id="cancelConfigBtn" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
+                `;
+
+                // Create modal dialog
+                const dialog = document.createElement('div');
+                dialog.id = 'aiConfigModal';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 10000;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                `;
+
+                const dialogBox = document.createElement('div');
+                dialogBox.style.cssText = `
+                    background: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    max-width: 500px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                `;
+                
+                dialogBox.innerHTML = dialogContent;
+                dialog.appendChild(dialogBox);
+                document.body.appendChild(dialog);
+
+                // Set current values
+                const currentApiKey = window.agentlet.env.OPENAI_API_KEY || '';
+                const currentModel = window.agentlet.env.OPENAI_MODEL || 'gpt-4o-mini';
+                
+                if (currentApiKey) {
+                    document.getElementById('dialogApiKey').placeholder = `Current: ${currentApiKey.substring(0, 8)}...`;
+                }
+                document.getElementById('dialogModel').value = currentModel;
+
+                // Handle save button
+                document.getElementById('saveConfigBtn').onclick = async () => {
+                    const apiKey = document.getElementById('dialogApiKey').value.trim();
+                    const model = document.getElementById('dialogModel').value;
+                    
+                    try {
+                        let updated = false;
+                        
+                        // Update API key if provided
+                        if (apiKey) {
+                            window.agentlet.env.OPENAI_API_KEY = apiKey;
+                            log(`🔑 OpenAI API key configured (${apiKey.substring(0, 8)}...)`, 'success');
+                            updated = true;
+                        }
+                        
+                        // Update model
+                        window.agentlet.env.OPENAI_MODEL = model;
+                        log(`🎛️ OpenAI model set to: ${model}`, 'success');
+                        updated = true;
+                        
+                        if (updated) {
+                            window.agentlet.ai.refresh();
+                            currentModel = model;
+                            updateAIStats();
+                            updateStatus('AI configuration saved successfully', 'success');
+                        }
+                        
+                    } catch (error) {
+                        log(`❌ Error saving configuration: ${error.message}`, 'error');
+                        updateStatus('Error saving configuration: ' + error.message, 'error');
+                    }
+                    
+                    // Close dialog
+                    document.body.removeChild(dialog);
+                };
+
+                // Handle cancel button
+                document.getElementById('cancelConfigBtn').onclick = () => {
+                    document.body.removeChild(dialog);
+                };
+
+                // Close on background click
+                dialog.onclick = (e) => {
+                    if (e.target === dialog) {
+                        document.body.removeChild(dialog);
+                    }
+                };
+
+                // Close on Escape key
+                document.addEventListener('keydown', function escapeHandler(e) {
+                    if (e.key === 'Escape' && document.getElementById('aiConfigModal')) {
+                        document.body.removeChild(dialog);
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                });
+
+                setButtonLoading('configBtn', false);
+                
+            } catch (error) {
+                log(`❌ Error opening config dialog: ${error.message}`, 'error');
+                updateStatus('Error opening configuration dialog: ' + error.message, 'error');
+                setButtonLoading('configBtn', false);
+            }
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Starting Agentlet Core initialization...', 'info');
+
+                // Check if already loaded
+                if (window.agentlet) {
+                    log('⚠️ Agentlet Core already loaded', 'warning');
+                    updateStatus('Agentlet Core already initialized!', 'success');
+                    setButtonLoading('initBtn', false);
+                    updateAIStats();
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Dynamically load Agentlet Core
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Try to access AgentletCore constructor
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('🚀 Creating AgentletCore instance...');
+                            agentletInstance = new AgentletConstructor(window.agentletConfig);
+                            
+                            log('⚙️ Starting initialization...');
+                            agentletInstance.init().then(() => {
+                                log('✅ Agentlet Core initialized successfully', 'success');
+                                log(`📊 Available APIs: ${Object.keys(window.agentlet || {}).join(', ')}`, 'info');
+                                
+                                // Check AI availability immediately
+                                if (window.agentlet && window.agentlet.ai) {
+                                    log('🤖 AI manager initialized and available', 'success');
+                                    updateAIStats();
+                                }
+                                
+                                updateStatus('Agentlet Core loaded! Set your OpenAI API key to use AI features.', 'success');
+                                
+                                // Draw sample chart
+                                drawSampleChart();
+                                setButtonLoading('initBtn', false);
+                                
+                            }).catch(error => {
+                                log(`❌ Initialization failed: ${error.message}`, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                            
+                        } catch (error) {
+                            log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore constructor not available', 'error');
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core. Make sure you ran "npm run build" first.', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+                updateStatus('Initialization error: ' + error.message, 'error');
+            }
+        }
+
+        // Simple function to display very small thumbnails below console
+        function displayImageThumbnail(base64Image, description) {
+            try {
+                const thumbnailsContainer = document.getElementById('thumbnails');
+                if (!thumbnailsContainer) return;
+
+                const img = document.createElement('img');
+                img.src = base64Image;
+                img.title = description || 'Click to view full size';
+                img.style.cssText = `
+                    width: 40px;
+                    height: 30px;
+                    object-fit: cover;
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    transition: transform 0.2s;
+                `;
+                
+                img.onclick = () => showImageModal(base64Image);
+                img.onmouseover = () => {
+                    img.style.transform = 'scale(1.3)';
+                    img.style.border = '2px solid #007bff';
+                };
+                img.onmouseout = () => {
+                    img.style.transform = 'scale(1)';
+                    img.style.border = '1px solid #ccc';
+                };
+
+                thumbnailsContainer.appendChild(img);
+
+            } catch (error) {
+                console.error('Error displaying image thumbnail:', error);
+            }
+        }
+
+
+        // Helper function to show image modal
+        function showImageModal(base64Image) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                cursor: pointer;
+            `;
+            
+            const fullImg = document.createElement('img');
+            fullImg.src = base64Image;
+            fullImg.style.cssText = `
+                max-width: 90%;
+                max-height: 90%;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            `;
+            
+            modal.appendChild(fullImg);
+            document.body.appendChild(modal);
+            
+            modal.onclick = () => {
+                document.body.removeChild(modal);
+            };
+        }
+
+        async function checkAIStatus() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            setButtonLoading('statusBtn', true);
+            log('🔍 Checking AI status and capabilities...', 'info');
+            
+            try {
+                const isAvailable = window.agentlet.ai.isAvailable();
+                const status = window.agentlet.ai.getStatus();
+                
+                log(`🤖 AI Available: ${isAvailable ? 'Yes' : 'No'}`, isAvailable ? 'success' : 'warning');
+                log(`🔌 Current Provider: ${status.currentProvider || 'None'}`, 'info');
+                log(`📋 Available Providers: ${status.availableProviders.join(', ') || 'None'}`, 'info');
+                log(`📄 PDF Support: ${status.pdfSupport?.available ? 'Yes' : 'No'}`, status.pdfSupport?.available ? 'success' : 'warning');
+                
+                if (status.pdfSupport?.available) {
+                    log(`📄 PDF Max Pages: ${status.pdfSupport.capabilities.maxRecommendedPages}`, 'info');
+                    log(`📄 PDF Max Size: ${status.pdfSupport.capabilities.maxRecommendedFileSize}`, 'info');
+                    log(`📄 PDF Worker URL: ${window.pdfjsLib?.GlobalWorkerOptions?.workerSrc || 'Not configured'}`, 'info');
+                }
+                
+                // Log environment variables (masked)
+                const apiKey = window.agentlet.env.OPENAI_API_KEY;
+                const model = window.agentlet.env.OPENAI_MODEL;
+                currentModel = model || 'gpt-4o-mini';
+                log(`🔑 API Key: ${apiKey ? (apiKey.substring(0, 8) + '...') : 'Not set'}`, 'info');
+                log(`🎛️ Model: ${currentModel}`, 'info');
+                
+                // Validate API connectivity if available
+                if (isAvailable) {
+                    log('🧪 Validating API connectivity...', 'info');
+                    updateStatus('Testing API connectivity...', 'info');
+                    
+                    try {
+                        const validation = await window.agentlet.ai.validateAPI();
+                        
+                        if (validation.success) {
+                            log('✅ API validation successful!', 'success');
+                            log(`⏱️ Response time: ${validation.details.responseTime}ms`, 'info');
+                            log(`🔄 Usage: ${JSON.stringify(validation.details.usage)}`, 'info');
+                            log(`💬 Test response: "${validation.details.testResponse}"`, 'info');
+                            updateStatus('AI is working correctly! API validated successfully.', 'success');
+                        } else {
+                            log('❌ API validation failed', 'error');
+                            log(`💥 Error: ${validation.error}`, 'error');
+                            
+                            // Provide helpful error messages based on error type
+                            const errorType = validation.details?.errorType;
+                            if (errorType === 'INVALID_API_KEY') {
+                                log('💡 Tip: Check if your OpenAI API key is correct', 'warning');
+                                updateStatus('Invalid API key. Please check your OpenAI API key.', 'error');
+                            } else if (errorType === 'QUOTA_EXCEEDED') {
+                                log('💡 Tip: You may have exceeded your OpenAI usage quota', 'warning');
+                                updateStatus('Usage quota exceeded. Check your OpenAI account billing.', 'error');
+                            } else if (errorType === 'RATE_LIMITED') {
+                                log('💡 Tip: Too many requests. Try again in a moment.', 'warning');
+                                updateStatus('Rate limited. Please wait and try again.', 'error');
+                            } else if (errorType === 'MODEL_NOT_FOUND') {
+                                log(`💡 Tip: Model "${currentModel}" may not be available for your account`, 'warning');
+                                updateStatus(`Model "${currentModel}" not accessible. Try a different model.`, 'error');
+                            } else {
+                                updateStatus('API validation failed: ' + validation.error, 'error');
+                            }
+                        }
+                    } catch (validationError) {
+                        log(`❌ API validation error: ${validationError.message}`, 'error');
+                        updateStatus('API validation failed: ' + validationError.message, 'error');
+                    }
+                } else {
+                    log('⚠️ AI not available - please set OPENAI_API_KEY', 'warning');
+                    updateStatus('Set your OpenAI API key to enable AI features', 'warning');
+                }
+                
+                updateAIStats();
+                setTimeout(() => setButtonLoading('statusBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ Error checking AI status: ${error.message}`, 'error');
+                updateStatus('Error checking AI status: ' + error.message, 'error');
+                setButtonLoading('statusBtn', false);
+            }
+        }
+
+        async function testTextPrompt() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            if (!window.agentlet.ai.isAvailable()) {
+                updateStatus('Set your OpenAI API key first', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('textPromptBtn', true);
+                log('💭 Sending text prompt to AI...', 'info');
+                updateStatus('Sending prompt to AI...', 'info');
+                
+                const sampleText = document.getElementById('sampleContent').textContent;
+                const prompt = `Analyze this quarterly sales report and provide 3 key insights (keep it concise):\n\n${sampleText}`;
+                
+                log(`📝 Prompt: ${prompt.substring(0, 100)}...`, 'info');
+                const response = await window.agentlet.ai.sendPrompt(prompt);
+                
+                log('🤖 AI Text Analysis Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('Text Prompt');
+                updateStatus('AI text response received successfully!', 'success');
+                setTimeout(() => setButtonLoading('textPromptBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ AI text request failed: ${error.message}`, 'error');
+                updateStatus('AI request failed: ' + error.message, 'error');
+                setButtonLoading('textPromptBtn', false);
+            }
+        }
+
+        async function testImagePrompt() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            if (!window.agentlet.ai.isAvailable()) {
+                updateStatus('Set your OpenAI API key first', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('imagePromptBtn', true);
+                log('📸 Capturing screenshot for AI analysis...', 'info');
+                updateStatus('Capturing screenshot and sending to AI...', 'info');
+                
+                // Capture the sample content area 
+                const element = document.getElementById('sampleContent');
+                const screenshot = await window.agentlet.utils.ScreenCapture.captureAsDataURL(element);
+                
+                log('✅ Screenshot captured successfully', 'success');
+                
+                // Display thumbnail in console
+                displayImageThumbnail(screenshot, '📊 Sample Content Screenshot');
+                
+                const prompt = "What do you see in this image? Analyze the data and provide insights about the business performance shown (keep it concise).";
+                
+                log('🤖 Sending image to AI for analysis...', 'info');
+                log(`📝 Prompt: ${prompt}`, 'info');
+                const response = await window.agentlet.ai.sendPrompt(prompt, [screenshot]);
+                
+                log('🤖 AI Image Analysis Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('Image Analysis', 1);
+                updateStatus('AI image analysis completed successfully!', 'success');
+                setTimeout(() => setButtonLoading('imagePromptBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ AI image analysis failed: ${error.message}`, 'error');
+                updateStatus('AI image analysis failed: ' + error.message, 'error');
+                
+                if (error.message.includes('ScreenCapture')) {
+                    log('💡 Tip: Make sure the page content is visible for screenshot capture', 'warning');
+                }
+                setButtonLoading('imagePromptBtn', false);
+            }
+        }
+
+        async function testFullPageAnalysis() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            if (!window.agentlet.ai.isAvailable()) {
+                updateStatus('Set your OpenAI API key first', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('fullPageBtn', true);
+                log('📄 Capturing full page screenshot for AI analysis...', 'info');
+                updateStatus('Capturing full page and sending to AI...', 'info');
+                
+                // Capture the entire page
+                const screenshot = await window.agentlet.utils.ScreenCapture.captureAsDataURL();
+                
+                log('✅ Full page screenshot captured successfully', 'success');
+                
+                // Display thumbnail in console
+                displayImageThumbnail(screenshot, '📄 Full Page Screenshot');
+                
+                const prompt = "Please analyze this webpage screenshot. What type of content does it contain? Provide a brief summary of its purpose and key sections.";
+                
+                log('🤖 Sending full page image to AI for analysis...', 'info');
+                log(`📝 Prompt: ${prompt}`, 'info');
+                const response = await window.agentlet.ai.sendPrompt(prompt, [screenshot]);
+                
+                log('🤖 AI Full Page Analysis Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('Full Page Analysis', 1);
+                updateStatus('AI full page analysis completed successfully!', 'success');
+                setTimeout(() => setButtonLoading('fullPageBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ AI full page analysis failed: ${error.message}`, 'error');
+                updateStatus('AI full page analysis failed: ' + error.message, 'error');
+                
+                if (error.message.includes('ScreenCapture')) {
+                    log('💡 Tip: Make sure the page content is visible for screenshot capture', 'warning');
+                }
+                setButtonLoading('fullPageBtn', false);
+            }
+        }
+
+        async function testPDFPrompt() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            if (!window.agentlet.ai.isAvailable()) {
+                updateStatus('Set your OpenAI API key first', 'error');
+                return;
+            }
+
+            const fileInput = document.getElementById('pdfFile');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                updateStatus('Please select a PDF file first', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            if (file.type !== 'application/pdf') {
+                updateStatus('Please select a valid PDF file', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('pdfPromptBtn', true);
+                log(`📄 Analyzing PDF: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`, 'info');
+                updateStatus('Converting PDF to images and sending to AI...', 'info');
+                
+                // Fix PDF worker URL issue
+                if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+                    const workerUrl = '../../../dist/pdf.worker.min.js';
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+                    log(`🔧 PDF Worker configured: ${workerUrl}`, 'info');
+                } else {
+                    log('⚠️ PDF.js not detected, library will attempt to configure automatically', 'warning');
+                }
+                
+                const prompt = "Analyze this PDF document. Provide a summary of the key points, main topics, and any important insights or data you can identify from the content.";
+                
+                log('🤖 Sending PDF to AI for analysis...', 'info');
+                log(`📝 Prompt: ${prompt.substring(0, 100)}...`, 'info');
+                
+                // First convert PDF to images to display thumbnails
+                log('🔄 Converting PDF to images for thumbnail display...', 'info');
+                const pdfImages = await window.agentlet.ai.convertPDFToImages(file, {
+                    scale: 1.5,
+                    maxPages: 10,
+                    format: 'image/png'
+                });
+                
+                // Display thumbnails immediately after conversion
+                log(`📄 PDF converted to ${pdfImages.length} images`, 'success');
+                pdfImages.forEach((image, index) => {
+                    displayImageThumbnail(image, `📄 PDF Page ${index + 1} - ${file.name}`);
+                });
+                
+                // Now send to AI with the converted images
+                log('🤖 Sending PDF images to AI for analysis...', 'info');
+                const response = await window.agentlet.ai.sendPrompt(prompt, pdfImages);
+                
+                log('🤖 AI PDF Analysis Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('PDF Analysis', 0, 1);
+                updateStatus('AI PDF analysis completed successfully!', 'success');
+                setTimeout(() => setButtonLoading('pdfPromptBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ AI PDF analysis failed: ${error.message}`, 'error');
+                updateStatus('AI PDF analysis failed: ' + error.message, 'error');
+                
+                if (error.message.includes('PDF.js') || error.message.includes('worker')) {
+                    log('💡 PDF Worker Issue: Try refreshing the page or check if pdf.worker.min.js is available', 'warning');
+                    log(`💡 Expected worker path: ../../../dist/pdf.worker.min.js`, 'info');
+                } else if (error.message.includes('file')) {
+                    log('💡 Tip: Make sure you selected a valid PDF file', 'warning');
+                }
+                setButtonLoading('pdfPromptBtn', false);
+            }
+        }
+
+        // Add missing AI functions referenced in buttons
+        async function testCustomPrompt() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            if (!window.agentlet.ai.isAvailable()) {
+                updateStatus('AI not available. Check configuration.', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('customPromptBtn', true);
+                log('✏️ Opening custom prompt dialog...', 'info');
+                
+                // Create custom prompt dialog
+                const customPrompt = await showCustomPromptDialog();
+                
+                if (!customPrompt || customPrompt.trim() === '') {
+                    log('❌ Custom prompt cancelled or empty', 'warning');
+                    updateStatus('Custom prompt cancelled', 'info');
+                    setButtonLoading('customPromptBtn', false);
+                    return;
+                }
+                
+                log(`💭 Sending custom prompt: "${customPrompt.substring(0, 50)}..."`, 'info');
+                updateStatus('Sending custom prompt to AI...', 'info');
+                
+                const response = await window.agentlet.ai.sendPrompt(customPrompt);
+                
+                log('🤖 AI Custom Prompt Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('Custom Prompt');
+                updateStatus('Custom prompt response received!', 'success');
+                setTimeout(() => setButtonLoading('customPromptBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ Custom prompt failed: ${error.message}`, 'error');
+                updateStatus('Custom prompt failed: ' + error.message, 'error');
+                setButtonLoading('customPromptBtn', false);
+            }
+        }
+
+        // Custom prompt dialog function
+        async function showCustomPromptDialog() {
+            return new Promise((resolve) => {
+                // Create dialog content for custom prompt
+                const dialogContent = `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #333;">✏️ Custom AI Prompt</h3>
+                        <p>Enter your question or prompt for the AI assistant.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="customPromptInput" style="display: block; margin-bottom: 8px; font-weight: bold;">Your prompt:</label>
+                        <textarea id="customPromptInput" 
+                            placeholder="Ask me anything about the data, or any general question..." 
+                            style="width: 100%; height: 120px; padding: 12px; border: 1px solid #ccc; border-radius: 4px; resize: vertical; font-family: inherit; font-size: 14px; line-height: 1.4;"
+                            autofocus></textarea>
+                        <small style="color: #666; font-size: 0.9em;">Examples: "Summarize the sales data", "What trends do you see?", "Explain this in simple terms"</small>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                        <button id="sendPromptBtn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-weight: bold;">🚀 Send Prompt</button>
+                        <button id="cancelPromptBtn" style="background: #6c757d; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
+                `;
+
+                // Create modal dialog
+                const dialog = document.createElement('div');
+                dialog.id = 'customPromptModal';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 10000;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                `;
+
+                const dialogBox = document.createElement('div');
+                dialogBox.style.cssText = `
+                    background: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    max-width: 600px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                `;
+                
+                dialogBox.innerHTML = dialogContent;
+                dialog.appendChild(dialogBox);
+                document.body.appendChild(dialog);
+
+                // Focus on textarea after a brief delay
+                setTimeout(() => {
+                    const textarea = document.getElementById('customPromptInput');
+                    if (textarea) {
+                        textarea.focus();
+                    }
+                }, 100);
+
+                // Handle send button
+                document.getElementById('sendPromptBtn').onclick = () => {
+                    const prompt = document.getElementById('customPromptInput').value.trim();
+                    document.body.removeChild(dialog);
+                    resolve(prompt);
+                };
+
+                // Handle cancel button
+                document.getElementById('cancelPromptBtn').onclick = () => {
+                    document.body.removeChild(dialog);
+                    resolve('');
+                };
+
+                // Close on background click
+                dialog.onclick = (e) => {
+                    if (e.target === dialog) {
+                        document.body.removeChild(dialog);
+                        resolve('');
+                    }
+                };
+
+                // Handle Enter key (Ctrl+Enter or Shift+Enter to send)
+                document.getElementById('customPromptInput').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        const prompt = document.getElementById('customPromptInput').value.trim();
+                        document.body.removeChild(dialog);
+                        resolve(prompt);
+                    }
+                });
+
+                // Close on Escape key
+                document.addEventListener('keydown', function escapeHandler(e) {
+                    if (e.key === 'Escape' && document.getElementById('customPromptModal')) {
+                        document.body.removeChild(dialog);
+                        document.removeEventListener('keydown', escapeHandler);
+                        resolve('');
+                    }
+                });
+            });
+        }
+
+        async function testElementCapture() {
+            if (!window.agentlet || !window.agentlet.ai.isAvailable()) {
+                updateStatus('AI not available. Check configuration.', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('elementBtn', true);
+                log('🎯 Capturing specific element for AI analysis...', 'info');
+                updateStatus('Analyzing chart element...', 'info');
+                
+                // Capture the chart canvas specifically
+                const chartElement = document.getElementById('sampleChart');
+                if (!chartElement) {
+                    throw new Error('Chart element not found');
+                }
+                
+                const screenshot = await window.agentlet.utils.ScreenCapture.captureAsDataURL(chartElement);
+                
+                log('✅ Chart element captured successfully', 'success');
+                displayImageThumbnail(screenshot, '📊 Chart Element Screenshot');
+                
+                const prompt = "Analyze this chart. What type of chart is it? What data does it show? What insights can you provide?";
+                
+                log('🤖 Sending chart image to AI...', 'info');
+                const response = await window.agentlet.ai.sendPrompt(prompt, [screenshot]);
+                
+                log('🤖 AI Chart Analysis Response:', 'success');
+                log(response, 'info');
+                log('--- End AI Response ---', 'success');
+                
+                trackAIActivity('Element Analysis', 1);
+                updateStatus('Chart analysis completed!', 'success');
+                setTimeout(() => setButtonLoading('elementBtn', false), 300);
+                
+            } catch (error) {
+                log(`❌ Element analysis failed: ${error.message}`, 'error');
+                updateStatus('Element analysis failed: ' + error.message, 'error');
+                setButtonLoading('elementBtn', false);
+            }
+        }
+
+
+
+
+        function clearOutput() {
+            const consoleElement = document.getElementById('console');
+            if (consoleElement) {
+                consoleElement.innerHTML = '';
+            }
+            
+            // Clear thumbnails
+            const thumbnailsContainer = document.getElementById('thumbnails');
+            if (thumbnailsContainer) {
+                thumbnailsContainer.innerHTML = '';
+            }
+            
+            updateStatus('Console and thumbnails cleared', 'info');
+            log('🗑️ Console and thumbnails cleared', 'info');
+        }
+
+        function drawSampleChart() {
+            const canvas = document.getElementById('sampleChart');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Simple bar chart
+            const data = [120, 150, 100, 180]; // Sample data
+            const labels = ['Q1', 'Q2', 'Q3', 'Q4'];
+            const barWidth = 50;
+            const maxValue = Math.max(...data);
+            
+            ctx.fillStyle = '#4CAF50';
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#333';
+            
+            for (let i = 0; i < data.length; i++) {
+                const x = 20 + i * 70;
+                const height = (data[i] / maxValue) * 100;
+                const y = 120 - height;
+                
+                // Draw bar
+                ctx.fillStyle = '#4CAF50';
+                ctx.fillRect(x, y, barWidth, height);
+                
+                // Draw label
+                ctx.fillStyle = '#333';
+                ctx.fillText(labels[i], x + 15, 140);
+                
+                // Draw value
+                ctx.fillText(data[i] + 'K', x + 10, y - 5);
+            }
+            
+            // Title
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('Revenue by Quarter ($K)', 10, 15);
+        }
+
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 AI Integration demo ready', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+            updateAIStats();
+            drawSampleChart(); // Draw initial chart
+        });
+
+        // Update AI stats periodically
+        setInterval(updateAIStats, 2000);
+    </script>
+</body>
+</html>

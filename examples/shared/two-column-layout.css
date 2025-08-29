@@ -1,0 +1,270 @@
+/* Two-Column Layout CSS for Agentlet Examples */
+
+/* Main two-column container */
+.two-column-container {
+    display: flex;
+    gap: 20px;
+    max-width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.left-column {
+    flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing */
+    padding-right: 10px;
+    /* Allow natural scrolling */
+}
+
+.right-column {
+    flex: 1;
+    min-width: 0; /* Prevent flex item from overflowing */
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    /* Fixed positioning for sticky behavior */
+    position: sticky;
+    top: 20px;
+    height: calc(100vh - 40px); /* Full height minus padding */
+    overflow-y: auto; /* Allow scrolling within right column if needed */
+}
+
+/* Console section styling */
+.console-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.console-header h3 {
+    margin: 0;
+}
+
+.console-clear-btn {
+    padding: 6px 12px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.console-clear-btn:hover {
+    background: #c82333;
+}
+
+.console-section {
+    background: #1a1a1a;
+    color: #00ff00;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    padding: 15px;
+    border-radius: 5px;
+    height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 20px;
+    scroll-behavior: smooth;
+}
+
+/* Status section styling */
+.status-section {
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border-left: 4px solid #007bff;
+    background: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.status-section.success {
+    border-left-color: #28a745;
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-section.error {
+    border-left-color: #dc3545;
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-section.warning {
+    border-left-color: #ffc107;
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Statistics section */
+.stats-section {
+    font-family: monospace;
+    font-size: 12px;
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.stats-section div {
+    margin: 2px 0;
+}
+
+/* Controls styling for left column */
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.controls h4 {
+    width: 100%;
+    margin: 0 0 10px 0;
+}
+
+.controls button {
+    padding: 8px 16px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.controls button:hover:not(:disabled) {
+    background: #0056b3;
+}
+
+.controls button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.input-group {
+    margin: 10px 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.input-group label {
+    font-weight: bold;
+    min-width: 120px;
+}
+
+.input-group input, 
+.input-group select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .two-column-container {
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+    
+    .left-column {
+        padding: 0;
+    }
+    
+    .right-column {
+        position: relative; /* Disable sticky on mobile */
+        height: auto;
+        padding: 15px;
+    }
+    
+    .console-section {
+        height: 200px;
+    }
+    
+    .input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .input-group label {
+        min-width: auto;
+    }
+    
+    .input-group input,
+    .input-group select {
+        min-width: auto;
+    }
+}
+
+/* Override container styles for full width */
+.container {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* Example section styling (inherits from main examples.css but with adjustments) */
+.example-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: #ffffff;
+    border-radius: 5px;
+    border: 1px solid #e9ecef;
+}
+
+.example-section h3 {
+    margin-top: 0;
+    color: #333;
+}
+
+.example-section h4 {
+    margin: 15px 0 8px 0;
+    color: #555;
+}
+
+/* Code block styling */
+.code-block {
+    margin: 15px 0;
+}
+
+.code-block pre {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid #e9ecef;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.code-block code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Navigation breadcrumb */
+.nav-breadcrumb {
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: #666;
+}
+
+.nav-breadcrumb a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.nav-breadcrumb a:hover {
+    text-decoration: underline;
+}
