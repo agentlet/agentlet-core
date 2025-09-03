@@ -181,6 +181,7 @@ class AgentletCore {
             dialogBoxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
             dialogHeaderBackground: '#ffffff',
             dialogHeaderTextColor: '#333333',
+            dialogHeaderTextMargin: '0',
             dialogContentBackground: '#ffffff',
             dialogContentTextColor: '#333333',
             dialogButtonPrimaryBackground: '#1E3A8A',

@@ -1293,8 +1293,8 @@ class Dialog {
         const title = document.createElement('h2');
         title.textContent = config.title;
         title.style.cssText = `
-            margin: 0;
-            color: ${this.theme.textColor || '#333333'};
+            margin: ${this.theme.dialogHeaderTextMargin || '0'};
+            color: ${this.theme.dialogHeaderTextColor || this.theme.headerTextColor || '#333333'};
             font-size: 24px;
             font-weight: 700;
             flex: 1;
