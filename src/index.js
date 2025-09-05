@@ -21,11 +21,13 @@ import TableExtractor from './utils/TableExtractor.js';
 import AIManager from './utils/AIProvider.js';
 import PageHighlighter from './utils/PageHighlighter.js';
 import PDFProcessor from './utils/PDFProcessor.js';
+import ShortcutManager from './utils/ShortcutManager.js';
 
 // Import external libraries
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import * as pdfjsLib from 'pdfjs-dist';
+import hotkeys from 'hotkeys-js';
 
 /**
  * Main Agentlet Core application class
@@ -82,6 +84,9 @@ class AgentletCore {
         
         // Initialize AI manager
         this.aiManager = new AIManager(this.envManager);
+        
+        // Initialize shortcut manager
+        this.shortcutManager = new ShortcutManager();
 
         // Initialize module loader with configuration
         this.moduleLoader = new ModuleLoader({
@@ -698,6 +703,23 @@ class AgentletCore {
             console.warn('📄 PDF.js not loaded yet, cannot set worker URL');
         }
     }
+    
+    /**
+     * Set up hotkeys library for keyboard shortcuts
+     */
+    setupHotkeys() {
+        // Make hotkeys available globally
+        if (typeof window.hotkeys === 'undefined') {
+            window.hotkeys = hotkeys;
+            console.log('⌨️ hotkeys-js library loaded for keyboard shortcuts');
+        }
+        
+        // Initialize shortcut manager with hotkeys
+        if (this.shortcutManager) {
+            this.shortcutManager.init(hotkeys);
+            console.log('⌨️ ShortcutManager initialized with hotkeys-js');
+        }
+    }
 
     /**
      * Set up global access for modules and debugging
@@ -722,7 +744,8 @@ class AgentletCore {
             MessageBubble: new MessageBubble(this.config.theme),
             ScreenCapture: new ScreenCapture(),
             ScriptInjector: new ScriptInjector(),
-            PDFProcessor: PDFProcessor
+            PDFProcessor: PDFProcessor,
+            shortcuts: this.shortcutManager ? this.shortcutManager.createProxy() : null
         };
         
         // Add PageHighlighter with error handling
@@ -875,6 +898,9 @@ class AgentletCore {
             // Set up PDF.js for PDF processing functionality
             this.setupPDFJS();
             
+            // Set up hotkeys for keyboard shortcuts
+            this.setupHotkeys();
+            
             // Set up event listeners
             this.setupEventListeners();
             
@@ -901,6 +927,11 @@ class AgentletCore {
             // Manual refresh to catch modules that were registered early
             this.updateApplicationDisplay();
             this.updateModuleContent();
+            
+            // Register default keyboard shortcuts
+            if (this.shortcutManager) {
+                this.shortcutManager.registerDefaultShortcuts();
+            }
             
             this.performanceMetrics.initTime = performance.now() - startTime;
             this.initialized = true;
@@ -3021,6 +3052,11 @@ class AgentletCore {
                 this.authManager.cleanup();
             }
             
+            // Cleanup shortcut manager
+            if (this.shortcutManager) {
+                this.shortcutManager.clear();
+            }
+            
             // Remove UI
             const $ = window.agentlet.$;
             const container = this.ui.container;
@@ -3416,3 +3452,4 @@ export { default as FormExtractor } from './utils/FormExtractor.js';
 export { default as FormFiller } from './utils/FormFiller.js';
 export { default as TableExtractor } from './utils/TableExtractor.js';
 export { default as PDFProcessor } from './utils/PDFProcessor.js';
+export { default as ShortcutManager } from './utils/ShortcutManager.js';
