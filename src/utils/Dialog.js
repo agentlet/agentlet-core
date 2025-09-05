@@ -12,6 +12,7 @@ class Dialog {
         this.type = null;
         this.activeInput = null;
         this.cancelCallback = null;
+        this.scrollY = 0; // Store scroll position
         
         // Bind methods
         this.handleKeydown = this.handleKeydown.bind(this);
@@ -19,6 +20,23 @@ class Dialog {
         
         // Ensure dialog styles are injected
         this.addDialogStyles();
+    }
+    
+    /**
+     * Preserve current scroll position before showing dialog
+     */
+    preserveScrollPosition() {
+        this.scrollY = window.scrollY;
+        document.body.style.top = `-${this.scrollY}px`;
+    }
+    
+    /**
+     * Restore scroll position after hiding dialog
+     */
+    restoreScrollPosition() {
+        const scrollY = this.scrollY;
+        document.body.style.top = '';
+        window.scrollTo(0, scrollY);
     }
     
     /**
@@ -681,7 +699,8 @@ class Dialog {
         
         // Add class to body when overlay is active
         $(document.body).addClass('agentlet-overlay-active');
-        // Block background scroll when dialog is open
+        // Block background scroll when dialog is open, preserve scroll position
+        this.preserveScrollPosition();
         document.body.classList.add('agentlet-dialog-open');
     }
     
@@ -722,7 +741,8 @@ class Dialog {
         
         // Add class to body when overlay is active
         $(document.body).addClass('agentlet-overlay-active');
-        // Block background scroll when dialog is open
+        // Block background scroll when dialog is open, preserve scroll position
+        this.preserveScrollPosition();
         document.body.classList.add('agentlet-dialog-open');
     }
     
@@ -739,6 +759,8 @@ class Dialog {
             $(document.body).removeClass('agentlet-overlay-active');
             // Restore background scroll when dialog is closed
             document.body.classList.remove('agentlet-dialog-open');
+            // Restore scroll position
+            this.restoreScrollPosition();
         }
     }
     
