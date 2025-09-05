@@ -16,6 +16,9 @@ class Dialog {
         // Bind methods
         this.handleKeydown = this.handleKeydown.bind(this);
         this.handleOverlayClick = this.handleOverlayClick.bind(this);
+        
+        // Ensure dialog styles are injected
+        this.addDialogStyles();
     }
     
     /**
@@ -34,6 +37,8 @@ class Dialog {
             return this.showProgress(options, callback);
         case 'fullscreen':
             return this.showFullscreen(options, callback);
+        case 'command':
+            return this.showCommandPrompt(options, callback);
         default:
             throw new Error(`Unknown dialog type: ${type}`);
         }
@@ -47,6 +52,8 @@ class Dialog {
             console.warn('Dialog is already active');
             return;
         }
+        
+        console.log('🚀 Starting info dialog creation with options:', options);
         
         const config = {
             title: options.title || 'Information',
@@ -62,8 +69,30 @@ class Dialog {
         this.type = 'info';
         
         this.createOverlay();
+        
+        // Check if overlay creation failed
+        if (!this.overlay) {
+            console.error('❌ Overlay creation failed, aborting dialog creation');
+            this.isActive = false;
+            this.type = null;
+            return;
+        }
+        
         this.createInfoDialog(config);
+        
+        // Check if dialog creation failed
+        if (!this.dialog) {
+            console.error('❌ Dialog creation failed, cleaning up');
+            this.removeOverlay();
+            this.isActive = false;
+            this.type = null;
+            return;
+        }
+        
         this.addEventListeners();
+        console.log('👂 Event listeners added');
+        
+        console.log('✅ Info dialog setup complete');
     }
     
     /**
@@ -93,6 +122,7 @@ class Dialog {
         this.createOverlay();
         this.createInputDialog(config);
         this.addEventListeners();
+        this.focusFirstInput();
     }
     
     /**
@@ -151,6 +181,40 @@ class Dialog {
         this.createFullscreenOverlay();
         this.createFullscreenDialog(config);
         this.addEventListeners();
+    }
+    
+    /**
+     * Show command prompt dialog - large centered input for quick commands
+     */
+    showCommandPrompt(options = {}, callback) {
+        if (this.isActive) {
+            console.warn('Dialog is already active');
+            return;
+        }
+        
+        const config = {
+            title: options.title || 'Command Prompt',
+            message: options.message || '',
+            icon: options.icon || '⚡',
+            placeholder: options.placeholder || 'Enter command...',
+            defaultValue: options.defaultValue || '',
+            inputType: options.inputType || 'text',
+            fontSize: options.fontSize || '24px',
+            showHeader: options.showHeader !== false,
+            showMessage: options.showMessage !== false,
+            allowHtml: options.allowHtml || false,
+            closeOnOverlay: options.closeOnOverlay !== false,
+            ...options
+        };
+        
+        this.callback = callback;
+        this.isActive = true;
+        this.type = 'command';
+        
+        this.createOverlay();
+        this.createCommandPromptDialog(config);
+        this.addEventListeners();
+        this.focusFirstInput();
     }
     
     /**
@@ -240,6 +304,36 @@ class Dialog {
         if (messageElement) {
             messageElement.textContent = newMessage;
         }
+    }
+    
+    /**
+     * Focus on the first input element in the dialog
+     */
+    focusFirstInput() {
+        if (!this.dialog) return;
+        
+        // Multiple attempts to ensure focus works
+        const attemptFocus = (attempt = 0) => {
+            const firstInput = this.dialog?.querySelector('input, textarea, select');
+            if (firstInput && document.body.contains(firstInput)) {
+                try {
+                    firstInput.focus();
+                    
+                    // For text inputs, also select all text if there's a default value
+                    if ((firstInput.type === 'text' || firstInput.type === 'email' || firstInput.type === 'password' || firstInput.tagName === 'TEXTAREA') && firstInput.value) {
+                        firstInput.select();
+                    }
+                } catch (error) {
+                    console.warn('Failed to focus input:', error);
+                }
+            } else if (attempt < 5) {
+                // Retry up to 5 times with increasing delays
+                setTimeout(() => attemptFocus(attempt + 1), 50 * (attempt + 1));
+            }
+        };
+        
+        // Start first attempt immediately, then with delays
+        attemptFocus();
     }
     
     // =================
@@ -400,6 +494,37 @@ class Dialog {
     }
     
     // =================
+    // COMMAND PROMPT METHODS
+    // =================
+    
+    /**
+     * Show command prompt dialog
+     */
+    commandPrompt(options = {}, callback) {
+        // Support legacy API (string as first param) for backward compatibility
+        if (typeof options === 'string') {
+            options = {
+                placeholder: options
+            };
+            callback = arguments[1];
+        }
+        
+        return this.showCommandPrompt(options, callback);
+    }
+    
+    /**
+     * Quick command prompt - minimal setup
+     */
+    quickCommand(placeholder = 'Enter command...', callback) {
+        return this.showCommandPrompt({
+            placeholder,
+            showHeader: false,
+            showMessage: false,
+            fontSize: '28px'
+        }, callback);
+    }
+    
+    // =================
     // FULLSCREEN DIALOG METHODS
     // =================
     
@@ -527,7 +652,13 @@ class Dialog {
     createOverlay() {
         const $ = window.agentlet.$;
         if (!$) {
-            console.error('jQuery not available for Dialog');
+            console.error('🚨 Dialog Error: jQuery not available for Dialog overlay creation');
+            console.error('🔍 Debug info:', {
+                'window.agentlet': !!window.agentlet,
+                'window.agentlet.$': !!window.agentlet?.$,
+                'window.jQuery': !!window.jQuery,
+                'dialogType': this.type
+            });
             return;
         }
         
@@ -560,7 +691,13 @@ class Dialog {
     createFullscreenOverlay() {
         const $ = window.agentlet.$;
         if (!$) {
-            console.error('jQuery not available for Dialog');
+            console.error('🚨 Dialog Error: jQuery not available for fullscreen Dialog overlay creation');
+            console.error('🔍 Debug info:', {
+                'window.agentlet': !!window.agentlet,
+                'window.agentlet.$': !!window.agentlet?.$,
+                'window.jQuery': !!window.jQuery,
+                'dialogType': this.type
+            });
             return;
         }
         
@@ -610,7 +747,25 @@ class Dialog {
      */
     createInfoDialog(config) {
         const $ = window.agentlet.$;
-        if (!$) return;
+        if (!$) {
+            console.error('🚨 Dialog Error: jQuery not available for info dialog creation');
+            console.error('🔍 Debug info:', {
+                'window.agentlet': !!window.agentlet,
+                'window.agentlet.$': !!window.agentlet?.$,
+                'window.jQuery': !!window.jQuery,
+                'dialogType': this.type,
+                'overlayExists': !!this.overlay
+            });
+            return;
+        }
+        
+        console.log('📘 Creating info dialog with config:', { 
+            title: config.title, 
+            hasMessage: !!config.message,
+            buttonsCount: config.buttons?.length || 0,
+            allowHtml: config.allowHtml,
+            theme: Object.keys(this.theme).length > 0 ? 'custom' : 'default'
+        });
         
         this.dialog = document.createElement('div');
         this.dialog.className = 'agentlet-info-dialog';
@@ -626,6 +781,8 @@ class Dialog {
             display: flex;
             flex-direction: column;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
+            position: relative;
+            z-index: 1000003;
         `;
         
         // Create header
@@ -735,6 +892,33 @@ class Dialog {
         this.dialog.appendChild(buttonContainer);
         
         this.overlay.appendChild(this.dialog);
+        
+        // Force visibility - ensure dialog is not hidden by CSS conflicts
+        this.dialog.style.display = 'flex';
+        this.dialog.style.visibility = 'visible';
+        
+        console.log('📦 Info dialog DOM structure created:', {
+            dialogExists: !!this.dialog,
+            overlayExists: !!this.overlay,
+            dialogInOverlay: this.overlay?.contains(this.dialog),
+            overlayInDOM: document.body.contains(this.overlay),
+            dialogDisplay: this.dialog?.style.display,
+            dialogVisibility: this.dialog?.style.visibility,
+            dialogClasses: this.dialog?.className
+        });
+        this.dialog.style.opacity = '1';
+        
+        console.log('✅ Info dialog created and appended to overlay:', {
+            overlayExists: !!this.overlay,
+            dialogExists: !!this.dialog,
+            overlayZIndex: this.overlay.style.zIndex,
+            dialogZIndex: this.dialog.style.zIndex,
+            overlayInDOM: document.body.contains(this.overlay),
+            dialogInDOM: document.body.contains(this.dialog),
+            dialogDisplay: this.dialog.style.display,
+            dialogVisibility: this.dialog.style.visibility,
+            dialogOpacity: this.dialog.style.opacity
+        });
     }
     
     /**
@@ -753,6 +937,8 @@ class Dialog {
             max-width: 500px;
             min-width: 350px;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
+            position: relative;
+            z-index: 1000003;
         `;
         
         // Create header
@@ -873,14 +1059,6 @@ class Dialog {
         this.dialog.appendChild(buttonContainer);
         
         this.overlay.appendChild(this.dialog);
-        
-        // Focus input after a brief delay
-        setTimeout(() => {
-            input.focus();
-            if (config.inputType === 'textarea' && config.defaultValue) {
-                input.setSelectionRange(input.value.length, input.value.length);
-            }
-        }, 100);
     }
     
     /**
@@ -900,6 +1078,8 @@ class Dialog {
             min-width: 300px;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
             text-align: center;
+            position: relative;
+            z-index: 1000003;
         `;
         
         // Create header
@@ -1008,8 +1188,231 @@ class Dialog {
         
         this.overlay.appendChild(this.dialog);
         
+        // Force visibility - ensure dialog is not hidden by CSS conflicts
+        this.dialog.style.display = 'block';
+        this.dialog.style.visibility = 'visible';
+        this.dialog.style.opacity = '1';
+        
         // Add CSS animations
         this.addDialogStyles();
+    }
+    
+    /**
+     * Create command prompt dialog
+     */
+    createCommandPromptDialog(config) {
+        const $ = window.agentlet.$;
+        if (!$) return;
+        
+        this.dialog = document.createElement('div');
+        this.dialog.className = 'agentlet-command-dialog';
+        this.dialog.style.cssText = `
+            background: ${this.theme.backgroundColor || '#ffffff'};
+            border-radius: ${this.theme.borderRadius || '12px'};
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            max-width: 800px;
+            min-width: 400px;
+            width: 80%;
+            font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 1000003;
+        `;
+        
+        // Create header (conditional)
+        if (config.showHeader) {
+            const header = document.createElement('div');
+            header.className = 'agentlet-command-header';
+            header.style.cssText = `
+                padding: 24px 30px 20px;
+                border-bottom: 2px solid ${this.theme.borderColor || '#e0e0e0'};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 15px;
+                background: ${this.theme.headerBackground || 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+                border-radius: ${this.theme.borderRadius || '12px'} ${this.theme.borderRadius || '12px'} 0 0;
+                flex-shrink: 0;
+            `;
+            
+            const icon = document.createElement('span');
+            icon.textContent = config.icon;
+            icon.style.cssText = 'font-size: 32px;';
+            
+            const title = document.createElement('h2');
+            title.textContent = config.title;
+            title.style.cssText = `
+                margin: 0;
+                color: ${this.theme.dialogHeaderTextColor || this.theme.headerTextColor || '#333333'};
+                font-size: 24px;
+                font-weight: 700;
+            `;
+            
+            header.appendChild(icon);
+            header.appendChild(title);
+            this.dialog.appendChild(header);
+        }
+        
+        // Create content
+        const content = document.createElement('div');
+        content.className = 'agentlet-command-content';
+        content.style.cssText = `
+            padding: ${config.showHeader ? '30px' : '40px'};
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            flex: 1;
+        `;
+        
+        // Add message if provided and enabled
+        if (config.showMessage && config.message) {
+            const message = document.createElement('div');
+            message.className = 'agentlet-command-message';
+            message.style.cssText = `
+                color: ${this.theme.textColor || '#333333'};
+                font-size: 18px;
+                line-height: 1.5;
+                text-align: center;
+                margin-bottom: 10px;
+            `;
+            
+            if (config.allowHtml) {
+                message.innerHTML = config.message;
+            } else {
+                message.textContent = config.message;
+            }
+            
+            content.appendChild(message);
+        }
+        
+        // Create large input
+        let input;
+        if (config.inputType === 'textarea') {
+            input = document.createElement('textarea');
+            input.rows = 3;
+            input.style.resize = 'vertical';
+        } else {
+            input = document.createElement('input');
+            input.type = config.inputType;
+        }
+        
+        input.className = 'agentlet-command-input';
+        input.placeholder = config.placeholder;
+        input.value = config.defaultValue;
+        input.style.cssText = `
+            width: 100%;
+            padding: 20px 24px;
+            border: 3px solid ${this.theme.borderColor || '#e0e0e0'};
+            border-radius: 12px;
+            font-size: ${config.fontSize};
+            font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
+            font-weight: 500;
+            box-sizing: border-box;
+            text-align: center;
+            background: ${this.theme.inputBackground || '#ffffff'};
+            color: ${this.theme.textColor || '#333333'};
+            transition: all 0.2s ease;
+            outline: none;
+        `;
+        
+        // Add focus styles
+        input.addEventListener('focus', () => {
+            input.style.borderColor = this.theme.primaryColor || '#007bff';
+            input.style.boxShadow = `0 0 0 4px rgba(0, 123, 255, 0.15)`;
+            input.style.transform = 'scale(1.02)';
+        });
+        
+        input.addEventListener('blur', () => {
+            input.style.borderColor = this.theme.borderColor || '#e0e0e0';
+            input.style.boxShadow = 'none';
+            input.style.transform = 'scale(1)';
+        });
+        
+        content.appendChild(input);
+        this.activeInput = input;
+        
+        // Create buttons container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'agentlet-command-buttons';
+        buttonContainer.style.cssText = `
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 10px;
+        `;
+        
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.style.cssText = `
+            padding: 12px 24px;
+            border: 2px solid ${this.theme.borderColor || '#ccc'};
+            border-radius: 8px;
+            background: ${this.theme.actionButtonBackground || '#f8f9fa'};
+            color: ${this.theme.actionButtonText || '#333333'};
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            min-width: 100px;
+        `;
+        
+        const submitButton = document.createElement('button');
+        submitButton.textContent = 'Execute';
+        submitButton.style.cssText = `
+            padding: 12px 24px;
+            border: 2px solid ${this.theme.primaryColor || '#007bff'};
+            border-radius: 8px;
+            background: ${this.theme.primaryColor || '#007bff'};
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            min-width: 100px;
+        `;
+        
+        // Add hover effects
+        cancelButton.addEventListener('mouseenter', () => {
+            cancelButton.style.backgroundColor = '#e9ecef';
+            cancelButton.style.transform = 'translateY(-1px)';
+        });
+        
+        cancelButton.addEventListener('mouseleave', () => {
+            cancelButton.style.backgroundColor = this.theme.actionButtonBackground || '#f8f9fa';
+            cancelButton.style.transform = 'translateY(0)';
+        });
+        
+        submitButton.addEventListener('mouseenter', () => {
+            submitButton.style.transform = 'translateY(-1px)';
+            submitButton.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
+        });
+        
+        submitButton.addEventListener('mouseleave', () => {
+            submitButton.style.transform = 'translateY(0)';
+            submitButton.style.boxShadow = 'none';
+        });
+        
+        // Add event listeners
+        cancelButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.hide(null);
+        });
+        
+        submitButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.hide(input.value.trim());
+        });
+        
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(submitButton);
+        content.appendChild(buttonContainer);
+        
+        this.dialog.appendChild(content);
+        this.overlay.appendChild(this.dialog);
     }
     
     /**
@@ -1028,6 +1431,8 @@ class Dialog {
             max-width: 500px;
             min-width: 400px;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
+            position: relative;
+            z-index: 1000003;
         `;
         
         // Create header
@@ -1270,6 +1675,7 @@ class Dialog {
             display: flex;
             flex-direction: column;
             position: relative;
+            z-index: 1000003;
         `;
         
         // Create header
@@ -1716,6 +2122,8 @@ class Dialog {
                 }
             } else if (this.type === 'input') {
                 this.hide(null);
+            } else if (this.type === 'command') {
+                this.hide(null);
             } else {
                 this.hide('cancel');
             }
@@ -1730,6 +2138,15 @@ class Dialog {
                     }
                 } else {
                     this.hide(this.activeInput?.value);
+                }
+            } else if (this.type === 'command') {
+                // For command prompt, Enter submits directly
+                if (this.activeInput?.tagName.toLowerCase() === 'textarea') {
+                    if (event.ctrlKey || event.metaKey) {
+                        this.hide(this.activeInput.value.trim());
+                    }
+                } else {
+                    this.hide(this.activeInput?.value.trim());
                 }
             } else if (this.type === 'info') {
                 // Click primary button if available
@@ -1748,6 +2165,12 @@ class Dialog {
         if (event.target === this.overlay) {
             if (this.type === 'input') {
                 this.hide(null);
+            } else if (this.type === 'command') {
+                // Check if command dialog allows closing on overlay click
+                const closeOnOverlay = this.dialog?.dataset?.closeOnOverlay !== 'false';
+                if (closeOnOverlay) {
+                    this.hide(null);
+                }
             } else if (this.type === 'info') {
                 this.hide('cancel');
             } else if (this.type === 'fullscreen') {

@@ -295,27 +295,304 @@ class AgentletCore {
     createjQueryFallback() {
         return function(selector) {
             if (typeof selector === 'string') {
-                return {
+                const elements = document.querySelectorAll(selector);
+                const result = {
                     0: document.querySelector(selector),
-                    length: document.querySelectorAll(selector).length,
+                    length: elements.length,
                     remove: function() {
-                        const elements = document.querySelectorAll(selector);
                         elements.forEach(el => el.remove());
+                        return this;
                     },
-                    append: function(...elements) {
+                    append: function(...appendElements) {
                         const target = document.querySelector(selector);
                         if (target) {
-                            elements.forEach(el => target.appendChild(el));
+                            appendElements.forEach(el => {
+                                if (typeof el === 'string') {
+                                    target.insertAdjacentHTML('beforeend', el);
+                                } else if (el && el.nodeType) {
+                                    target.appendChild(el);
+                                }
+                            });
                         }
+                        return this;
+                    },
+                    addClass: function(className) {
+                        elements.forEach(el => {
+                            if (el && el.classList) {
+                                el.classList.add(className);
+                            }
+                        });
+                        return this;
+                    },
+                    removeClass: function(className) {
+                        elements.forEach(el => {
+                            if (el && el.classList) {
+                                el.classList.remove(className);
+                            }
+                        });
+                        return this;
+                    },
+                    hide: function() {
+                        elements.forEach(el => {
+                            if (el && el.style) {
+                                el.style.display = 'none';
+                            }
+                        });
+                        return this;
+                    },
+                    show: function() {
+                        elements.forEach(el => {
+                            if (el && el.style) {
+                                el.style.display = '';
+                            }
+                        });
+                        return this;
+                    },
+                    css: function(property, value) {
+                        if (typeof property === 'object') {
+                            // Handle object of properties
+                            elements.forEach(el => {
+                                if (el && el.style) {
+                                    Object.keys(property).forEach(key => {
+                                        const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                                        el.style.setProperty(cssKey, property[key]);
+                                    });
+                                }
+                            });
+                        } else if (value !== undefined) {
+                            // Set single property
+                            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
+                            elements.forEach(el => {
+                                if (el && el.style) {
+                                    el.style.setProperty(cssProperty, value);
+                                }
+                            });
+                        }
+                        return this;
+                    },
+                    attr: function(name, value) {
+                        if (value !== undefined) {
+                            elements.forEach(el => {
+                                if (el && el.setAttribute) {
+                                    el.setAttribute(name, value);
+                                }
+                            });
+                            return this;
+                        } else {
+                            const el = elements[0];
+                            return el && el.getAttribute ? el.getAttribute(name) : null;
+                        }
+                    },
+                    html: function(htmlContent) {
+                        if (htmlContent !== undefined) {
+                            elements.forEach(el => {
+                                if (el) {
+                                    el.innerHTML = htmlContent;
+                                }
+                            });
+                            return this;
+                        } else {
+                            const el = elements[0];
+                            return el ? el.innerHTML : '';
+                        }
+                    },
+                    text: function(textContent) {
+                        if (textContent !== undefined) {
+                            elements.forEach(el => {
+                                if (el) {
+                                    el.textContent = textContent;
+                                }
+                            });
+                            return this;
+                        } else {
+                            const el = elements[0];
+                            return el ? el.textContent : '';
+                        }
+                    },
+                    val: function(value) {
+                        if (value !== undefined) {
+                            elements.forEach(el => {
+                                if (el && 'value' in el) {
+                                    el.value = value;
+                                }
+                            });
+                            return this;
+                        } else {
+                            const el = elements[0];
+                            return el && 'value' in el ? el.value : '';
+                        }
+                    },
+                    focus: function() {
+                        const el = elements[0];
+                        if (el && el.focus) {
+                            el.focus();
+                        }
+                        return this;
+                    },
+                    on: function(event, handler) {
+                        elements.forEach(el => {
+                            if (el && el.addEventListener) {
+                                el.addEventListener(event, handler);
+                            }
+                        });
+                        return this;
+                    },
+                    off: function(event, handler) {
+                        elements.forEach(el => {
+                            if (el && el.removeEventListener) {
+                                el.removeEventListener(event, handler);
+                            }
+                        });
+                        return this;
                     }
                 };
+                
+                // Add array-like access to elements
+                for (let i = 0; i < elements.length; i++) {
+                    result[i] = elements[i];
+                }
+                
+                return result;
             } else if (selector && selector.nodeType) {
-                // DOM element passed
-                return {
+                // DOM element passed - create a wrapper with all methods
+                const result = {
                     0: selector,
                     length: 1,
-                    remove: () => selector.remove(),
-                    append: (...elements) => elements.forEach(el => selector.appendChild(el))
+                    remove: function() {
+                        if (selector.remove) {
+                            selector.remove();
+                        }
+                        return this;
+                    },
+                    append: function(...appendElements) {
+                        appendElements.forEach(el => {
+                            if (typeof el === 'string') {
+                                selector.insertAdjacentHTML('beforeend', el);
+                            } else if (el && el.nodeType) {
+                                selector.appendChild(el);
+                            }
+                        });
+                        return this;
+                    },
+                    addClass: function(className) {
+                        if (selector.classList) {
+                            selector.classList.add(className);
+                        }
+                        return this;
+                    },
+                    removeClass: function(className) {
+                        if (selector.classList) {
+                            selector.classList.remove(className);
+                        }
+                        return this;
+                    },
+                    hide: function() {
+                        if (selector.style) {
+                            selector.style.display = 'none';
+                        }
+                        return this;
+                    },
+                    show: function() {
+                        if (selector.style) {
+                            selector.style.display = '';
+                        }
+                        return this;
+                    },
+                    css: function(property, value) {
+                        if (typeof property === 'object') {
+                            // Handle object of properties
+                            if (selector.style) {
+                                Object.keys(property).forEach(key => {
+                                    const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                                    selector.style.setProperty(cssKey, property[key]);
+                                });
+                            }
+                        } else if (value !== undefined) {
+                            // Set single property
+                            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
+                            if (selector.style) {
+                                selector.style.setProperty(cssProperty, value);
+                            }
+                        }
+                        return this;
+                    },
+                    attr: function(name, value) {
+                        if (value !== undefined) {
+                            if (selector.setAttribute) {
+                                selector.setAttribute(name, value);
+                            }
+                            return this;
+                        } else {
+                            return selector.getAttribute ? selector.getAttribute(name) : null;
+                        }
+                    },
+                    html: function(htmlContent) {
+                        if (htmlContent !== undefined) {
+                            selector.innerHTML = htmlContent;
+                            return this;
+                        } else {
+                            return selector.innerHTML || '';
+                        }
+                    },
+                    text: function(textContent) {
+                        if (textContent !== undefined) {
+                            selector.textContent = textContent;
+                            return this;
+                        } else {
+                            return selector.textContent || '';
+                        }
+                    },
+                    val: function(value) {
+                        if (value !== undefined) {
+                            if ('value' in selector) {
+                                selector.value = value;
+                            }
+                            return this;
+                        } else {
+                            return 'value' in selector ? selector.value : '';
+                        }
+                    },
+                    focus: function() {
+                        if (selector.focus) {
+                            selector.focus();
+                        }
+                        return this;
+                    },
+                    on: function(event, handler) {
+                        if (selector.addEventListener) {
+                            selector.addEventListener(event, handler);
+                        }
+                        return this;
+                    },
+                    off: function(event, handler) {
+                        if (selector.removeEventListener) {
+                            selector.removeEventListener(event, handler);
+                        }
+                        return this;
+                    }
+                };
+                return result;
+            } else if (selector === document) {
+                // Handle document object
+                return {
+                    0: document,
+                    length: 1,
+                    ready: function(callback) {
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', callback);
+                        } else {
+                            callback();
+                        }
+                        return this;
+                    },
+                    on: function(event, handler) {
+                        document.addEventListener(event, handler);
+                        return this;
+                    },
+                    off: function(event, handler) {
+                        document.removeEventListener(event, handler);
+                        return this;
+                    }
                 };
             }
             return { length: 0 };
@@ -1996,7 +2273,7 @@ class AgentletCore {
                 width: 100vw;
                 height: 100vh;
                 background: var(--agentlet-dialog-overlay-background);
-                z-index: 999997;
+                z-index: 1000002;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -2010,7 +2287,7 @@ class AgentletCore {
                 min-width: 400px;
                 max-width: 90vw;
                 font-family: var(--agentlet-font-family);
-                z-index: 999998;
+                z-index: 1000003;
                 animation: waitDialogFadeIn var(--agentlet-transition-duration) ease-out;
                 overflow: hidden;
                 text-align: center;
@@ -2131,7 +2408,7 @@ class AgentletCore {
                 width: 100vw;
                 height: 100vh;
                 background: var(--agentlet-info-dialog-overlay-background);
-                z-index: 999997;
+                z-index: 1000002;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -2146,7 +2423,7 @@ class AgentletCore {
                 max-width: 90vw;
                 max-height: 80vh;
                 font-family: var(--agentlet-font-family);
-                z-index: 999998;
+                z-index: 1000003;
                 animation: dialogFadeIn 0.2s ease-out;
                 overflow: hidden;
             }
@@ -2257,7 +2534,7 @@ class AgentletCore {
                 width: 100vw;
                 height: 100vh;
                 background: var(--agentlet-input-dialog-overlay-background);
-                z-index: 999997;
+                z-index: 1000002;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -2271,7 +2548,7 @@ class AgentletCore {
                 min-width: 400px;
                 max-width: 90vw;
                 font-family: var(--agentlet-font-family);
-                z-index: 999998;
+                z-index: 1000003;
                 animation: dialogFadeIn 0.2s ease-out;
             }
             
@@ -2372,7 +2649,7 @@ class AgentletCore {
                 width: 100vw;
                 height: 100vh;
                 background: var(--agentlet-progress-dialog-overlay-background);
-                z-index: 999997;
+                z-index: 1000002;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -2386,7 +2663,7 @@ class AgentletCore {
                 min-width: 400px;
                 max-width: 90vw;
                 font-family: var(--agentlet-font-family);
-                z-index: 999998;
+                z-index: 1000003;
                 animation: dialogFadeIn 0.2s ease-out;
                 overflow: hidden;
             }
