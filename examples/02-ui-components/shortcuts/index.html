@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Keyboard Shortcuts - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../../resources/favicons/favicon.ico">
     <link rel="stylesheet" href="../../shared/examples.css">
     <link rel="stylesheet" href="../../shared/two-column-layout.css">
 </head>
@@ -45,10 +46,15 @@
                 </div>
 
                 <div class="controls">
-                    <h4>Custom Shortcuts</h4>
-                    <button onclick="registerCustomShortcuts()" id="customBtn">📝 Register Custom Shortcuts</button>
+                    <h4>Practical Shortcuts</h4>
+                    <button onclick="registerCustomShortcuts()" id="customBtn">⚡ Register Practical Shortcuts</button>
                     <button onclick="showShortcutsHelp()" id="helpBtn">❓ Show All Shortcuts</button>
                     <button onclick="toggleShortcuts()" id="toggleBtn">🔄 Toggle Shortcuts</button>
+                    
+                    <div class="practical-demo" style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 6px; font-size: 13px;">
+                        <strong>Practical examples:</strong><br>
+                        <kbd>Ctrl+M</kbd> Minimize/maximize • <kbd>Alt+H</kbd> Help • <kbd>Alt+T</kbd> Focus input
+                    </div>
                 </div>
 
                 <div class="controls">
@@ -60,13 +66,13 @@
                 <div class="example-section">
                     <h3>📜 Shortcuts API Examples:</h3>
                     <div class="code-block">
-                        <h4>Register a Simple Shortcut</h4>
-                        <pre><code class="language-javascript">// Register Ctrl+J to show an alert
-window.agentlet.utils.shortcuts.register('ctrl+j', () => {
-    alert('Hello from Ctrl+J!');
+                        <h4>Register a Global Help Shortcut</h4>
+                        <pre><code class="language-javascript">// Register F1 for help (works everywhere, even in inputs)
+window.agentlet.utils.shortcuts.register('f1', () => {
+    window.agentlet.utils.shortcuts.showHelp();
 }, {
-    description: 'Show hello alert',
-    allowInInputs: false
+    description: 'Show shortcuts help',
+    allowInInputs: true
 });</code></pre>
                         
                         <h4>Register Multiple Key Combinations</h4>
@@ -81,15 +87,18 @@ window.agentlet.utils.shortcuts.register('ctrl+;,cmd+;', () => {
     allowInInputs: false
 });</code></pre>
                         
-                        <h4>Advanced Shortcut with Options</h4>
-                        <pre><code class="language-javascript">// Register F1 for help (works everywhere)
-window.agentlet.utils.shortcuts.register('f1', () => {
-    window.agentlet.utils.shortcuts.showHelp();
+                        <h4>Panel Control Shortcut</h4>
+                        <pre><code class="language-javascript">// Register F2 to toggle panel visibility
+window.agentlet.utils.shortcuts.register('f2', () => {
+    const isVisible = window.agentlet.ui.container.style.display !== 'none';
+    if (isVisible) {
+        window.agentlet.ui.hide();
+    } else {
+        window.agentlet.ui.show();
+    }
 }, {
-    description: 'Show shortcuts help',
-    allowInInputs: true,  // Works even in input fields
-    preventDefault: true,
-    stopPropagation: true
+    description: 'Toggle panel visibility',
+    allowInInputs: true  // Works even in input fields
 });</code></pre>
                         
                         <h4>Manage Shortcuts</h4>
@@ -170,7 +179,7 @@ window.agentlet.utils.shortcuts.setEnabled(false);</code></pre>
             }
             
             if (elements.customShortcutsCount) {
-                elements.customShortcutsCount.textContent = customShortcutsRegistered ? '4' : '0';
+                elements.customShortcutsCount.textContent = customShortcutsRegistered ? '3' : '0';
             }
         }
 
@@ -288,62 +297,98 @@ window.agentlet.utils.shortcuts.setEnabled(false);</code></pre>
                     return;
                 }
 
-                // Register Ctrl+J for a simple alert
-                window.agentlet.utils.shortcuts.register('ctrl+j', () => {
-                    log('🎉 Ctrl+J pressed!', 'success');
-                    window.agentlet.utils.Dialog.info('Hello from Ctrl+J shortcut!', 'Custom Shortcut');
+
+
+                // Ctrl+M - Toggle panel minimize/maximize
+                window.agentlet.utils.shortcuts.register('ctrl+m', () => {
+                    try {
+                        if (window.agentlet.isMinimized) {
+                            window.agentlet.ui.maximize();
+                            log('📤 Ctrl+M pressed - panel maximized', 'success');
+                        } else {
+                            window.agentlet.ui.minimize();
+                            log('📥 Ctrl+M pressed - panel minimized', 'info');
+                        }
+                    } catch (error) {
+                        log('❌ Ctrl+M error: ' + error.message, 'error');
+                    }
                 }, {
-                    description: 'Show hello alert',
-                    allowInInputs: false
+                    description: 'Toggle panel minimize/maximize',
+                    allowInInputs: true,
+                    preventDefault: true
                 });
 
-                // Register F1 for help (works everywhere)
-                window.agentlet.utils.shortcuts.register('f1', () => {
-                    log('📖 F1 pressed - showing shortcuts help', 'info');
-                    window.agentlet.utils.shortcuts.showHelp();
+                // Alt+H - Main help dialog using fullscreen (Option+H on Mac)
+                window.agentlet.utils.shortcuts.register('alt+h', () => {
+                    try {
+                        log('📖 Alt+H pressed - showing help', 'info');
+                        window.agentlet.utils.Dialog.fullscreen({
+                            title: 'Keyboard Shortcuts Help',
+                            message: `
+                                <div style="max-height: 70vh; overflow-y: auto; padding: 20px;">
+                                    <h3>⌨️ Available Keyboard Shortcuts</h3>
+                                    <div style="display: grid; gap: 15px; margin-top: 20px;">
+                                        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff;">
+                                            <h4 style="margin: 0 0 10px 0; color: #007bff;">Navigation & Control</h4>
+                                            <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                                                <li><kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Alt+H</kbd> - Show this help</li>
+                                                <li><kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Ctrl+M</kbd> - Minimize/maximize panel</li>
+                                                <li><kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Ctrl+;</kbd> - Quick command</li>
+                                                <li><kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Esc</kbd> - Close dialogs</li>
+                                            </ul>
+                                        </div>
+                                        <div style="padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #28a745;">
+                                            <h4 style="margin: 0 0 10px 0; color: #28a745;">Demo Shortcuts</h4>
+                                            <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                                                <li><kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Alt+T</kbd> - Focus test input</li>
+                                            </ul>
+                                        </div>
+                                        <div style="padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                            <h4 style="margin: 0 0 10px 0; color: #856404;">💡 Tips</h4>
+                                            <ul style="margin: 0; padding-left: 20px; line-height: 1.6;">
+                                                <li>Some shortcuts work everywhere, others are disabled in input fields for safety</li>
+                                                <li>Use <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Ctrl</kbd> on Windows/Linux or <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Cmd</kbd> on Mac</li>
+                                                <li>Press <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Esc</kbd> to close this dialog</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            `,
+                            allowHtml: true
+                        });
+                    } catch (error) {
+                        log('❌ Alt+H error: ' + error.message, 'error');
+                    }
                 }, {
                     description: 'Show shortcuts help',
-                    allowInInputs: true
+                    allowInInputs: false,
+                    preventDefault: true
                 });
 
-                // Register Ctrl+; for a different command prompt
-                window.agentlet.utils.shortcuts.register('ctrl+;', () => {
-                    log('⚡ Ctrl+; pressed - custom command prompt', 'info');
-                    window.agentlet.utils.Dialog.commandPrompt({
-                        title: '⚡ Custom Command',
-                        placeholder: 'Enter your custom command...',
-                        showHeader: true
-                    }, (result) => {
-                        if (result) {
-                            log(`🔥 Custom command entered: ${result}`, 'success');
-                        }
-                    });
-                }, {
-                    description: 'Open custom command prompt',
-                    allowInInputs: false
-                });
-
-                // Register Alt+T for test input focus
+                // Alt+T - Focus test input (context-aware)
                 window.agentlet.utils.shortcuts.register('alt+t', () => {
                     log('🎯 Alt+T pressed - focusing test input', 'info');
                     const testInput = document.getElementById('testInput');
                     if (testInput) {
                         testInput.focus();
                         testInput.select();
+                        testInput.style.backgroundColor = '#ffffcc';
+                        setTimeout(() => {
+                            testInput.style.backgroundColor = '';
+                        }, 1000);
                     }
                 }, {
-                    description: 'Focus test input field',
+                    description: 'Focus and highlight test input',
                     allowInInputs: true
                 });
 
                 customShortcutsRegistered = true;
                 updateShortcutsStats();
                 
-                log('✅ Custom shortcuts registered:', 'success');
-                log('  • Ctrl+J - Show hello alert');
-                log('  • F1 - Show shortcuts help (works in inputs)');
-                log('  • Ctrl+; - Custom command prompt');
-                log('  • Alt+T - Focus test input');
+                log('✅ Practical shortcuts registered:', 'success');
+                log('  • Ctrl+M - Toggle minimize/maximize');
+                log('  • Alt+H - Show help dialog');
+                log('  • Alt+T - Focus and highlight test input');
                 
                 updateStatus('Custom shortcuts registered! Try them out.', 'success');
                 setButtonLoading('customBtn', false);
