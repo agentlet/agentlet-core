@@ -14,6 +14,8 @@ import ScriptInjector from './utils/ScriptInjector.js';
 import { LocalStorageEnvironmentVariablesManager } from './utils/EnvManager.js';
 import CookieManager from './utils/CookieManager.js';
 import StorageManager from './utils/StorageManager.js';
+import { Z_INDEX, createZIndexConstants } from './utils/ZIndexConstants.js';
+import ZIndexDetector, { detectMaxZIndex, suggestAgentletZIndexBase, analyzeZIndexDistribution } from './utils/ZIndexDetector.js';
 import AuthManager from './utils/AuthManager.js';
 import FormExtractor from './utils/FormExtractor.js';
 import FormFiller from './utils/FormFiller.js';
@@ -207,7 +209,7 @@ class AgentletCore {
             imageOverlayHeight: '100px',
             imageOverlayBottom: '20px',
             imageOverlayRight: '20px',
-            imageOverlayZIndex: '999999',
+            imageOverlayZIndex: Z_INDEX.IMAGE_OVERLAY,
             imageOverlayTransition: 'all 0.3s ease',
             imageOverlayHoverScale: '1.05'
         };
@@ -745,7 +747,15 @@ class AgentletCore {
             ScreenCapture: new ScreenCapture(),
             ScriptInjector: new ScriptInjector(),
             PDFProcessor: PDFProcessor,
-            shortcuts: this.shortcutManager ? this.shortcutManager.createProxy() : null
+            shortcuts: this.shortcutManager ? this.shortcutManager.createProxy() : null,
+            // Z-Index utilities for agentlet development
+            zIndex: {
+                detect: detectMaxZIndex,
+                suggest: suggestAgentletZIndexBase,
+                analyze: analyzeZIndexDistribution,
+                constants: Z_INDEX,
+                createConstants: createZIndexConstants
+            }
         };
         
         // Add PageHighlighter with error handling
@@ -1750,7 +1760,7 @@ class AgentletCore {
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 1000000;
+            z-index: ${Z_INDEX.MODAL_BACKDROP};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1967,7 +1977,7 @@ class AgentletCore {
                 position: fixed;
                 top: 0;
                 height: 100vh;
-                z-index: 999999;
+                z-index: ${Z_INDEX.PANEL};
                 background: var(--agentlet-background-color);
                 font-family: var(--agentlet-font-family);
                 transition: all var(--agentlet-transition-duration) ease;
@@ -2003,7 +2013,7 @@ class AgentletCore {
                 height: 40px;
                 line-height: 1;
                 transition: all var(--agentlet-transition-duration) ease;
-                z-index: 1000000;
+                z-index: ${Z_INDEX.CRITICAL_OVERLAY};
             }
 
             /* Resize Handle */
@@ -2205,7 +2215,7 @@ class AgentletCore {
                 width: 100%;
                 height: 100%;
                 background: var(--agentlet-dialog-overlay-background);
-                z-index: 999999;
+                z-index: ${Z_INDEX.DIALOG_OVERLAY};
                 display: flex;
                 align-items: center;
                 justify-content: center;

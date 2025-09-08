@@ -2,6 +2,7 @@
  * Message Bubble Utility for Agentlet Core
  * Provides toast-style notifications and messages
  */
+import { Z_INDEX } from './ZIndexConstants.js';
 export default class MessageBubble {
     constructor() {
         this.bubbles = new Map();
@@ -23,7 +24,7 @@ export default class MessageBubble {
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 1000000;
+            z-index: ${Z_INDEX.MESSAGE_BUBBLE};
             pointer-events: none;
             display: flex;
             flex-direction: column;
