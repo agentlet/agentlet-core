@@ -2,6 +2,7 @@
  * Unified Dialog - Consolidated InfoDialog, InputDialog, and WaitDialog functionality
  * Provides modal dialogs for information display, user input, and wait states
  */
+import { Z_INDEX } from './ZIndexConstants.js';
 class Dialog {
     constructor(config = {}) {
         this.theme = config.theme || {};
@@ -689,7 +690,7 @@ class Dialog {
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 1000002;
+            z-index: ${Z_INDEX.DIALOG_OVERLAY};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -729,7 +730,7 @@ class Dialog {
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 1000002;
+            z-index: ${Z_INDEX.DIALOG_OVERLAY};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -804,7 +805,7 @@ class Dialog {
             flex-direction: column;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header
@@ -960,7 +961,7 @@ class Dialog {
             min-width: 350px;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header
@@ -1101,7 +1102,7 @@ class Dialog {
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
             text-align: center;
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header
@@ -1239,7 +1240,7 @@ class Dialog {
             display: flex;
             flex-direction: column;
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header (conditional)
@@ -1454,7 +1455,7 @@ class Dialog {
             min-width: 400px;
             font-family: ${this.theme.fontFamily || 'system-ui, -apple-system, sans-serif'};
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header
@@ -1697,7 +1698,7 @@ class Dialog {
             display: flex;
             flex-direction: column;
             position: relative;
-            z-index: 1000003;
+            z-index: ${Z_INDEX.DIALOG};
         `;
         
         // Create header
@@ -1789,7 +1790,6 @@ class Dialog {
             message.className = 'agentlet-fullscreen-message';
             message.style.cssText = `
                 margin-bottom: 20px;
-                overflow-y: hidden;
             `;
             
             if (config.allowHtml) {

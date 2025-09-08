@@ -8,6 +8,7 @@
  * - Multiple highlight types (border, arrow, sticker, pulse)
  * - Animation support and accessibility features
  */
+import { Z_INDEX } from './ZIndexConstants.js';
 
 class PageHighlighter {
     constructor() {
@@ -33,7 +34,7 @@ class PageHighlighter {
                 width: 100%;
                 height: 100%;
                 background: rgba(0, 0, 0, 0.5);
-                z-index: 999998;
+                z-index: ${Z_INDEX.ELEMENT_HIGHLIGHT};
                 pointer-events: auto;
                 transition: opacity 0.3s ease;
             }
@@ -53,7 +54,7 @@ class PageHighlighter {
                 left: 0;
                 right: 0;
                 width: 100%;
-                z-index: 999999;
+                z-index: ${Z_INDEX.HOVER_HIGHLIGHT};
                 pointer-events: auto;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
@@ -259,7 +260,7 @@ class PageHighlighter {
             .agentlet-highlight-container {
                 position: absolute;
                 pointer-events: none;
-                z-index: 999997;
+                z-index: ${Z_INDEX.HIGHLIGHT_BACKDROP};
                 transition: all 0.3s ease;
             }
 
@@ -290,7 +291,7 @@ class PageHighlighter {
             /* Arrow pointer */
             .agentlet-arrow {
                 position: absolute;
-                z-index: 999999;
+                z-index: ${Z_INDEX.HOVER_HIGHLIGHT};
                 pointer-events: none;
             }
 
@@ -347,7 +348,7 @@ class PageHighlighter {
                 border-radius: 6px;
                 font-size: 14px;
                 white-space: nowrap;
-                z-index: 1000000;
+                z-index: ${Z_INDEX.ACTIVE_SELECTION};
                 pointer-events: none;
                 animation: agentletFadeIn 0.3s ease;
             }
@@ -391,7 +392,7 @@ class PageHighlighter {
                 justify-content: center;
                 font-weight: bold;
                 font-size: 16px;
-                z-index: 999999;
+                z-index: ${Z_INDEX.HOVER_HIGHLIGHT};
                 animation: agentletBounce 1s infinite;
                 cursor: pointer;
             }

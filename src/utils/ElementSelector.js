@@ -2,6 +2,7 @@
  * Element Selector Utility for Agentlet Core
  * Provides an interactive element selection tool for modules
  */
+import { Z_INDEX } from './ZIndexConstants.js';
 export default class ElementSelector {
     constructor() {
         this.isActive = false;
@@ -100,7 +101,7 @@ export default class ElementSelector {
             width: 100vw;
             height: 100vh;
             background: rgba(0, 0, 0, 0.2);
-            z-index: 999997;
+            z-index: ${Z_INDEX.SELECTION_BACKDROP};
             pointer-events: none;
         `;
         
@@ -123,7 +124,7 @@ export default class ElementSelector {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 14px;
             pointer-events: none;
-            z-index: 999998;
+            z-index: ${Z_INDEX.SELECTION_HIGHLIGHT};
         `;
         messageEl.textContent = message;
         this.overlay.appendChild(messageEl);
@@ -153,7 +154,7 @@ export default class ElementSelector {
             border: 2px solid #007bff;
             background: rgba(0, 123, 255, 0.1);
             pointer-events: none;
-            z-index: 999996;
+            z-index: ${Z_INDEX.BACKDROP};
             display: none;
             transition: all 0.1s ease;
         `;
@@ -356,7 +357,7 @@ export default class ElementSelector {
             border: 2px solid #007bff;
             background: rgba(0, 123, 255, 0.1);
             pointer-events: none;
-            z-index: 999998;
+            z-index: ${Z_INDEX.SELECTION_HIGHLIGHT};
             display: block;
             transition: all 0.1s ease;
         `;
