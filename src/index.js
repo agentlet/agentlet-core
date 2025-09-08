@@ -2824,13 +2824,11 @@ class AgentletCore {
             
             /* Ensure dialog overlays and content remain scrollable */
             .agentlet-dialog-overlay,
-            .agentlet-fullscreen-dialog,
             .agentlet-info-dialog {
                 overflow-y: auto !important;
             }
             
-            .agentlet-dialog-content,
-            .agentlet-fullscreen-content {
+            .agentlet-dialog-content {
                 overflow-y: auto !important;
                 max-height: calc(100vh - 120px) !important;
             }

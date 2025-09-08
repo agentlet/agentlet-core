@@ -1789,6 +1789,7 @@ class Dialog {
             message.className = 'agentlet-fullscreen-message';
             message.style.cssText = `
                 margin-bottom: 20px;
+                overflow-y: hidden;
             `;
             
             if (config.allowHtml) {
