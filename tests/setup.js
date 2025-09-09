@@ -48,15 +48,48 @@ Object.defineProperty(window, 'sessionStorage', {
   writable: true
 });
 
+// Store original console.error for fallback
+const originalError = console.error;
+
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,
   log: jest.fn(),
   warn: jest.fn(),
-  error: jest.fn(),
+  error: jest.fn((message, ...args) => {
+    // Suppress JSDOM navigation warnings
+    if (typeof message === 'string' && message.includes('Not implemented: navigation')) {
+      return;
+    }
+    if (message && message.message && message.message.includes('Not implemented: navigation')) {
+      return;
+    }
+    // Suppress expected test error messages
+    if (typeof message === 'string') {
+      if (message.includes('Failed to load environment variables from localStorage')) {
+        return; // Expected EnvManager test error
+      }
+      if (message.includes('❌ Test error')) {
+        return; // Expected showError test
+      }
+    }
+    originalError(message, ...args);
+  }),
   info: jest.fn(),
   debug: jest.fn()
 };
+
+// Additional JSDOM navigation error suppression
+const originalVirtualConsoleError = console.error;
+if (typeof process !== 'undefined' && process.stderr && process.stderr.write) {
+  const originalStderrWrite = process.stderr.write;
+  process.stderr.write = function(string, encoding, fd) {
+    if (string && typeof string === 'string' && string.includes('Not implemented: navigation')) {
+      return true; // Suppress the output
+    }
+    return originalStderrWrite.call(process.stderr, string, encoding, fd);
+  };
+}
 
 // Mock document.head with proper appendChild
 const mockHead = {

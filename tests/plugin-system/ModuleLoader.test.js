@@ -21,16 +21,6 @@ describe('ModuleLoader', () => {
 
     // Reset fetch mock
     fetch.mockClear();
-
-    // Store original location and mock it
-    originalLocation = window.location;
-    delete window.location;
-    window.location = { href: 'https://test.com' };
-  });
-
-  afterEach(() => {
-    // Restore original location
-    window.location = originalLocation;
   });
 
   describe('Constructor', () => {
