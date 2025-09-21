@@ -1,6 +1,8 @@
 # {{name}} 📎
 
-This agentlet 📎 was generated using the `agentlet-core` 📎 scaffolding tool.
+This agentlet 📎 was generated using the `agentlet-core` 📎 scaffolding tool.{{#if template}}
+
+**Template**: {{#if (eq template 'minimal')}}Minimal (simple starter){{else}}Full (comprehensive example){{/if}}{{/if}}
 
 ## Getting Started
 

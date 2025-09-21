@@ -6,6 +6,9 @@ yarn-error.log*
 .npm
 .yarn-integrity
 
+# Claude
+codebase_context.md
+
 # Build outputs
 dist/
 build/
@@ -16,6 +19,7 @@ build/
 !plop-templates/agentlet/dist/**
 
 # Playwright
+.playwright-mcp/
 test-results/
 playwright-report/
 playwright/.cache/

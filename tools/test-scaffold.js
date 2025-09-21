@@ -66,7 +66,7 @@ async function main() {
 
     // Step 2: Scaffold the test agentlet with custom name using CLI parameters
     runCommand(
-      `plop agentlet --name=${testName} --folder=../ --libs=jquery,html2canvas,xlsx`, 
+      `plop agentlet --name=${testName} --folder=../ --libs=html2canvas,xlsx`, 
       `Scaffolding test agentlet: ${testName}`
     );
 

@@ -10,16 +10,16 @@ The agentlet ecosystem includes a core framework, a collection of example implem
 `agentlet-core` is the foundation that provides core capabilities. Developers can then build their own agentlets on top of it.
 
 Key features of the `agentlet-core` framework:
-- Element selector: Add dynamic element selection to your agentlets, with the ability to limit the selection to specific types of elements (e.g., forms, tables, images).
-- Screenshot capture: Built-in support for HTML2Canvas allows rendering any web page element as an image or base64, ideal for feeding into AI models.
-- Form extractor: Extracts structured data from forms, including field names, labels, placeholders, current values, options, and bounding boxes.
-- Form filler: Automatically populates forms using structured data. You can chain the form extractor → AI model → form filler to automate form completion.
-- Utility functions: Includes methods to display information, collect user input, wait, show tooltips or bubbles, and more.
-- Data access: Retrieve information from cookies and local storage.
-- Environment management: Manage local environment variables.
-- Authentication: Supports integration with various identity providers.
-- Script injector: Easily run JavaScript code via bookmarklets or browser extensions.
-- Simplified lifecycle: Clean 3-hook lifecycle system (init, activate, cleanup) for predictable module behavior.
+- **Simple Element Selection**: Easy DOM element selection with reliable CSS selectors.
+- **Screenshot Capture**: Built-in support for HTML2Canvas to capture web page elements as images for AI processing.
+- **Smart Form Handling**: Extract form structure and fill forms programmatically with AI-friendly data formats.
+- **Table Processing**: Extract table data with optional Excel export using SheetJS.
+- **AI Integration**: Direct integration with AI providers (OpenAI) including multimodal support for text, images, and PDFs.
+- **Utility Functions**: Essential utilities for dialogs, messages, screen capture, and script injection.
+- **Data Access**: Simple access to cookies, local storage, and environment variables.
+- **Authentication**: Optional popup-based authentication for OAuth/OIDC flows.
+- **Clean Architecture**: 3-hook module lifecycle (init, activate, cleanup) for predictable behavior.
+- **No Dependencies**: Uses native DOM methods - no jQuery or complex dependencies required.
 
 These primitives enable AI developers to rapidly create agentlets that enhance their applications. Note that backend AI APIs (such as those wrapping OpenAI services or AWS Bedrock) are still required, along with proper authentication mechanisms.
 
@@ -30,24 +30,24 @@ These primitives enable AI developers to rapidly create agentlets that enhance t
 - **ModuleLoader** (`src/plugin-system/ModuleLoader.js`) - Dynamic module loading system
 - **BaseModule/BaseSubmodule** (`src/core/`) - Base classes with simplified 3-hook lifecycle (init, activate, cleanup)
 
-### Form automation system
-- **FormExtractor** (`src/utils/FormExtractor.js`) - Extracts form structure with AI-ready data
-- **FormFiller** (`src/utils/FormFiller.js`) - Safe, context-aware form filling with jQuery integration
+### Form automation system (Simplified)
+- **FormExtractor** (`src/utils/data-processing/FormExtractor.js`) - Simple form structure extraction with essential data
+- **FormFiller** (`src/utils/data-processing/FormFiller.js`) - Basic form filling with context scoping and event triggering
 - **APIs**: `window.agentlet.forms.{extract, exportForAI, quickExport, fill, fillFromAI, fillMultiple}`
 
-### Table extraction system
-- **TableExtractor** (`src/utils/TableExtractor.js`) - Extracts structured data from HTML tables with Excel export
-- Handles pagination automatically and provides Excel download using SheetJS
+### Table extraction system (Simplified)
+- **TableExtractor** (`src/utils/data-processing/TableExtractor.js`) - Basic table data extraction with optional Excel export
+- Simple pagination support (user provides next button selector) and Excel download using SheetJS
 - **APIs**: `window.agentlet.tables.{extract, extractAll, download, extractAndDownload}`
 
 ### Authentication system
-- **AuthManager** (`src/utils/AuthManager.js`) - Customizable popup-based authentication
+- **AuthManager** (`src/utils/system/AuthManager.js`) - Customizable popup-based authentication
 - Supports OIDC, OAuth2, custom IDPs with configurable token extraction
 - Optional login button in agentlet panel
 
 ### AI integration system
-- **AIManager** (`src/utils/AIProvider.js`) - Direct AI API integration with provider abstraction
-- **PDFProcessor** (`src/utils/PDFProcessor.js`) - PDF-to-image conversion using PDF.js for document analysis
+- **AIManager** (`src/utils/ai/AIProvider.js`) - Direct AI API integration with provider abstraction
+- **PDFProcessor** (`src/utils/ai/PDFProcessor.js`) - PDF-to-image conversion using PDF.js for document analysis
 - Currently supports OpenAI API with multimodal capabilities (text + images + PDFs)
 - Uses environment variables for API key management (OPENAI_API_KEY, OPENAI_MODEL, etc.)
 - **APIs**: `window.agentlet.ai.{sendPrompt, sendPromptWithPDF, convertPDFToImages, isAvailable, getStatus}`
@@ -106,48 +106,55 @@ window.agentlet.env.OPENAI_MODEL = 'gpt-4o-mini';
 window.agentlet.ai.refresh(); // Refresh after env changes
 ```
 
-### Form extraction
+### Form extraction (Simplified)
 ```javascript
-// Simple array export
+// Quick export - simple array of fields (most common)
 const fields = window.agentlet.forms.quickExport(formElement);
+// Returns: [{selector: '#email', type: 'email', name: 'email', label: 'Email', ...}]
 
-// AI-structured export
+// AI-structured export - clean format for AI processing
 const formData = window.agentlet.forms.exportForAI(element, options);
 
-// Complete extraction
+// Full extraction with all metadata
 const fullData = window.agentlet.forms.extract(element, options);
 ```
 
-### Form filling
+### Form filling (Simplified)
 ```javascript
-// Basic filling
-const result = window.agentlet.forms.fill(parentElement, selectorValues, options);
+// Basic form filling - most common usage
+const result = window.agentlet.forms.fill(parentElement, {
+    '#email': 'user@example.com',
+    '[name="firstName"]': 'John',
+    '.password-field': 'secret123'
+});
 
-// AI-powered filling
+// AI-powered filling using extracted form data
 const result = window.agentlet.forms.fillFromAI(parentElement, aiFormData, userValues, options);
 
-// Multiple forms with retry
+// Multiple forms with basic retry logic
 const results = await window.agentlet.forms.fillMultiple(parentElement, formDataArray, options);
 ```
 
-### Table extraction and Excel export
+### Table extraction and Excel export (Simplified)
 ```javascript
 // Simple table extraction
 const tableData = window.agentlet.tables.extract(tableElement);
 
-// Extract all pages (handles pagination automatically)
-const allData = await window.agentlet.tables.extractAll(tableElement, options);
+// Extract with pagination (user must provide next button selector)
+const allData = await window.agentlet.tables.extractAll(tableElement, {
+    nextButtonSelector: '.next-page-btn', // User must specify
+    maxPages: 10
+});
 
 // Download as Excel file
-const result = window.agentlet.tables.download(tableData, {
-    filename: 'data.xlsx',
-    sheetName: 'Sheet1',
-    includeMetadata: true
+const result = await window.agentlet.tables.download(tableData, {
+    filename: 'data.xlsx'
 });
 
 // Extract and download in one step
 const result = await window.agentlet.tables.extractAndDownload(tableElement, {
     includePagination: true,
+    nextButtonSelector: '.next-page-btn', // Required for pagination
     filename: 'complete-data.xlsx'
 });
 ```
@@ -174,7 +181,6 @@ class MyAgentlet extends window.agentlet.BaseModule {
     async initModule() {
         // Called once during module startup
         console.log('Initializing module');
-        window.agentlet.refreshjQuery();
         // Setup logic here
     }
     
@@ -195,10 +201,12 @@ class MyAgentlet extends window.agentlet.BaseModule {
 }
 ```
 
-### jQuery management
+### Native DOM Integration
 ```javascript
-// Refresh jQuery reference if loaded after agentlet initialization
-window.agentlet.refreshjQuery();
+// Agentlet now uses native DOM methods for all operations
+// No jQuery dependency required
+const element = document.querySelector('.my-element');
+element.addEventListener('click', handleClick);
 ```
 
 ## Development rules
@@ -245,7 +253,7 @@ This repository enforces [Conventional Commits](https://www.conventionalcommits.
 **Examples:**
 ```bash
 feat: add table extraction API for agentlets
-fix: resolve jQuery reference issue in form filler
+fix: resolve DOM manipulation issue in form filler
 docs: update API documentation for table extractor
 style: improve CSS formatting in panel component
 refactor: use CLI parameters for plop instead of file modification

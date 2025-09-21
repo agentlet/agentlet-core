@@ -28,16 +28,16 @@ Many more demos or examples below and in the repository!
 
 Deliver tactical improvements that create strategic advantage without infrastructure changes:
 
-- Zero backend changes required for web application enhancement
-- Three deployment options: bookmarklets, browser extensions, or native integration
-- Instant deployment via bookmarklet injection — no installation required
-- Advanced form automation with extraction, AI processing, and intelligent filling
-- Table-to-Excel export with automatic pagination handling
-- Screenshot capture integration for AI-powered visual analysis
-- Modular plugin architecture for custom agentlet development
-- Authentication management with your existing identity provider integration
-- Built-in scaffolding tools for rapid agentlet development
-- CSP and CORS compliant for secure enterprise deployment
+- **Zero backend changes** required for web application enhancement
+- **Three deployment options**: bookmarklets, browser extensions, or native integration
+- **Instant deployment** via bookmarklet injection — no installation required
+- **Simple form automation** with extraction, AI processing, and intelligent filling
+- **Table-to-Excel export** with user-controlled pagination (Excel optional)
+- **Screenshot capture** integration for AI-powered visual analysis
+- **Clean module architecture** with 3-hook lifecycle for predictable behavior
+- **Optional authentication** management with identity provider integration
+- **Built-in scaffolding tools** for rapid agentlet development
+- **Focused & lightweight** - only the features you actually need
 
 ## The agentlet approach
 
@@ -101,23 +101,21 @@ Key features of the framework include:
 - Documentation and example implementations;
 - Test suites.
 
-#### Utility components
+#### Utility components (Simplified & Focused)
 
-`agentlet-core` currently includes the following components to simplify the development of _agentlets_:
+`agentlet-core` includes essential components for building practical AI-powered web augmentations:
 
-- **Element selector**: Adds dynamic element selection to your agentlets, with the ability to restrict selection to specific element types (e.g., forms, tables, images).
-- **Screenshot capture**: Built-in integration with HTML2Canvas enables rendering any web page element as an image or base64, ideal for feeding into AI models.
-- **Form extractor**: Extracts structured data from forms, including field names, labels, placeholders, current values, options, and bounding boxes.
-- **Form filler**: Automatically fills out forms using structured data. You can chain the form extractor → AI model → form filler to automate form completion.
-- **Table extractor**: Extracts structured data from tables, including support for paginated tables.
-- **Excel generator**: Creates Excel spreadsheets on the fly using _SheetJS (JS-XLSX)_, typically used alongside the table extractor.
-- **Dialog functions**: Provides methods to display information, collect user input, wait, show tooltips or bubbles, and more.
-- **Data access**: Retrieves information from cookies and local storage.
-- **Environment management**: Manages local environment variables.
-- **Authentication**: Supports integration with various identity providers.
-- **Script injector**: Easily runs JavaScript code via bookmarklets or browser extensions.
+- **Element selector**: Simple, reliable DOM element selection with CSS selectors.
+- **Screenshot capture**: HTML2Canvas integration for capturing web elements as images for AI processing.
+- **Form automation**: Extract form structure and fill forms programmatically with AI-friendly data formats.
+- **Table processing**: Extract table data with optional Excel export (requires user to specify pagination controls).
+- **AI integration**: Direct OpenAI API integration with support for text, images, and PDF documents.
+- **Dialog system**: Essential dialogs for user interaction, input collection, and progress display.
+- **Data access**: Simple access to cookies, local storage, and environment variables.
+- **Authentication**: Optional popup-based authentication for OAuth/OIDC flows.
+- **Script injection**: Safe JavaScript execution for bookmarklets and extensions.
 
-These components give AI developers the tools to quickly build agentlets that augment web applications. While backend AI APIs (such as OpenAI or AWS Bedrock) and proper authentication are still required for advanced features, agentlet offers a solid foundation to easily connect and integrate these services.
+These components focus on the 80% of use cases that matter most, providing a clean, maintainable foundation for AI developers to build practical web augmentations without unnecessary complexity.
 
 ## Getting started
 
@@ -151,10 +149,17 @@ npm run dev       # Just starts server (no build)
 This command creates a working demo agentlet named `my-agentlet` within `agentlet-core/../my-agentlet/`, pre-packaged with all required external libraries.
 
 ```bash
+# Full template (comprehensive example with all API features)
 npm run scaffold:agentlet:defaults
+
+# Minimal template (simple starter - just 74 lines)
+npm run scaffold:agentlet -- --minimal
+
+# Interactive scaffolding (choose template and options)
+npm run scaffold:agentlet
 ```
 
-You can remove the `:defaults` option should you want to scaffold a demo agentlet with other settings. They will be asked in the interactive scaffolding.
+The **minimal template** provides a clean 74-line starting point with basic structure and agentlet.Dialog API usage, while the **full template** includes comprehensive examples of all framework features.
 
 **Run the custom agentlet:**
 
@@ -279,7 +284,6 @@ The agentlet framework is built on several excellent open-source libraries:
 - **[PDF.js](https://mozilla.github.io/pdf.js/)** - Mozilla Foundation - PDF rendering and processing
 - **[html2canvas](https://html2canvas.hertzen.com/)** - HTML to canvas screenshot generation  
 - **[SheetJS](https://sheetjs.com/)** - Excel file generation and manipulation
-- **[jQuery](https://jquery.com/)** - DOM manipulation and utilities (optional bundled version)
 
 ### Testing & Development
 

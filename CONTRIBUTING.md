@@ -83,7 +83,7 @@ We welcome feature requests! Please create an issue with:
    **Examples:**
    ```bash
    git commit -m "feat: add table extraction API"
-   git commit -m "fix: resolve jQuery reference issue"
+   git commit -m "fix: resolve DOM manipulation issue"
    git commit -m "docs: update API documentation"
    ```
 

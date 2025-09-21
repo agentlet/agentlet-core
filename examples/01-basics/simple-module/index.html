@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Module Example - Agentlet Core</title>
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <script src="../../shared/console-utils.js"></script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../../index.html">Examples</a> &gt; 
+        <a href="../index.html">01-basics</a> &gt; 
+        <span>simple-module</span>
+    </nav>
+
+    <div class="layout-container">
+        <main class="main-content">
+            <h1>📦 Simple Module Example</h1>
+            
+            <div class="highlight-box">
+                <h3>What this example shows</h3>
+                <p>How to create and register a simple agentlet module using the new simplified Module API.</p>
+            </div>
+
+            <section>
+                <h2>1. Create a Simple Module</h2>
+                <div class="code-block">
+                    <pre><code class="language-javascript">// Create a simple agentlet module
+class SimpleModule extends window.agentlet.Module {
+    constructor() {
+        super({
+            name: 'simple-demo',
+            patterns: ['*'],  // Match all URLs
+            description: 'A simple demonstration module'
+        });
+    }
+    
+    async init() {
+        console.log('✅ Simple module initialized!');
+    }
+    
+    async activate(context) {
+        console.log('🔄 Simple module activated!', context);
+        // Add custom styling
+        this.injectStyles(`
+            .simple-module-banner {
+                background: linear-gradient(45deg, #007bff, #6610f2);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                margin: 10px 0;
+                text-align: center;
+            }
+        `);
+    }
+    
+    async cleanup() {
+        console.log('🧹 Simple module cleaned up!');
+    }
+    
+    getContent() {
+        return `
+            &lt;div class="simple-module-banner"&gt;
+                &lt;h3&gt;🎉 Simple Module Active!&lt;/h3&gt;
+                &lt;p&gt;This module matches all URLs and shows custom content.&lt;/p&gt;
+                &lt;button onclick="window.agentlet.utils.MessageBubble.success('Hello from Simple Module!')"&gt;
+                    Say Hello
+                &lt;/button&gt;
+            &lt;/div&gt;
+        `;
+    }
+}</code></pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>2. Register the Module</h2>
+                <div class="code-block">
+                    <pre><code class="language-javascript">// Register the module with Agentlet
+window.agentlet.modules.register(new SimpleModule());</code></pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>3. Try It Out</h2>
+                <div class="controls">
+                    <button id="initializeBtn" class="btn btn-primary">
+                        🚀 Initialize Agentlet & Register Module
+                    </button>
+                    <button id="showModulesBtn" class="btn btn-secondary" disabled>
+                        📦 Show Registered Modules
+                    </button>
+                    <button id="testEventsBtn" class="btn btn-secondary" disabled>
+                        📡 Test Module Events
+                    </button>
+                </div>
+            </section>
+
+            <section>
+                <h2>4. Module Lifecycle</h2>
+                <div class="info-box">
+                    <h4>Simplified 3-Hook Lifecycle:</h4>
+                    <ol>
+                        <li><strong>init()</strong> - Called once when module is first loaded</li>
+                        <li><strong>activate(context)</strong> - Called when URL matches patterns</li>
+                        <li><strong>cleanup(context)</strong> - Called when module is deactivated</li>
+                    </ol>
+                </div>
+            </section>
+
+            <section>
+                <h2>API Reference</h2>
+                <div class="api-reference">
+                    <h4>Module Creation:</h4>
+                    <code>class MyModule extends window.agentlet.Module</code>
+                    
+                    <h4>Module Registration:</h4>
+                    <code>window.agentlet.modules.register(new MyModule())</code>
+                    
+                    <h4>Module Management:</h4>
+                    <ul>
+                        <li><code>window.agentlet.modules.get(name)</code> - Get module by name</li>
+                        <li><code>window.agentlet.modules.getAll()</code> - Get all module names</li>
+                        <li><code>window.agentlet.modules.unregister(name)</code> - Remove module</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <aside class="console-panel">
+            <div class="console-header">
+                <h3>📋 Console & Status</h3>
+            </div>
+            <div id="console-output" class="console-output"></div>
+            <div id="status-display" class="status-display">
+                <div class="status-item">
+                    <span class="status-label">Agentlet Status:</span>
+                    <span id="agentlet-status" class="status-value">Not loaded</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Active Module:</span>
+                    <span id="active-module" class="status-value">None</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Total Modules:</span>
+                    <span id="total-modules" class="status-value">0</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        let agentletCore = null;
+
+        // Initialize example
+        document.getElementById('initializeBtn').onclick = async function() {
+            try {
+                logMessage('🚀 Loading Agentlet Core...');
+                
+                // Dynamically import and initialize AgentletCore
+                const { default: AgentletCore } = await import('../../../dist/agentlet-core.js');
+                
+                agentletCore = new AgentletCore({
+                    debugMode: true,
+                    startMinimized: false
+                });
+                
+                await agentletCore.init();
+                
+                updateStatus('agentlet-status', 'Loaded ✅');
+                logMessage('✅ Agentlet Core initialized!');
+                
+                // Create and register the simple module
+                class SimpleModule extends window.agentlet.Module {
+                    constructor() {
+                        super({
+                            name: 'simple-demo',
+                            patterns: ['*'],
+                            description: 'A simple demonstration module'
+                        });
+                    }
+                    
+                    async init() {
+                        logMessage('✅ Simple module initialized!');
+                    }
+                    
+                    async activate(context) {
+                        logMessage('🔄 Simple module activated!', context);
+                        updateStatus('active-module', this.name);
+                        
+                        this.injectStyles(`
+                            .simple-module-banner {
+                                background: linear-gradient(45deg, #007bff, #6610f2);
+                                color: white;
+                                padding: 10px;
+                                border-radius: 5px;
+                                margin: 10px 0;
+                                text-align: center;
+                            }
+                        `);
+                    }
+                    
+                    async cleanup() {
+                        logMessage('🧹 Simple module cleaned up!');
+                        updateStatus('active-module', 'None');
+                    }
+                    
+                    getContent() {
+                        return `
+                            <div class="simple-module-banner">
+                                <h3>🎉 Simple Module Active!</h3>
+                                <p>This module matches all URLs and shows custom content.</p>
+                                <button onclick="window.agentlet.utils.MessageBubble.success('Hello from Simple Module!')">
+                                    Say Hello
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+                
+                // Register the module
+                window.agentlet.modules.register(new SimpleModule());
+                
+                updateStatus('total-modules', window.agentlet.modules.getAll().length);
+                logMessage(`📦 Module registered: ${window.agentlet.modules.getAll()[0]}`);
+                
+                // Enable other buttons
+                document.getElementById('showModulesBtn').disabled = false;
+                document.getElementById('testEventsBtn').disabled = false;
+                document.getElementById('initializeBtn').disabled = true;
+                
+            } catch (error) {
+                logMessage(`❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        document.getElementById('showModulesBtn').onclick = function() {
+            const modules = window.agentlet.modules.getAll();
+            const activeModule = window.agentlet.moduleRegistry.activeModule;
+            
+            logMessage(`📦 Registered modules: ${modules.length}`);
+            modules.forEach(name => {
+                const module = window.agentlet.modules.get(name);
+                const isActive = activeModule && activeModule.name === name;
+                logMessage(`  • ${name} ${isActive ? '(ACTIVE)' : ''}`);
+            });
+        };
+
+        document.getElementById('testEventsBtn').onclick = function() {
+            const module = window.agentlet.modules.get('simple-demo');
+            if (module) {
+                // Test module events
+                module.emit('test-event', { message: 'Hello from event system!' });
+                logMessage('📡 Test event emitted');
+                
+                // Show module metadata
+                const metadata = module.getMetadata();
+                logMessage('📋 Module metadata:', metadata);
+            }
+        };
+    </script>
+</body>
+</html>

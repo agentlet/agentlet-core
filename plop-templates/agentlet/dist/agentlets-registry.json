@@ -1,5 +1,20 @@
-[{
-    "name": "{{name}}",
-    "url": "http://localhost:8080/module-bundle.js",
-    "module": "{{camelCase name}}AgentletModule"
-}]
+{
+{{#if (eq libraryLoading 'registry')}}
+  "libraries": {
+    "xlsx": "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+    "html2canvas": "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+    "pdfjs": "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+    "hotkeys": "https://cdnjs.cloudflare.com/ajax/libs/hotkeys-js/3.10.1/hotkeys.min.js"
+  },
+{{/if}}
+  "agentlets": [
+    {
+      "name": "{{name}}",
+      "version": "1.0.0",
+      "url": "./module-bundle.js",
+      "module": "{{camelCase name}}AgentletModule",
+      "patterns": ["*"],
+      "description": "A powerful Agentlet module for enhanced web automation and data extraction"
+    }
+  ]
+}

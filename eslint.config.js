@@ -46,9 +46,6 @@ export default [
                 require: 'readonly',
                 exports: 'readonly',
                 
-                // jQuery
-                '$': 'readonly',
-                'jQuery': 'readonly',
                 
                 // Chrome extension APIs
                 'chrome': 'readonly',
