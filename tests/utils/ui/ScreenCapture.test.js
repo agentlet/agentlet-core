@@ -152,7 +152,7 @@ describe('ScreenCapture', () => {
       };
 
       await expect(screenCapture.captureBySelector('.non-existent'))
-        .rejects.toThrow('Invalid element provided for capture');
+        .rejects.toThrow('Element not found with selector: .non-existent');
     });
 
     test('should have captureBySelector method', () => {

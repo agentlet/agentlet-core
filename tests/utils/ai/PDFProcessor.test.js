@@ -150,7 +150,7 @@ describe('PDFProcessor', () => {
                 }
             }
 
-            await expect(promise).rejects.toThrow('PDF.js library is not available. Make sure AgentletCore is properly initialized.');
+            await expect(promise).rejects.toThrow('PDF.js library is not available. PDF processing is disabled.');
             
             global.setTimeout = originalSetTimeout;
         }, 10000);

@@ -8,11 +8,44 @@ describe('MessageBubble', () => {
   let messageBubble;
 
   beforeEach(() => {
-    // Mock document
-    global.document = {
-      ...global.document,
-      head: global.document.head || { appendChild: jest.fn() }
-    };
+    // Ensure document.head exists for style injection
+    if (!document.head) {
+      document.head = document.createElement('head');
+      document.documentElement.appendChild(document.head);
+    }
+
+    // Mock DOM methods to avoid JSDOM issues
+    jest.spyOn(document.body, 'appendChild').mockImplementation((child) => {
+      // Ensure child has necessary DOM methods
+      if (child && typeof child === 'object') {
+        child.dispatchEvent = jest.fn();
+        child.querySelector = jest.fn(() => ({ innerHTML: '', textContent: '' }));
+        child.remove = jest.fn();
+        child.classList = { add: jest.fn(), remove: jest.fn(), contains: jest.fn() };
+        child.addEventListener = jest.fn();
+        child.removeEventListener = jest.fn();
+      }
+      return child;
+    });
+
+    // Mock createElement to return mock elements with necessary methods
+    jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      return {
+        tagName: tagName.toUpperCase(),
+        id: '',
+        style: { cssText: '' },
+        innerHTML: '',
+        textContent: '',
+        dispatchEvent: jest.fn(),
+        querySelector: jest.fn(() => ({ innerHTML: '', textContent: '' })),
+        querySelectorAll: jest.fn(() => []),
+        remove: jest.fn(),
+        classList: { add: jest.fn(), remove: jest.fn(), contains: jest.fn() },
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        appendChild: jest.fn()
+      };
+    });
 
     // Mock timers
     global.setTimeout = jest.fn((fn, delay) => {
@@ -22,6 +55,16 @@ describe('MessageBubble', () => {
     global.clearTimeout = jest.fn();
 
     messageBubble = new MessageBubble();
+  });
+
+  afterEach(() => {
+    // Clean up any created DOM elements
+    if (messageBubble.container && messageBubble.container.parentNode) {
+      messageBubble.container.parentNode.removeChild(messageBubble.container);
+    }
+
+    // Restore all mocks
+    jest.restoreAllMocks();
   });
 
   describe('Constructor', () => {

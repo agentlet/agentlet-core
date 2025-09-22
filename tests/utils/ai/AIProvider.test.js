@@ -3,11 +3,11 @@
  */
 
 import { BaseAIProvider, OpenAIProvider, AIManager } from '../../../src/utils/ai/AIProvider.js';
-import { LocalStorageEnvironmentVariablesManager } from '../../src/utils/EnvManager.js';
-import PDFProcessor from '../../src/utils/PDFProcessor.js';
+import { LocalStorageEnvironmentVariablesManager } from '../../../src/utils/config-persistence/EnvManager.js';
+import PDFProcessor from '../../../src/utils/ai/PDFProcessor.js';
 
 // Mock PDFProcessor
-jest.mock('../../src/utils/PDFProcessor.js');
+jest.mock('../../../src/utils/ai/PDFProcessor.js');
 
 describe('AIProvider', () => {
     let mockEnvManager;
@@ -190,7 +190,7 @@ describe('AIProvider', () => {
             const result = await manager.sendPromptWithPDF('Analyze PDF', mockPDFData, {});
             
             expect(result).toBe('PDF analysis response');
-            expect(mockProvider.sendPromptWithPDF).toHaveBeenCalledWith('Analyze PDF', mockPDFData, {});
+            expect(mockProvider.sendPromptWithPDF).toHaveBeenCalledWith('Analyze PDF', mockPDFData, {}, null);
         });
 
         test('should throw error when no provider available for sendPromptWithPDF', async () => {

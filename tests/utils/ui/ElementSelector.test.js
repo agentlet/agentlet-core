@@ -8,26 +8,45 @@ describe('ElementSelector', () => {
   let elementSelector;
 
   beforeEach(() => {
+    // Mock DOM methods that might not exist in JSDOM
+    document.elementFromPoint = jest.fn(() => ({
+      id: 'test-element',
+      matches: jest.fn(() => true)
+    }));
 
-    // Mock document methods
-    global.document = {
-      body: {
-        style: {},
-        appendChild: jest.fn(),
-        removeChild: jest.fn()
-      },
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      elementFromPoint: jest.fn(() => ({ id: 'test-element', matches: jest.fn(() => true) })),
-      getElementById: jest.fn(() => null)
-    };
+    // Spy on document methods
+    jest.spyOn(document, 'addEventListener');
+    jest.spyOn(document, 'removeEventListener');
+    jest.spyOn(document, 'getElementById').mockReturnValue(null);
+
+    // Ensure document.body exists and mock appendChild
+    if (!document.body) {
+      document.body = document.createElement('body');
+      document.documentElement.appendChild(document.body);
+    }
+
+    jest.spyOn(document.body, 'appendChild').mockImplementation((child) => child);
+
+    // Mock createElement to return mock elements
+    jest.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      return {
+        tagName: tagName.toUpperCase(),
+        id: '',
+        style: { cssText: '', cursor: '' },
+        innerHTML: '',
+        textContent: '',
+        remove: jest.fn(),
+        classList: { add: jest.fn(), remove: jest.fn(), contains: jest.fn() },
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        appendChild: jest.fn()
+      };
+    });
 
     // Mock console methods
-    global.console = {
-      log: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn()
-    };
+    jest.spyOn(console, 'log').mockImplementation();
+    jest.spyOn(console, 'warn').mockImplementation();
+    jest.spyOn(console, 'error').mockImplementation();
 
     elementSelector = new ElementSelector();
   });
@@ -37,6 +56,9 @@ describe('ElementSelector', () => {
     if (elementSelector.isActive) {
       elementSelector.stop();
     }
+
+    // Restore all mocks
+    jest.restoreAllMocks();
   });
 
   describe('Constructor', () => {

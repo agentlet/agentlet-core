@@ -233,7 +233,9 @@ describe('ModuleRegistry', () => {
                 activationCount: 0,
                 failedActivations: 0,
                 activeModule: null,
-                moduleList: ['test-module']
+                moduleList: ['test-module'],
+                registriesLoaded: 0,
+                registryLoadFailures: 0
             });
         });
     });
