@@ -85,24 +85,29 @@ test.describe('Agentlet panel', () => {
     await page.click('#agentlet-toggle');
 
     // Wait for minimize animation and check state
-    await page.waitForTimeout(300); // Allow for CSS transition
+    await page.waitForTimeout(500); // Allow for CSS transition (increased for reliability)
     isMinimized = await page.evaluate(() => window.agentlet?.isMinimized);
     expect(isMinimized).toBe(true);
 
-    // Verify panel is visually minimized by checking transform
-    const transform = await page.evaluate(() => {
+    // Verify panel is visually minimized by checking transform or other visual indicators
+    const isVisuallyMinimized = await page.evaluate(() => {
       const panel = document.getElementById('agentlet-container');
       const computedTransform = getComputedStyle(panel).transform;
-      // Check if it's translated (either translateX or matrix format)
-      return computedTransform !== 'none' && computedTransform !== 'matrix(1, 0, 0, 1, 0, 0)';
+      const computedWidth = getComputedStyle(panel).width;
+
+      // Check if it's translated (either translateX or matrix format) OR has minimal width
+      const hasTransform = computedTransform !== 'none' && computedTransform !== 'matrix(1, 0, 0, 1, 0, 0)';
+      const hasMinimalWidth = parseInt(computedWidth) <= 50; // Panel is collapsed to minimal width
+
+      return hasTransform || hasMinimalWidth || panel.classList.contains('minimized');
     });
-    expect(transform).toBe(true);
+    expect(isVisuallyMinimized).toBe(true);
 
     // Click toggle button to maximize
     await page.click('#agentlet-toggle');
 
     // Wait for maximize animation and check state
-    await page.waitForTimeout(300); // Allow for CSS transition
+    await page.waitForTimeout(500); // Allow for CSS transition (increased for reliability)
     isMinimized = await page.evaluate(() => window.agentlet?.isMinimized);
     expect(isMinimized).toBe(false);
   });

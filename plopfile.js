@@ -120,13 +120,25 @@ module.exports = function (plop) {
 
       // Add current folder name for dynamic agentlet-core reference
       data.agentletCoreFolder = currentFolderName;
+
+      // Define ignore patterns based on template type
+      const ignorePatterns = ['**/module*.js']; // Always exclude module files initially
+      if (data.template === 'minimal') {
+        // In minimal mode, exclude feature-specific test files
+        ignorePatterns.push(
+          '**/module-table-extraction.spec.js',
+          '**/module-message-bubbles.spec.js',
+          '**/module-dialogs.spec.js'
+        );
+      }
+
       const actions = [
         {
           type: 'addMany',
           destination: '{{folder}}/{{name}}',
           base: 'plop-templates/agentlet',
           templateFiles: 'plop-templates/agentlet/**',
-          globOptions: { dot: true, ignore: ['**/module*.js'] } // Exclude all module files initially
+          globOptions: { dot: true, ignore: ignorePatterns }
         },
       ];
 

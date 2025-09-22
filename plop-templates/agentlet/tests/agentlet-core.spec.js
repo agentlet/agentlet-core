@@ -28,12 +28,17 @@ test.describe('Agentlet core framework', () => {
 
     // Verify module content is loaded
     const hasModuleContent = await page.locator('#agentlet-content').textContent();
-    expect(hasModuleContent).toContain('Welcome to My-Agentlet!');
+    {{#if (eq template 'minimal')}}
+    expect(hasModuleContent).toContain('Hello from {{titleCase name}}!');
+    {{else}}
+    expect(hasModuleContent).toContain('Welcome to {{titleCase name}}!');
+    {{/if}}
   });
 
+{{#unless (eq template 'minimal')}}
   test('z-index hierarchy is correct for all UI elements', async ({ page }) => {
     await page.goto('/');
-    
+
     const productionLink = page.getByRole('link', { name: '📎 {{kebabCase name}} (Production)' });
     await productionLink.click();
     await page.waitForSelector('#agentlet-container', { state: 'visible' });
@@ -45,12 +50,12 @@ test.describe('Agentlet core framework', () => {
     const zIndexComparison = await page.evaluate(() => {
       const panel = document.getElementById('agentlet-container');
       const messageContainer = document.getElementById('agentlet-message-bubbles');
-      
+
       if (!panel || !messageContainer) return null;
-      
+
       const panelZ = parseInt(getComputedStyle(panel).zIndex);
       const messageZ = parseInt(getComputedStyle(messageContainer).zIndex);
-      
+
       return {
         panel: panelZ,
         messages: messageZ,
@@ -70,12 +75,12 @@ test.describe('Agentlet core framework', () => {
     const dialogZIndex = await page.evaluate(() => {
       const panel = document.getElementById('agentlet-container');
       const overlay = document.querySelector('.agentlet-dialog-overlay');
-      
+
       if (!panel || !overlay) return null;
-      
+
       const panelZ = parseInt(getComputedStyle(panel).zIndex);
       const overlayZ = parseInt(getComputedStyle(overlay).zIndex);
-      
+
       return {
         panel: panelZ,
         overlay: overlayZ,
@@ -92,5 +97,29 @@ test.describe('Agentlet core framework', () => {
     await page.keyboard.press('Escape');
     await page.waitForSelector('.agentlet-dialog-overlay', { state: 'detached' });
   });
+{{/unless}}
+
+{{#if (eq template 'minimal')}}
+  test('basic dialog functionality works in minimal template', async ({ page }) => {
+    await page.goto('/');
+
+    const productionLink = page.getByRole('link', { name: '📎 {{kebabCase name}} (Production)' });
+    await productionLink.click();
+    await page.waitForSelector('#agentlet-container', { state: 'visible' });
+
+    // Test basic dialog functionality
+    await page.click('button:has-text("Try Dialog API")');
+    await page.waitForSelector('.agentlet-dialog-overlay', { state: 'visible' });
+
+    // Verify dialog content
+    const dialogText = await page.locator('.agentlet-info-dialog').textContent();
+    expect(dialogText).toContain('It Works!');
+    expect(dialogText).toContain('Your minimal agentlet is working perfectly');
+
+    // Close dialog
+    await page.click('button:has-text("Great!")');
+    await page.waitForSelector('.agentlet-dialog-overlay', { state: 'detached' });
+  });
+{{/if}}
 
 });
