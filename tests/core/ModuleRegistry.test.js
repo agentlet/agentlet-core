@@ -67,14 +67,14 @@ describe('ModuleRegistry', () => {
             }).toThrow('Invalid module: name is required');
         });
 
-        test('should warn when replacing existing module', () => {
+        test('should warn when registering same module instance', () => {
             const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
-            
+
             registry.register(testModule);
             registry.register(testModule);
 
-            expect(consoleSpy).toHaveBeenCalledWith('Module test-module already registered, replacing...');
-            
+            expect(consoleSpy).toHaveBeenCalledWith('Module test-module already registered with same instance, ignoring');
+
             consoleSpy.mockRestore();
         });
     });

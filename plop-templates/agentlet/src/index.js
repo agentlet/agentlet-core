@@ -35,9 +35,10 @@ import AgentletCore from 'agentlet-core';
     agentletConfig.registryUrl = '{{registryUrl}}';
     agentletConfig.loadingMode = 'registry';
 {{else}}
-    // Even in bundled mode, load registry for local module discovery
+    // Bundled mode: load registry for module script loading but skip auto-registration
     agentletConfig.registryUrl = './agentlets-registry.json';
     agentletConfig.loadingMode = 'bundled';
+    agentletConfig.skipRegistryModuleRegistration = true; // Prevent dual registration
 {{/if}}
     agentletConfig.envVarsButton = true;
     
@@ -51,10 +52,16 @@ import AgentletCore from 'agentlet-core';
             window.agentlet.configurePDFWorker('http://localhost:8080/pdf.worker.min.mjs');
         }
         
-        // Register local module (only if the global class exists)
+        // Register local module through ModuleManager to prevent duplicates
         if (typeof window.{{camelCase name}}AgentletModule !== 'undefined') {
             const localModule = new window.{{camelCase name}}AgentletModule();
-            agentlet.moduleRegistry.register(localModule);
+            // Use ModuleManager instead of direct moduleRegistry registration
+            if (agentlet.moduleManager) {
+                agentlet.moduleManager.register(localModule, 'local-template');
+            } else {
+                // Fallback for older agentlet-core versions
+                agentlet.moduleRegistry.register(localModule);
+            }
             console.log('🤖 Local agentlet module registered:', localModule.name);
         }
     }).catch(error => {

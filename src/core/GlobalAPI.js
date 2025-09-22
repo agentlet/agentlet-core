@@ -123,13 +123,22 @@ export class GlobalAPI {
         // Expose initialization status
         window.agentlet.initialized = this.core.initialized;
         
-        // Expose useful APIs for modules
+        // Expose useful APIs for modules via ModuleManager
         window.agentlet.modules = {
-            get: (name) => this.core.moduleRegistry.get(name),
-            getAll: () => this.core.moduleRegistry.getAll(),
-            register: (module) => this.core.moduleRegistry.register(module),
-            unregister: (name) => this.core.moduleRegistry.unregister(name)
+            get: (name) => this.core.moduleManager ? this.core.moduleManager.get(name) : this.core.moduleRegistry.get(name),
+            getAll: () => this.core.moduleManager ? this.core.moduleManager.getAll() : this.core.moduleRegistry.getAll(),
+            register: (module) => {
+                if (this.core.moduleManager) {
+                    this.core.moduleManager.register(module, 'global-api');
+                } else {
+                    this.core.moduleRegistry.register(module);
+                }
+            },
+            unregister: (name) => this.core.moduleManager ? this.core.moduleManager.unregister(name) : this.core.moduleRegistry.unregister(name)
         };
+
+        // Expose ModuleManager directly for advanced use
+        window.agentlet.moduleManager = this.core.moduleManager;
         
         // Also expose moduleRegistry directly for advanced use
         window.agentlet.moduleRegistry = this.core.moduleRegistry;

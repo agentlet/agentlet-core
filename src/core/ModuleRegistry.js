@@ -8,17 +8,18 @@ export default class ModuleRegistry {
         this.modules = new Map();
         this.activeModule = null;
         this.lastUrl = window.location.href;
-        
+
         // Event system
         this.eventBus = config.eventBus;
-        
+
         // Registry configuration
         this.registryUrl = config.registryUrl;
         this.loadedRegistries = new Set();
-        
+        this.skipRegistryModuleRegistration = config.skipRegistryModuleRegistration || false;
+
         // Callback for module changes
         this.onModuleChange = null;
-        
+
         // Performance tracking - simplified
         this.metrics = {
             totalModules: 0,
@@ -27,7 +28,11 @@ export default class ModuleRegistry {
             registriesLoaded: 0,
             registryLoadFailures: 0
         };
-        
+
+        // Guards to prevent duplicate operations
+        this._registrationInProgress = new Set();
+        this._activationInProgress = new Set();
+
         // Start URL monitoring
         this.startUrlMonitoring();
     }
@@ -41,21 +46,39 @@ export default class ModuleRegistry {
             throw new Error('Invalid module: name is required');
         }
 
-        if (this.modules.has(module.name)) {
-            console.warn(`Module ${module.name} already registered, replacing...`);
+        // Prevent double registration
+        if (this._registrationInProgress.has(module.name)) {
+            console.warn(`Registration already in progress for ${module.name}, skipping`);
+            return;
         }
 
-        // Set event bus reference
-        module.eventBus = this.eventBus;
+        this._registrationInProgress.add(module.name);
 
-        this.modules.set(module.name, module);
-        this.metrics.totalModules = this.modules.size;
+        try {
+            // Enhanced duplicate detection
+            if (this.modules.has(module.name)) {
+                const existing = this.modules.get(module.name);
+                if (existing === module) {
+                    console.warn(`Module ${module.name} already registered with same instance, ignoring`);
+                    return; // Don't re-register the exact same instance
+                }
+                console.warn(`Module ${module.name} already registered, replacing...`);
+            }
 
-        console.log(`📦 Module registered: ${module.name}`);
-        this.emit('module:registered', { module: module.name });
+            // Set event bus reference
+            module.eventBus = this.eventBus;
 
-        // Check if this module should be active for current URL
-        this.checkUrlChange();
+            this.modules.set(module.name, module);
+            this.metrics.totalModules = this.modules.size;
+
+            console.log(`📦 Module registered: ${module.name}`);
+            this.emit('module:registered', { module: module.name });
+
+            // Check if this module should be active for current URL
+            this.checkUrlChange();
+        } finally {
+            this._registrationInProgress.delete(module.name);
+        }
     }
 
     /**
@@ -107,6 +130,15 @@ export default class ModuleRegistry {
     async activateModule(module, context = {}) {
         if (!module) return;
 
+        // Prevent cascade activations
+        const activationKey = `${module.name}-${context.trigger || 'default'}`;
+        if (this._activationInProgress.has(activationKey)) {
+            console.warn(`Activation already in progress for ${activationKey}, skipping`);
+            return;
+        }
+
+        this._activationInProgress.add(activationKey);
+
         try {
             // Deactivate current module if different
             if (this.activeModule && this.activeModule !== module) {
@@ -139,6 +171,8 @@ export default class ModuleRegistry {
             this.metrics.failedActivations++;
             console.error(`❌ Module activation failed: ${module.name}`, error);
             this.emit('module:activationFailed', { module: module.name, error: error.message });
+        } finally {
+            this._activationInProgress.delete(activationKey);
         }
     }
 
@@ -323,15 +357,19 @@ export default class ModuleRegistry {
                 throw new Error(`Module class '${moduleClass}' not found in global scope after loading ${url}`);
             }
             
-            // Create and register the module instance
+            // Create module instance
             const moduleInstance = new ModuleClass();
             if (!moduleInstance.name) {
                 moduleInstance.name = name; // Set name if not provided
             }
-            
-            this.register(moduleInstance);
-            
-            console.log(`✅ Agentlet loaded and registered: ${name}`);
+
+            // Only register if not skipping registry module registration
+            if (!this.skipRegistryModuleRegistration) {
+                this.register(moduleInstance);
+                console.log(`✅ Agentlet loaded and registered: ${name}`);
+            } else {
+                console.log(`✅ Agentlet loaded (registration skipped): ${name}`);
+            }
             
         } catch (error) {
             console.error(`❌ Failed to load agentlet module ${name}:`, error);

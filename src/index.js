@@ -4,6 +4,7 @@
  */
 
 import ModuleRegistry from './core/ModuleRegistry.js';
+import ModuleManager from './core/ModuleManager.js';
 import Module from './core/Module.js';
 import ElementSelector from './utils/ui/ElementSelector.js';
 import Dialog from './utils/ui/Dialog.js';
@@ -126,8 +127,13 @@ class AgentletCore {
         // Initialize module registry with configuration
         this.moduleRegistry = new ModuleRegistry({
             eventBus: this.eventBus,
-            registryUrl: this.config.registryUrl
+            registryUrl: this.config.registryUrl,
+            skipRegistryModuleRegistration: this.config.skipRegistryModuleRegistration
         });
+
+        // Initialize centralized module manager
+        this.moduleManager = new ModuleManager(this.moduleRegistry);
+        this.moduleManager.initialize();
         
         // UI management (delegated to UIManager)
         
@@ -306,17 +312,17 @@ class AgentletCore {
     setupEventListeners() {
         // Module events
         this.eventBus.on('module:registered', (data) => {
-            console.log(`📦 Module registered: ${data.module}`);
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
-        
+
         this.eventBus.on('module:activated', (data) => {
-            console.log(`🔄 Module activated: ${data.module}`);
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
-        
+
         this.eventBus.on('module:deactivated', (data) => {
-            console.log(`⏸️ Module deactivated: ${data.module}`);
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
         
