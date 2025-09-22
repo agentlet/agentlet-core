@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple Module Example - Agentlet Core</title>
-    <link rel="stylesheet" href="../../shared/examples.css">
-    <link rel="stylesheet" href="../../shared/two-column-layout.css">
-    <script src="../../shared/console-utils.js"></script>
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <script src="../shared/console-utils.js"></script>
 </head>
 <body>
     <nav class="breadcrumb">
@@ -154,23 +154,78 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
     <script>
         let agentletCore = null;
 
+        // Custom console functions for this example's layout
+        function log(message, type = 'info') {
+            const consoleElement = document.getElementById('console-output');
+            if (consoleElement) {
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+                consoleElement.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+                consoleElement.scrollTop = consoleElement.scrollHeight;
+            }
+        }
+
+        function updateStatus(message, type = 'info') {
+            // For this example, just show in console - the status elements are specific to this layout
+            log(`Status: ${message}`, type);
+        }
+
+        // Load Agentlet script dynamically
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                // Remove existing script if present
+                const existingScript = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existingScript) {
+                    existingScript.remove();
+                }
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    resolve();
+                };
+
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Make sure you ran "npm run build" first.');
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
         // Initialize example
         document.getElementById('initializeBtn').onclick = async function() {
             try {
-                logMessage('🚀 Loading Agentlet Core...');
-                
-                // Dynamically import and initialize AgentletCore
-                const { default: AgentletCore } = await import('../../../dist/agentlet-core.js');
-                
-                agentletCore = new AgentletCore({
+                log('🚀 Loading Agentlet Core...');
+
+                // Dynamically load Agentlet Core script
+                await loadAgentletScript();
+
+                // Access AgentletCore constructor
+                let AgentletConstructor = null;
+                if (window.AgentletCore) {
+                    AgentletConstructor = window.AgentletCore.default;
+                }
+
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('🚀 Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({
                     debugMode: true,
                     startMinimized: false
                 });
-                
+
+                log('⚙️ Starting initialization...');
                 await agentletCore.init();
                 
-                updateStatus('agentlet-status', 'Loaded ✅');
-                logMessage('✅ Agentlet Core initialized!');
+                updateStatus('Agentlet Core loaded successfully', 'success');
+                log('✅ Agentlet Core initialized!', 'success');
                 
                 // Create and register the simple module
                 class SimpleModule extends window.agentlet.Module {
@@ -183,12 +238,12 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
                     }
                     
                     async init() {
-                        logMessage('✅ Simple module initialized!');
+                        log('✅ Simple module initialized!', 'success');
                     }
-                    
+
                     async activate(context) {
-                        logMessage('🔄 Simple module activated!', context);
-                        updateStatus('active-module', this.name);
+                        log('🔄 Simple module activated!', 'info');
+                        updateStatus(`Active module: ${this.name}`, 'info');
                         
                         this.injectStyles(`
                             .simple-module-banner {
@@ -203,8 +258,8 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
                     }
                     
                     async cleanup() {
-                        logMessage('🧹 Simple module cleaned up!');
-                        updateStatus('active-module', 'None');
+                        log('🧹 Simple module cleaned up!', 'info');
+                        updateStatus('Simple module cleaned up', 'info');
                     }
                     
                     getContent() {
@@ -222,17 +277,19 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
                 
                 // Register the module
                 window.agentlet.modules.register(new SimpleModule());
-                
-                updateStatus('total-modules', window.agentlet.modules.getAll().length);
-                logMessage(`📦 Module registered: ${window.agentlet.modules.getAll()[0]}`);
-                
+
+                const moduleCount = window.agentlet.modules.getAll().length;
+                updateStatus(`${moduleCount} module(s) registered successfully`, 'success');
+                log(`📦 Module registered: ${window.agentlet.modules.getAll()[0]}`, 'success');
+
                 // Enable other buttons
                 document.getElementById('showModulesBtn').disabled = false;
                 document.getElementById('testEventsBtn').disabled = false;
                 document.getElementById('initializeBtn').disabled = true;
-                
+
             } catch (error) {
-                logMessage(`❌ Error: ${error.message}`, 'error');
+                log(`❌ Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
                 console.error(error);
             }
         };
@@ -240,13 +297,14 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
         document.getElementById('showModulesBtn').onclick = function() {
             const modules = window.agentlet.modules.getAll();
             const activeModule = window.agentlet.moduleRegistry.activeModule;
-            
-            logMessage(`📦 Registered modules: ${modules.length}`);
+
+            log(`📦 Registered modules: ${modules.length}`, 'info');
             modules.forEach(name => {
                 const module = window.agentlet.modules.get(name);
                 const isActive = activeModule && activeModule.name === name;
-                logMessage(`  • ${name} ${isActive ? '(ACTIVE)' : ''}`);
+                log(`  • ${name} ${isActive ? '(ACTIVE)' : ''}`, 'info');
             });
+            updateStatus(`Showing ${modules.length} registered modules`, 'info');
         };
 
         document.getElementById('testEventsBtn').onclick = function() {
@@ -254,13 +312,24 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
             if (module) {
                 // Test module events
                 module.emit('test-event', { message: 'Hello from event system!' });
-                logMessage('📡 Test event emitted');
-                
+                log('📡 Test event emitted', 'success');
+
                 // Show module metadata
                 const metadata = module.getMetadata();
-                logMessage('📋 Module metadata:', metadata);
+                log('📋 Module metadata:', 'info');
+                log(JSON.stringify(metadata, null, 2), 'info');
+                updateStatus('Module events tested successfully', 'success');
+            } else {
+                log('❌ Module not found', 'error');
+                updateStatus('Module not found', 'error');
             }
         };
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📦 Simple Module example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
     </script>
 </body>
 </html>

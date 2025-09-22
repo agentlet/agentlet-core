@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="{{FAVICON_PATH}}">
+    <link rel="stylesheet" href="{{EXAMPLES_CSS_PATH}}">
+    <link rel="stylesheet" href="{{LAYOUT_CSS_PATH}}">
+    <!-- SLOT: Additional CSS/JS includes go here -->
+    {{ADDITIONAL_HEAD}}
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <!-- Standard breadcrumb navigation -->
+                <div class="nav-breadcrumb">
+                    {{BREADCRUMB}}
+                </div>
+
+                <!-- SLOT: Main example content -->
+                <div class="example-main-content">
+                    {{MAIN_CONTENT}}
+                </div>
+
+                <!-- SLOT: Additional sections (API docs, code examples, etc.) -->
+                <div class="example-additional-content">
+                    {{ADDITIONAL_CONTENT}}
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status (standardized) -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    {{DEFAULT_STATUS_MESSAGE}}
+                </div>
+
+                <h3>📈 Statistics</h3>
+                <div class="stats-section" id="stats">
+                    <div>Messages logged: <span id="messageCount">0</span></div>
+                    <div>Errors: <span id="errorCount">0</span></div>
+                    <div>Warnings: <span id="warningCount">0</span></div>
+                    <div>Last action: <span id="lastAction">None</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Standard console utilities -->
+    <script src="{{CONSOLE_UTILS_PATH}}"></script>
+
+    <!-- SLOT: Example-specific JavaScript -->
+    <script>
+        {{EXAMPLE_SCRIPT}}
+    </script>
+</body>
+</html>

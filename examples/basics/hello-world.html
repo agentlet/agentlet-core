@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hello World - Agentlet Core Example</title>
-    <link rel="icon" type="image/x-icon" href="../../../resources/favicons/favicon.ico">
-    <link rel="stylesheet" href="../../shared/examples.css">
-    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
     <!-- Prism.js for syntax highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
@@ -18,7 +18,7 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../../">Examples</a> → <a href="../">01-basics</a> → hello-world
+                    <a href="../">Examples</a> → <a href="./">basics</a> → hello-world
                 </div>
 
                 <h1>🤖 Hello World - Agentlet Core</h1>
@@ -100,7 +100,7 @@ window.agentlet.tables.extract(document.querySelector('table'));</code></pre>
     </div>
 
     <!-- Console utilities -->
-    <script src="../../shared/console-utils.js"></script>
+    <script src="../shared/console-utils.js"></script>
 
     <script>
         let agentletInstance = null;
@@ -130,7 +130,7 @@ window.agentlet.tables.extract(document.querySelector('table'));</code></pre>
 
                 // Dynamically load Agentlet Core
                 const script = document.createElement('script');
-                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
                 
                 script.onload = () => {
                     log('✅ Agentlet Core script loaded successfully', 'success');
