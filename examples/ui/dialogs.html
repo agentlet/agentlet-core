@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Info Dialogs - Agentlet Core Example</title>
+    <title>Dialogs and Message Bubbles - Agentlet Core Example</title>
     <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
     <link rel="stylesheet" href="../shared/examples.css">
     <link rel="stylesheet" href="../shared/two-column-layout.css">
@@ -17,9 +17,9 @@
                     <a href="../">Examples</a> → ui → dialogs → info-dialogs
                 </div>
 
-                <h1>Info dialogs</h1>
+                <h1>Dialogs and message bubbles</h1>
 
-                <p>This example demonstrates the various types of information dialogs available in Agentlet Core.</p>
+                <p>This example demonstrates information dialogs and message bubbles (toast notifications) available in Agentlet Core.</p>
 
                 <div class="example-section">
                     <h3>What this example shows:</h3>
@@ -29,6 +29,7 @@
                         <li>Dialog callbacks and button handling</li>
                         <li>Dialog styling and customization options</li>
                         <li>Fullscreen dialogs for large content</li>
+                        <li>Message bubbles for quick notifications</li>
                     </ul>
                 </div>
 
@@ -58,6 +59,14 @@
                     <button onclick="showSequentialDialogs()" id="sequentialBtn">Sequential dialogs</button>
                     <button onclick="showFormDialog()" id="formBtn">Form-like dialog</button>
                     <button onclick="showFullscreenDialog()" id="fullscreenBtn">Fullscreen dialog</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Message bubbles</h4>
+                    <button onclick="showInfoBubble()" id="infoBubbleBtn">Info bubble</button>
+                    <button onclick="showSuccessBubble()" id="successBubbleBtn" style="background: #28a745;">Success bubble</button>
+                    <button onclick="showWarningBubble()" id="warningBubbleBtn" style="background: #ffc107; color: #212529;">Warning bubble</button>
+                    <button onclick="showErrorBubble()" id="errorBubbleBtn" style="background: #dc3545;">Error bubble</button>
                 </div>
 
                 <div class="example-section">
@@ -106,6 +115,21 @@ window.agentlet.utils.Dialog.fullscreen({
     ]
 }, (result) => {
     console.log('Fullscreen result:', result);
+});</code></pre>
+
+                        <h4>Message Bubbles</h4>
+                        <pre><code class="language-javascript">// Simple message bubbles (toast notifications)
+window.agentlet.utils.MessageBubble.info('Operation completed successfully');
+
+// Different types
+window.agentlet.utils.MessageBubble.success('File saved!');
+window.agentlet.utils.MessageBubble.warning('Please check your input');
+window.agentlet.utils.MessageBubble.error('Connection failed');
+
+// Custom duration and position
+window.agentlet.utils.MessageBubble.show('info', 'Custom message', {
+    duration: 5000,  // 5 seconds
+    position: 'top-right'
 });</code></pre>
                     </div>
                 </div>
@@ -748,6 +772,67 @@ window.agentlet.utils.Dialog.fullscreen({
             } catch (error) {
                 log(`❌ Error showing fullscreen dialog: ${error.message}`, 'error');
                 setButtonLoading('fullscreenBtn', false);
+            }
+        }
+
+        // Message bubble functions
+        function showInfoBubble() {
+            if (!checkDialog()) return;
+
+            try {
+                setButtonLoading('infoBubbleBtn', true);
+                window.agentlet.utils.MessageBubble.info('This is an info message bubble');
+                log('✅ Info message bubble shown', 'success');
+                trackDialog('Info Bubble', false);
+                setTimeout(() => setButtonLoading('infoBubbleBtn', false), 300);
+            } catch (error) {
+                log(`❌ Error showing info bubble: ${error.message}`, 'error');
+                setButtonLoading('infoBubbleBtn', false);
+            }
+        }
+
+        function showSuccessBubble() {
+            if (!checkDialog()) return;
+
+            try {
+                setButtonLoading('successBubbleBtn', true);
+                window.agentlet.utils.MessageBubble.success('Operation completed successfully!');
+                log('✅ Success message bubble shown', 'success');
+                trackDialog('Success Bubble', false);
+                setTimeout(() => setButtonLoading('successBubbleBtn', false), 300);
+            } catch (error) {
+                log(`❌ Error showing success bubble: ${error.message}`, 'error');
+                setButtonLoading('successBubbleBtn', false);
+            }
+        }
+
+        function showWarningBubble() {
+            if (!checkDialog()) return;
+
+            try {
+                setButtonLoading('warningBubbleBtn', true);
+                window.agentlet.utils.MessageBubble.warning('Please check your input before proceeding');
+                log('✅ Warning message bubble shown', 'success');
+                trackDialog('Warning Bubble', false);
+                setTimeout(() => setButtonLoading('warningBubbleBtn', false), 300);
+            } catch (error) {
+                log(`❌ Error showing warning bubble: ${error.message}`, 'error');
+                setButtonLoading('warningBubbleBtn', false);
+            }
+        }
+
+        function showErrorBubble() {
+            if (!checkDialog()) return;
+
+            try {
+                setButtonLoading('errorBubbleBtn', true);
+                window.agentlet.utils.MessageBubble.error('Connection failed - please try again');
+                log('✅ Error message bubble shown', 'success');
+                trackDialog('Error Bubble', false);
+                setTimeout(() => setButtonLoading('errorBubbleBtn', false), 300);
+            } catch (error) {
+                log(`❌ Error showing error bubble: ${error.message}`, 'error');
+                setButtonLoading('errorBubbleBtn', false);
             }
         }
 

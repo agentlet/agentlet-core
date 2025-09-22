@@ -58,6 +58,8 @@ class AgentletCore {
             envManager: config.envManager, // Custom EnvironmentVariablesManager instance or null to disable
             resizablePanel: config.resizablePanel !== false, // Enable panel resizing
             minimumPanelWidth: config.minimumPanelWidth || 320, // Minimum panel width in pixels
+            quickCommandDialogShortcut: config.quickCommandDialogShortcut || false, // Enable Ctrl/Cmd+; quick command dialog
+            quickCommandCallback: config.quickCommandCallback || null, // Custom callback for quick command dialog
             ...config
         };
         
@@ -286,7 +288,7 @@ class AgentletCore {
             
             // Register default keyboard shortcuts
             if (this.shortcutManager) {
-                await this.shortcutManager.registerDefaultShortcuts();
+                await this.shortcutManager.registerDefaultShortcuts(this.config);
             }
             
             this.performanceMetrics.initTime = performance.now() - startTime;

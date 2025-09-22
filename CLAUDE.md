@@ -174,6 +174,27 @@ const agentlet = new AgentletCore({
 });
 ```
 
+### Keyboard shortcuts
+```javascript
+// Configure quick command dialog shortcut
+const agentlet = new AgentletCore({
+    quickCommandDialogShortcut: true, // Enable Ctrl/Cmd+; shortcut (disabled by default)
+    quickCommandCallback: (result) => {
+        // Custom callback when user enters a command
+        console.log('User entered command:', result);
+
+        // Parse and execute custom commands
+        if (result === 'help') {
+            window.agentlet.utils.Dialog.info('Available commands: help, clear, export');
+        } else if (result === 'export') {
+            // Custom export logic
+        } else {
+            console.log('Unknown command:', result);
+        }
+    }
+});
+```
+
 ### Module lifecycle
 ```javascript
 // Simplified 3-hook lifecycle for modules and submodules

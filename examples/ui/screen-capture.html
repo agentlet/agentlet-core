@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Capture - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → ui → screen-capture
+                </div>
+
+                <h1>Screen capture</h1>
+
+                <p>This example demonstrates screen capture capabilities using Agentlet Core's ScreenCapture utility, which leverages the HTML2Canvas library.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Full page screenshot capture</li>
+                        <li>Element-specific screenshot capture</li>
+                        <li>Interactive element selection for screenshots</li>
+                        <li>Screenshot preview in fullscreen dialog</li>
+                        <li>Download captured screenshots</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Screenshot capture</h4>
+                    <button onclick="captureTable()" id="tableBtn">Capture sample table</button>
+                    <button onclick="captureFullPage()" id="fullPageBtn">Capture full page</button>
+                    <button onclick="captureSelectedElement()" id="elementBtn">Capture selected element</button>
+                </div>
+
+                <div class="sample-content">
+                    <h4>Sample table for capture</h4>
+                    <table id="sampleTable" class="capture-table">
+                        <thead>
+                            <tr><th>Product</th><th>Category</th><th>Price</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Laptop</td><td>Electronics</td><td>$999</td></tr>
+                            <tr><td>Coffee Mug</td><td>Kitchen</td><td>$15</td></tr>
+                            <tr><td>Notebook</td><td>Office</td><td>$5</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+
+                <div class="example-section">
+                    <h3>Screen capture API examples:</h3>
+                    <div class="code-block">
+                        <h4>Full Page Screenshot</h4>
+                        <pre><code class="language-javascript">// Capture full page screenshot
+const canvas = await window.agentlet.utils.ScreenCapture.capturePage();
+console.log('Full page captured:', canvas);
+
+// Convert to data URL for download
+const dataUrl = canvas.toDataURL('image/png');</code></pre>
+
+                        <h4>Element Screenshot</h4>
+                        <pre><code class="language-javascript">// Capture specific element
+const element = document.getElementById('myTable');
+const canvas = await window.agentlet.utils.ScreenCapture.captureElement(element);
+console.log('Element captured:', canvas);
+
+// Show in dialog with download option
+window.agentlet.utils.Dialog.fullscreen({
+    title: 'Screenshot Preview',
+    message: canvas.outerHTML,
+    allowHtml: true
+});</code></pre>
+
+                        <h4>Interactive Element Capture</h4>
+                        <pre><code class="language-javascript">// Let user select element to capture
+window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
+    const canvas = await window.agentlet.utils.ScreenCapture.captureElement(element);
+    // Display screenshot in fullscreen dialog
+    showScreenshotDialog(canvas, `Screenshot of ${elementInfo.cssSelector}`);
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+                
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize Agentlet" to start the demo.
+                </div>
+                
+                
+                <h3>📸 Capture Activity</h3>
+                <div class="stats-section" id="captureStats">
+                    <div>ScreenCapture available: <span id="captureAvailable">No</span></div>
+                    <div>Screenshots taken: <span id="screenshotsTaken">0</span></div>
+                    <div>Last capture type: <span id="lastCaptureType">None</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <style>
+        .sample-content {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .capture-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .capture-table th,
+        .capture-table td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .capture-table th {
+            background: #007bff;
+            color: white;
+            font-weight: 600;
+        }
+
+        .capture-table tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+    </style>
+
+    <script>
+        let screenshotsTaken = 0;
+        let lastCaptureType = 'None';
+
+        // Configure Agentlet
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: true  // Start with panel minimized
+        };
+
+        // Update capture stats display
+        function updateCaptureStats() {
+            const elements = {
+                captureAvailable: document.getElementById('captureAvailable'),
+                screenshotsTaken: document.getElementById('screenshotsTaken'),
+                lastCaptureType: document.getElementById('lastCaptureType')
+            };
+
+            if (elements.captureAvailable) {
+                const available = !!(window.agentlet && window.agentlet.utils && window.agentlet.utils.ScreenCapture);
+                elements.captureAvailable.textContent = available ? 'Yes' : 'No';
+            }
+
+            if (elements.screenshotsTaken) {
+                elements.screenshotsTaken.textContent = screenshotsTaken;
+            }
+
+            if (elements.lastCaptureType) {
+                elements.lastCaptureType.textContent = lastCaptureType;
+            }
+        }
+
+        function trackCapture(type) {
+            screenshotsTaken++;
+            lastCaptureType = type;
+            updateCaptureStats();
+            log(`📸 ${type} capture completed`, 'success');
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Initializing Agentlet Core...');
+
+                if (window.agentlet) {
+                    log('⚠️ Agentlet already loaded', 'warning');
+                    updateStatus('Ready! Try the element selection buttons above.', 'success');
+                    setButtonLoading('initBtn', false);
+                    updateSelectionStats();
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Check if AgentletCore is available and what it contains
+                    if (window.AgentletCore) {
+                        log('📦 AgentletCore is available');
+                        
+                        let AgentletConstructor = null;
+                        if (window.AgentletCore) {
+                            AgentletConstructor = window.AgentletCore.default;
+                        }
+                        
+                        if (AgentletConstructor) {
+                            try {
+                                // Create and initialize Agentlet instance
+                                log('🚀 Creating AgentletCore instance...');
+                                const agentletInstance = new AgentletConstructor(window.agentletConfig);
+                                
+                                // Start initialization
+                                log('⚙️ Starting initialization...');
+                                agentletInstance.init().then(() => {
+                                    if (window.agentlet && window.agentlet.utils && window.agentlet.utils.ScreenCapture) {
+                                        log('✅ Agentlet Core loaded with ScreenCapture utilities', 'success');
+                                        updateStatus('Ready! Try the screen capture buttons above.', 'success');
+                                        updateCaptureStats();
+                                    } else {
+                                        log('❌ ScreenCapture utilities not available', 'error');
+                                        updateStatus('ScreenCapture utilities not available', 'error');
+                                    }
+                                    setButtonLoading('initBtn', false);
+                                }).catch(error => {
+                                    log(`❌ Initialization failed: ${error.message}`, 'error');
+                                    updateStatus('Initialization failed: ' + error.message, 'error');
+                                    setButtonLoading('initBtn', false);
+                                });
+                                
+                            } catch (error) {
+                                log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                                updateStatus('Error creating instance: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            }
+                        } else {
+                            log('❌ AgentletCore constructor not available', 'error');
+                            updateStatus('AgentletCore constructor not found', 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore not found in window object', 'error');
+                        updateStatus('AgentletCore not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                updateStatus('Initialization error', 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+
+        function checkScreenCapture() {
+            if (!window.agentlet || !window.agentlet.utils || !window.agentlet.utils.ScreenCapture) {
+                updateStatus('Screen capture not available. Initialize Agentlet first.', 'warning');
+                return false;
+            }
+            return true;
+        }
+
+        function showScreenshotDialog(canvas, title = 'Screenshot Preview') {
+            if (!canvas) {
+                log('❌ No canvas to display', 'error');
+                return;
+            }
+
+            // Convert canvas to data URL for display
+            const imageDataUrl = canvas.toDataURL('image/png');
+
+            const content = `
+                <div style="text-align: center;">
+                    <img src="${imageDataUrl}" style="max-width: 100%; max-height: 60vh; border: 1px solid #ddd; border-radius: 4px;">
+                    <p style="margin-top: 15px; color: #666;">Screenshot captured successfully</p>
+                </div>
+            `;
+
+            window.agentlet.utils.Dialog.fullscreen({
+                title: title,
+                message: content,
+                icon: '📸',
+                allowHtml: true,
+                buttons: [
+                    { text: 'Download', value: 'download', primary: true },
+                    { text: 'Close', value: 'close', secondary: true }
+                ]
+            }, (result) => {
+                if (result === 'download') {
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.download = `screenshot-${Date.now()}.png`;
+                    link.href = imageDataUrl;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    log('📥 Screenshot downloaded', 'success');
+                }
+            });
+        }
+
+        async function captureTable() {
+            if (!checkScreenCapture()) return;
+
+            try {
+                setButtonLoading('tableBtn', true);
+                log('📸 Capturing sample table...', 'info');
+                updateStatus('Taking screenshot of table...', 'info');
+
+                const tableElement = document.getElementById('sampleTable');
+                if (!tableElement) {
+                    log('❌ Sample table not found', 'error');
+                    updateStatus('Sample table not found', 'error');
+                    setButtonLoading('tableBtn', false);
+                    return;
+                }
+
+                const canvas = await window.agentlet.utils.ScreenCapture.captureElement(tableElement);
+                log('✅ Table screenshot captured', 'success');
+
+                trackCapture('Table');
+                updateStatus('Table screenshot ready', 'success');
+                showScreenshotDialog(canvas, 'Sample Table Screenshot');
+
+                setButtonLoading('tableBtn', false);
+            } catch (error) {
+                log(`❌ Error capturing table: ${error.message}`, 'error');
+                updateStatus('Table capture failed', 'error');
+                setButtonLoading('tableBtn', false);
+            }
+        }
+
+        async function captureFullPage() {
+            if (!checkScreenCapture()) return;
+
+            try {
+                setButtonLoading('fullPageBtn', true);
+                log('📸 Capturing full page...', 'info');
+                updateStatus('Taking full page screenshot...', 'info');
+
+                const canvas = await window.agentlet.utils.ScreenCapture.capturePage();
+                log('✅ Full page screenshot captured', 'success');
+
+                trackCapture('Full Page');
+                updateStatus('Full page screenshot ready', 'success');
+                showScreenshotDialog(canvas, 'Full Page Screenshot');
+
+                setButtonLoading('fullPageBtn', false);
+            } catch (error) {
+                log(`❌ Error capturing full page: ${error.message}`, 'error');
+                updateStatus('Full page capture failed', 'error');
+                setButtonLoading('fullPageBtn', false);
+            }
+        }
+
+        async function captureSelectedElement() {
+            if (!checkScreenCapture()) return;
+
+            try {
+                setButtonLoading('elementBtn', true);
+                log('🎯 Starting element selection for capture...', 'info');
+                updateStatus('Click any element to capture it', 'info');
+
+                window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
+                    log(`✅ Element selected: ${element.tagName.toLowerCase()}`, 'success');
+                    log(`📋 Selector: ${elementInfo.cssSelector}`, 'info');
+
+                    try {
+                        updateStatus('Capturing selected element...', 'info');
+                        const canvas = await window.agentlet.utils.ScreenCapture.captureElement(element);
+                        log('✅ Element screenshot captured', 'success');
+
+                        trackCapture('Selected Element');
+                        updateStatus('Element screenshot ready', 'success');
+                        showScreenshotDialog(canvas, `Screenshot of ${elementInfo.cssSelector}`);
+                    } catch (captureError) {
+                        log(`❌ Error capturing element: ${captureError.message}`, 'error');
+                        updateStatus('Element capture failed', 'error');
+                    }
+                }, {
+                    message: 'Click any element to capture a screenshot of it'
+                });
+
+                setTimeout(() => setButtonLoading('elementBtn', false), 300);
+            } catch (error) {
+                log(`❌ Error starting element selection: ${error.message}`, 'error');
+                setButtonLoading('elementBtn', false);
+            }
+        }
+
+
+
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Screen capture example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+            updateCaptureStats();
+        });
+
+        // Update capture stats periodically
+        setInterval(updateCaptureStats, 2000);
+    </script>
+</body>
+</html>

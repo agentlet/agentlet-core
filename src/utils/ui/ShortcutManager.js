@@ -213,25 +213,30 @@ class ShortcutManager {
     
     /**
      * Register common Agentlet shortcuts
+     * @param {Object} config - Configuration object
      */
-    async registerDefaultShortcuts() {
+    async registerDefaultShortcuts(config = {}) {
         if (!window.agentlet?.utils?.Dialog) {
             console.warn('⌨️ Dialog not available, skipping default shortcuts');
             return;
         }
-        
-        // Ctrl/Cmd + ; - Quick Command
-        await this.register('ctrl+;,cmd+;', () => {
-            window.agentlet.utils.Dialog.quickCommand('Enter command...', (result) => {
+
+        // Ctrl/Cmd + ; - Quick Command (only if enabled)
+        if (config.quickCommandDialogShortcut) {
+            const callback = config.quickCommandCallback || ((result) => {
                 if (result) {
                     console.log('⌨️ Quick command:', result);
                     // Here you could add logic to parse and execute commands
                 }
             });
-        }, {
-            description: 'Open quick command dialog',
-            allowInInputs: false
-        });
+
+            await this.register('ctrl+;,cmd+;', () => {
+                window.agentlet.utils.Dialog.quickCommand('Enter command...', callback);
+            }, {
+                description: 'Open quick command dialog',
+                allowInInputs: false
+            });
+        }
         
         // Escape - Close dialogs (handled by Dialog class, but we can add global escape)
         await this.register('esc', () => {
@@ -289,9 +294,9 @@ class ShortcutManager {
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 4px;">
                     <h4 style="margin: 0 0 10px 0; color: #007bff;">💡 Tips:</h4>
                     <ul style="margin: 0; padding-left: 20px;">
-                        <li><strong>ctrl+;</strong> or <strong>cmd+;</strong> - Quick command</li>
                         <li><strong>esc</strong> - Close active dialog</li>
                         <li>Some shortcuts may not work in input fields for security</li>
+                        <li>Quick command shortcut (ctrl+; / cmd+;) is available if enabled in config</li>
                     </ul>
                 </div>
             </div>

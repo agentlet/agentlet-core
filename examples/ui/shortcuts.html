@@ -24,7 +24,8 @@
                 <div class="example-section">
                     <h3>What this example shows:</h3>
                     <ul>
-                        <li>Default Agentlet shortcuts (Shift+Shift, Ctrl+K, Esc)</li>
+                        <li>Default Agentlet shortcuts (Esc for closing dialogs)</li>
+                        <li>Optional quick command dialog (Ctrl/Cmd+; - enabled in this example)</li>
                         <li>Custom shortcut registration and management</li>
                         <li>Shortcut scoping and input field handling</li>
                         <li>Visual shortcut help system</li>
@@ -40,9 +41,10 @@
                 <div class="controls">
                     <h4>Try default shortcuts</h4>
                     <div class="shortcut-demo">
-                        <kbd>Ctrl</kbd> + <kbd>;</kbd> (or <kbd>Cmd</kbd> + <kbd>;</kbd>) - Quick Command<br>
+                        <kbd>Ctrl</kbd> + <kbd>;</kbd> (or <kbd>Cmd</kbd> + <kbd>;</kbd>) - Quick Command ⭐<br>
                         <kbd>Esc</kbd> - Close Active Dialog
                     </div>
+                    <p><small>⭐ Quick command is enabled in this example via <code>quickCommandDialogShortcut: true</code></small></p>
                 </div>
 
                 <div class="controls">
@@ -152,7 +154,26 @@ window.agentlet.utils.shortcuts.setEnabled(false);</code></pre>
         window.agentletConfig = {
             debugMode: true,
             theme: 'default',
-            startMinimized: true  // Start with panel minimized
+            startMinimized: true,  // Start with panel minimized
+            quickCommandDialogShortcut: true, // Enable Ctrl/Cmd+; quick command
+            quickCommandCallback: (result) => {
+                if (result) {
+                    log(`🎯 Quick command executed: "${result}"`, 'success');
+                    // Parse some demo commands
+                    if (result === 'help') {
+                        window.agentlet.utils.Dialog.info('Available commands: help, clear, test', 'Command Help');
+                    } else if (result === 'clear') {
+                        clearConsole();
+                        log('🗑️ Console cleared via quick command', 'info');
+                    } else if (result === 'test') {
+                        testShortcut();
+                    } else {
+                        log(`Unknown command: "${result}"`, 'warning');
+                    }
+                } else {
+                    log('Quick command cancelled', 'info');
+                }
+            }
         };
 
         // Update shortcuts stats display
