@@ -147,7 +147,8 @@ class AgentletCore {
         // Set up global access (preserve UI references)
         const originalUIReferences = this.ui; // Backup DOM references
         this.globalAPI.setupGlobalAccess();
-        this.ui = originalUIReferences; // Restore DOM references
+        // Merge original DOM references with the API methods added by setupGlobalAccess
+        Object.assign(window.agentlet.ui, originalUIReferences);
         
         console.log('AgentletCore 📎 initialized with config:', this.config);
     }

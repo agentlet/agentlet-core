@@ -18,11 +18,11 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">forms</a> → extraction → simple-form
+                    <a href="../">Examples</a> → forms → extraction → simple-form
                 </div>
 
-                <h1>📝 Simple Form Extraction - Agentlet Core</h1>
-                
+                <h1>Simple form extraction</h1>
+
                 <p>This example demonstrates how to extract structured data from HTML forms using Agentlet Core.</p>
 
                 <div class="example-section">
@@ -35,12 +35,11 @@
                     </ul>
                 </div>
 
-                <!-- Sample Forms for Testing -->
                 <div class="example-section">
-                    <h3>Sample Forms</h3>
+                    <h3>Sample forms</h3>
                     
                     <form id="contact-form" class="test-form">
-                        <h4>Contact Form</h4>
+                        <h4>Contact form</h4>
                         <label for="name">Full Name *</label>
                         <input type="text" id="name" name="name" placeholder="Enter your full name" required>
                         
@@ -73,7 +72,7 @@
                     </form>
 
                     <form id="registration-form" class="test-form">
-                        <h4>User Registration</h4>
+                        <h4>User registration</h4>
                         <label for="username">Username *</label>
                         <input type="text" id="username" name="username" placeholder="Choose a username" required>
                         
@@ -112,43 +111,43 @@
                 </div>
 
                 <div class="controls">
-                    <h4>🚀 Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
-                    <button onclick="checkStatus()">Check Status</button>
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📋 Form Extraction</h4>
-                    <button onclick="extractContactForm()" id="extractContactBtn">Extract Contact Form</button>
-                    <button onclick="extractRegistrationForm()" id="extractRegistrationBtn">Extract Registration Form</button>
-                    <button onclick="extractAllForms()" id="extractAllBtn">Extract All Forms</button>
+                    <h4>Form extraction</h4>
+                    <button onclick="extractContactForm()" id="extractContactBtn">Extract contact form</button>
+                    <button onclick="extractRegistrationForm()" id="extractRegistrationBtn">Extract registration form</button>
+                    <button onclick="extractAllForms()" id="extractAllBtn">Extract all forms</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📊 Export Formats</h4>
-                    <button onclick="quickExportContact()" id="quickExportBtn">⚡ Quick Export (Contact)</button>
-                    <button onclick="aiExportContact()" id="aiExportBtn">🤖 AI Export (Contact)</button>
-                    <button onclick="fullExportContact()" id="fullExportBtn">📊 Full Export (Contact)</button>
+                    <h4>Export formats</h4>
+                    <button onclick="quickExportContact()" id="quickExportBtn">Quick export (contact)</button>
+                    <button onclick="aiExportContact()" id="aiExportBtn">AI export (contact)</button>
+                    <button onclick="fullExportContact()" id="fullExportBtn">Full export (contact)</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🔧 Debug & Troubleshooting</h4>
-                    <button onclick="debugFormMethods()" id="debugBtn">🔍 Debug Form Methods</button>
-                    <button onclick="manualExtraction()" id="manualBtn">🛠️ Manual Extraction</button>
-                    <button onclick="testFormAccess()" id="testBtn">🧪 Test Form Access</button>
+                    <h4>Debug and troubleshooting</h4>
+                    <button onclick="debugFormMethods()" id="debugBtn">Debug form methods</button>
+                    <button onclick="manualExtraction()" id="manualBtn">Manual extraction</button>
+                    <button onclick="testFormAccess()" id="testBtn">Test form access</button>
                 </div>
 
                 <div class="example-section">
-                    <h3>📝 Fill Sample Data</h3>
+                    <h3>Fill sample data</h3>
                     <p>Click to fill forms with sample data for testing extraction:</p>
                     <div class="controls">
-                        <button onclick="fillContactForm()" id="fillContactBtn">Fill Contact Form</button>
-                        <button onclick="fillRegistrationForm()" id="fillRegistrationBtn">Fill Registration Form</button>
+                        <button onclick="fillContactForm()" id="fillContactBtn">Fill contact form</button>
+                        <button onclick="fillRegistrationForm()" id="fillRegistrationBtn">Fill registration form</button>
                     </div>
                 </div>
 
                 <div class="example-section">
-                    <h3>📜 Form Extraction API Reference:</h3>
+                    <h3>Form extraction API reference:</h3>
                     <div class="code-block">
                         <h4>Basic Extraction</h4>
                         <pre><code class="language-javascript">// Extract form structure
@@ -174,18 +173,18 @@ const fullData = window.agentlet.forms.extract(formElement, {
             <!-- Right Column: Console and Status -->
             <div class="right-column">
                 <div class="console-header">
-                    <h3>📟 Console Output</h3>
-                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                    <h3>Console output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">Clear</button>
                 </div>
                 <div class="console-section" id="console"></div>
                 
-                <h3>📊 Status</h3>
+                <h3>Status</h3>
                 <div class="status-section" id="status">
                     Click "Initialize Agentlet Core" to start the demo.
                 </div>
                 
                 
-                <h3>📋 Form Activity</h3>
+                <h3>Form activity</h3>
                 <div class="stats-section" id="formStats">
                     <div>Forms API available: <span id="formsAvailable">No</span></div>
                     <div>Forms extracted: <span id="formsExtracted">0</span></div>

@@ -261,3 +261,30 @@ disable: turn off Playwright video recording
 ```
 
 **Validation:** Commits are automatically validated via husky git hooks. Invalid commits will be rejected.
+
+## Documentation Style Guide
+
+When creating or updating any project documentation (examples, README.md, or any .md files), follow these style guidelines to maintain a clean, professional appearance:
+
+### Text and UI Guidelines
+1. **Remove excessive emojis** - Don't use emojis in headings, section titles, or button text
+   - ❌ `<h1>🚀 Hello World - Agentlet Core</h1>`
+   - ✅ `<h1>Hello world</h1>`
+
+2. **Fix capitalization** - Use sentence case (only first word capitalized), not Title Case
+   - ❌ `<button>Initialize Agentlet Core</button>`
+   - ✅ `<button>Initialize agentlet core</button>`
+   - ❌ `<h4>Advanced Export Options</h4>`
+   - ✅ `<h4>Advanced export options</h4>`
+
+3. **Simplify text** - Remove marketing fluff and overly complex descriptions
+   - ❌ "This example demonstrates the powerful AI integration capabilities..."
+   - ✅ "This example demonstrates AI integration capabilities..."
+
+4. **Avoid em dashes** - Use simple punctuation instead of em dashes (–) in sentences
+
+### Goals
+- **Professional appearance** - Examples should look clean and business-ready
+- **Consistent style** - All examples follow the same formatting patterns
+- **Focus on functionality** - Let the code and features speak for themselves
+- **Easy maintenance** - Simple, clear text is easier to update and translate

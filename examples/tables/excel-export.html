@@ -18,12 +18,12 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">tables</a> → export → excel-export
+                    <a href="../">Examples</a> → tables → export → excel-export
                 </div>
 
-                <h1>📥 Excel Export - Agentlet Core</h1>
-                
-                <p>This example demonstrates advanced Excel export capabilities using Agentlet Core's table utilities with SheetJS integration.</p>
+                <h1>Excel export</h1>
+
+                <p>This example demonstrates Excel export capabilities using Agentlet Core's table utilities with SheetJS integration.</p>
 
                 <div class="example-section">
                     <h3>What this example shows:</h3>
@@ -36,18 +36,17 @@
                     </ul>
                 </div>
 
-        <!-- Sample Tables for Export Testing -->
         <div class="example-section">
-            <h3>Sample Data Tables</h3>
+            <h3>Sample data tables</h3>
             
             <table id="sales-data" class="export-table">
-                <caption>Q4 2023 Sales Data</caption>
+                <caption>Q4 2023 sales data</caption>
                 <thead>
                     <tr>
                         <th>Region</th>
                         <th>Salesperson</th>
                         <th>Product</th>
-                        <th>Units Sold</th>
+                        <th>Units sold</th>
                         <th>Revenue</th>
                         <th>Commission</th>
                         <th>Date</th>
@@ -197,34 +196,34 @@
         </div>
 
                 <div class="controls">
-                    <h4>🚀 Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
-                    <button onclick="checkStatus()">Check Status</button>
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📊 Single Table Export</h4>
-                    <button onclick="exportSalesData()" id="salesBtn">📊 Export Sales Data</button>
-                    <button onclick="exportCustomerData()" id="customerBtn">👥 Export Customer Data</button>
-                    <button onclick="exportFinancialSummary()" id="financialBtn">💰 Export Financial Summary</button>
+                    <h4>Single table export</h4>
+                    <button onclick="exportSalesData()" id="salesBtn">Export sales data</button>
+                    <button onclick="exportCustomerData()" id="customerBtn">Export customer data</button>
+                    <button onclick="exportFinancialSummary()" id="financialBtn">Export financial summary</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📚 Multi-Sheet Export</h4>
-                    <button onclick="exportAllAsWorkbook()" id="workbookBtn">📚 Export All as Workbook</button>
-                    <button onclick="exportWithCustomSheetNames()" id="customBtn">📝 Custom Sheet Names</button>
-                    <button onclick="exportWithFormatting()" id="formatBtn">🎨 Export with Formatting</button>
+                    <h4>Multi-sheet export</h4>
+                    <button onclick="exportAllAsWorkbook()" id="workbookBtn">Export all as workbook</button>
+                    <button onclick="exportWithCustomSheetNames()" id="customBtn">Custom sheet names</button>
+                    <button onclick="exportWithFormatting()" id="formatBtn">Export with formatting</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🔧 Advanced Export Options</h4>
-                    <button onclick="exportWithMetadata()" id="metadataBtn">📋 Export with Metadata</button>
-                    <button onclick="exportLargeDataset()" id="largeBtn">📈 Export Large Dataset</button>
-                    <button onclick="extractAndExportDemo()" id="extractBtn">⚡ Extract & Export Demo</button>
+                    <h4>Advanced export options</h4>
+                    <button onclick="exportWithMetadata()" id="metadataBtn">Export with metadata</button>
+                    <button onclick="exportLargeDataset()" id="largeBtn">Export large dataset</button>
+                    <button onclick="extractAndExportDemo()" id="extractBtn">Extract and export demo</button>
                 </div>
 
                 <div class="example-section">
-                    <h3>📜 Excel Export API Reference:</h3>
+                    <h3>Excel export API reference:</h3>
                     <div class="code-block">
                         <h4>Basic Export</h4>
                         <pre><code class="language-javascript">// Single table export
@@ -280,13 +279,13 @@ const result = window.agentlet.tables.download(tableData, {
                 </div>
                 <div class="console-section" id="console"></div>
                 
-                <h3>📊 Status</h3>
+                <h3>Status</h3>
                 <div class="status-section" id="status">
                     Click "Initialize Agentlet Core" to start the demo.
                 </div>
                 
                 
-                <h3>📥 Export Activity</h3>
+                <h3>Export activity</h3>
                 <div class="stats-section" id="exportStats">
                     <div>Tables API available: <span id="tablesAvailable">No</span></div>
                     <div>Files exported: <span id="filesExported">0</span></div>

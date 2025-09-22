@@ -18,11 +18,11 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">forms</a> → filling → auto-fill
+                    <a href="../">Examples</a> → forms → filling → auto-fill
                 </div>
 
-                <h1>✏️ Auto Fill Forms - Agentlet Core</h1>
-                
+                <h1>Auto fill forms</h1>
+
                 <p>This example demonstrates automatic form filling using Agentlet Core's FormFiller utility.</p>
 
                 <div class="example-section">
@@ -35,37 +35,36 @@
                     </ul>
                 </div>
 
-                <!-- Sample Forms for Testing -->
                 <div class="example-section">
-                    <h3>Target Forms</h3>
+                    <h3>Target forms</h3>
                     
                     <form id="user-profile-form" class="test-form">
-                        <h4>User Profile Form</h4>
-                        <label for="firstName">First Name *</label>
+                        <h4>User profile form</h4>
+                        <label for="firstName">First name *</label>
                         <input type="text" id="firstName" name="firstName" required>
-                        
-                        <label for="lastName">Last Name *</label>
+
+                        <label for="lastName">Last name *</label>
                         <input type="text" id="lastName" name="lastName" required>
-                        
+
                         <label for="emailAddress">Email *</label>
                         <input type="email" id="emailAddress" name="emailAddress" required>
-                        
+
                         <label for="phoneNumber">Phone</label>
                         <input type="tel" id="phoneNumber" name="phoneNumber">
-                        
-                        <label for="dateOfBirth">Date of Birth</label>
+
+                        <label for="dateOfBirth">Date of birth</label>
                         <input type="date" id="dateOfBirth" name="dateOfBirth">
-                        
+
                         <label for="profession">Profession</label>
                         <select id="profession" name="profession">
                             <option value="">Select profession</option>
-                            <option value="developer">Software Developer</option>
+                            <option value="developer">Software developer</option>
                             <option value="designer">Designer</option>
                             <option value="manager">Manager</option>
-                            <option value="analyst">Data Analyst</option>
+                            <option value="analyst">Data analyst</option>
                             <option value="other">Other</option>
                         </select>
-                        
+
                         <label for="bio">Bio</label>
                         <textarea id="bio" name="bio" rows="3" placeholder="Tell us about yourself..."></textarea>
                         
@@ -77,71 +76,71 @@
                             <input type="checkbox" name="newsletter" value="subscribed"> Subscribe to newsletter
                         </label>
                         
-                        <button type="submit">Save Profile</button>
+                        <button type="submit">Save profile</button>
                     </form>
 
                     <form id="survey-form" class="test-form">
-                        <h4>Customer Survey</h4>
+                        <h4>Customer survey</h4>
                         <label for="customerName">Name</label>
                         <input type="text" id="customerName" name="customerName">
-                        
+
                         <label for="customerEmail">Email</label>
                         <input type="email" id="customerEmail" name="customerEmail">
-                        
+
                         <fieldset>
                             <legend>How did you hear about us?</legend>
-                            <label><input type="radio" name="source" value="search"> Search Engine</label>
-                            <label><input type="radio" name="source" value="social"> Social Media</label>
-                            <label><input type="radio" name="source" value="friend"> Friend/Referral</label>
+                            <label><input type="radio" name="source" value="search"> Search engine</label>
+                            <label><input type="radio" name="source" value="social"> Social media</label>
+                            <label><input type="radio" name="source" value="friend"> Friend/referral</label>
                             <label><input type="radio" name="source" value="ad"> Advertisement</label>
                         </fieldset>
-                        
-                        <label for="rating">Overall Rating</label>
+
+                        <label for="rating">Overall rating</label>
                         <select id="rating" name="rating">
                             <option value="">Select rating</option>
                             <option value="5">5 - Excellent</option>
                             <option value="4">4 - Good</option>
                             <option value="3">3 - Average</option>
                             <option value="2">2 - Poor</option>
-                            <option value="1">1 - Very Poor</option>
+                            <option value="1">1 - Very poor</option>
                         </select>
-                        
+
                         <label for="feedback">Feedback</label>
                         <textarea id="feedback" name="feedback" rows="4" placeholder="Your feedback..."></textarea>
-                        
-                        <button type="submit">Submit Survey</button>
+
+                        <button type="submit">Submit survey</button>
                     </form>
                 </div>
 
                 <div class="controls">
-                    <h4>🚀 Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
-                    <button onclick="checkStatus()">Check Status</button>
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📝 Basic Form Filling</h4>
-                    <button onclick="fillUserProfile()" id="fillUserBtn">👤 Fill User Profile</button>
-                    <button onclick="fillSurvey()" id="fillSurveyBtn">📊 Fill Survey</button>
-                    <button onclick="clearAllForms()" id="clearBtn">🗑️ Clear All Forms</button>
+                    <h4>Basic form filling</h4>
+                    <button onclick="fillUserProfile()" id="fillUserBtn">Fill user profile</button>
+                    <button onclick="fillSurvey()" id="fillSurveyBtn">Fill survey</button>
+                    <button onclick="clearAllForms()" id="clearBtn">Clear all forms</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🤖 Advanced Filling</h4>
-                    <button onclick="fillWithAI()" id="aiBtn">AI-Powered Fill</button>
-                    <button onclick="fillMultipleForms()" id="multiBtn">📝 Fill Multiple Forms</button>
-                    <button onclick="fillWithValidation()" id="validateBtn">✅ Fill with Validation</button>
+                    <h4>Advanced filling</h4>
+                    <button onclick="fillWithAI()" id="aiBtn">AI-powered fill</button>
+                    <button onclick="fillMultipleForms()" id="multiBtn">Fill multiple forms</button>
+                    <button onclick="fillWithValidation()" id="validateBtn">Fill with validation</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🔧 Demonstration & Testing</h4>
-                    <button onclick="showSampleData()" id="sampleBtn">📋 Show Sample Data</button>
-                    <button onclick="testFieldMapping()" id="mappingBtn">🎯 Test Field Mapping</button>
-                    <button onclick="debugFormFilling()" id="debugBtn">🔍 Debug Form Filling</button>
+                    <h4>Demonstration and testing</h4>
+                    <button onclick="showSampleData()" id="sampleBtn">Show sample data</button>
+                    <button onclick="testFieldMapping()" id="mappingBtn">Test field mapping</button>
+                    <button onclick="debugFormFilling()" id="debugBtn">Debug form filling</button>
                 </div>
 
                 <div class="example-section">
-                    <h3>📜 Form Filling API Reference:</h3>
+                    <h3>Form filling API reference:</h3>
                     <div class="code-block">
                         <h4>Basic Form Filling</h4>
                         <pre><code class="language-javascript">// Fill form with data object

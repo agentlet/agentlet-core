@@ -10,22 +10,22 @@
 </head>
 <body>
     <nav class="breadcrumb">
-        <a href="../../index.html">Examples</a> &gt; 
-        <a href="../index.html">01-basics</a> &gt; 
+        <a href="../../index.html">Examples</a> &gt;
+        basics &gt;
         <span>simple-module</span>
     </nav>
 
     <div class="layout-container">
         <main class="main-content">
-            <h1>📦 Simple Module Example</h1>
-            
+            <h1>Simple module example</h1>
+
             <div class="highlight-box">
                 <h3>What this example shows</h3>
-                <p>How to create and register a simple agentlet module using the new simplified Module API.</p>
+                <p>How to create and register a simple agentlet module using the simplified Module API.</p>
             </div>
 
             <section>
-                <h2>1. Create a Simple Module</h2>
+                <h2>1. Create a simple module</h2>
                 <div class="code-block">
                     <pre><code class="language-javascript">// Create a simple agentlet module
 class SimpleModule extends window.agentlet.Module {
@@ -76,7 +76,7 @@ class SimpleModule extends window.agentlet.Module {
             </section>
 
             <section>
-                <h2>2. Register the Module</h2>
+                <h2>2. Register the module</h2>
                 <div class="code-block">
                     <pre><code class="language-javascript">// Register the module with Agentlet
 window.agentlet.modules.register(new SimpleModule());</code></pre>
@@ -84,24 +84,24 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
             </section>
 
             <section>
-                <h2>3. Try It Out</h2>
+                <h2>3. Try it out</h2>
                 <div class="controls">
                     <button id="initializeBtn" class="btn btn-primary">
-                        🚀 Initialize Agentlet & Register Module
+                        Initialize agentlet & register module
                     </button>
                     <button id="showModulesBtn" class="btn btn-secondary" disabled>
-                        📦 Show Registered Modules
+                        Show registered modules
                     </button>
                     <button id="testEventsBtn" class="btn btn-secondary" disabled>
-                        📡 Test Module Events
+                        Test module events
                     </button>
                 </div>
             </section>
 
             <section>
-                <h2>4. Module Lifecycle</h2>
+                <h2>4. Module lifecycle</h2>
                 <div class="info-box">
-                    <h4>Simplified 3-Hook Lifecycle:</h4>
+                    <h4>Simplified 3-hook lifecycle:</h4>
                     <ol>
                         <li><strong>init()</strong> - Called once when module is first loaded</li>
                         <li><strong>activate(context)</strong> - Called when URL matches patterns</li>
@@ -111,15 +111,15 @@ window.agentlet.modules.register(new SimpleModule());</code></pre>
             </section>
 
             <section>
-                <h2>API Reference</h2>
+                <h2>API reference</h2>
                 <div class="api-reference">
-                    <h4>Module Creation:</h4>
+                    <h4>Module creation:</h4>
                     <code>class MyModule extends window.agentlet.Module</code>
-                    
-                    <h4>Module Registration:</h4>
+
+                    <h4>Module registration:</h4>
                     <code>window.agentlet.modules.register(new MyModule())</code>
                     
-                    <h4>Module Management:</h4>
+                    <h4>Module management:</h4>
                     <ul>
                         <li><code>window.agentlet.modules.get(name)</code> - Get module by name</li>
                         <li><code>window.agentlet.modules.getAll()</code> - Get all module names</li>

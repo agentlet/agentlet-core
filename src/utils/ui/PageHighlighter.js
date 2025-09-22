@@ -34,7 +34,7 @@ class PageHighlighter {
                 width: 100%;
                 height: 100%;
                 background: rgba(0, 0, 0, 0.5);
-                z-index: ${Z_INDEX.ELEMENT_HIGHLIGHT};
+                z-index: ${Z_INDEX.BACKDROP};
                 pointer-events: auto;
                 transition: opacity 0.3s ease;
             }
@@ -78,7 +78,7 @@ class PageHighlighter {
 
             /* Message content - full width banner style */
             .agentlet-message-content {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #007bff;
                 color: white;
                 padding: 16px 24px;
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -101,22 +101,22 @@ class PageHighlighter {
 
             /* Type-specific styling for banner messages */
             .agentlet-message-content.info {
-                background: linear-gradient(135deg, #007cba 0%, #0056b3 100%);
+                background: #007bff;
                 color: white;
             }
 
             .agentlet-message-content.success {
-                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+                background: #28a745;
                 color: white;
             }
 
             .agentlet-message-content.warning {
-                background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+                background: #ffc107;
                 color: #333;
             }
 
             .agentlet-message-content.error {
-                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                background: #dc3545;
                 color: white;
             }
 
@@ -193,7 +193,7 @@ class PageHighlighter {
             .agentlet-message-text {
                 font-size: 18px;
                 font-weight: 500;
-                color: #333;
+                color: inherit;
                 margin: 0;
                 line-height: 1.4;
             }

@@ -103,11 +103,11 @@ export class PanelManager {
      * @param {number} width - Width in pixels to save
      */
     savePanelWidthForModule(width) {
-        if (!this.core.envManager || !this.core.moduleLoader.activeModule) {
+        if (!this.core.envManager || !this.core.moduleRegistry.activeModule) {
             return;
         }
 
-        const moduleName = this.core.moduleLoader.activeModule.name;
+        const moduleName = this.core.moduleRegistry.activeModule.name;
         if (!moduleName) {
             return;
         }

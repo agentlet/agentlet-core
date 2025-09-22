@@ -12,119 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
     
-    <!-- Override PageHighlighter message text color for better visibility on blue backgrounds -->
-    <style>
-        .agentlet-message-text {
-            color: #FFF !important;
-        }
-        
-        /* Ensure centered banners also get blue background */
-        .agentlet-overlay[data-position="center"] {
-            background-color: #007bff !important;
-        }
-        
-        .agentlet-overlay[data-type="info"] {
-            background-color: #007bff !important;
-        }
-        
-        /* Additional fallback for centered info overlays */
-        .agentlet-overlay.agentlet-overlay-center.agentlet-overlay-info {
-            background-color: #007bff !important;
-        }
-        
-        /* Ensure message content background is also blue for info type */
-        .agentlet-message-content[data-type="info"] {
-            background-color: #007bff !important;
-        }
-        
-        .agentlet-message-content.agentlet-message-info {
-            background-color: #007bff !important;
-        }
-        
-        /* Target all info message content containers */
-        .agentlet-overlay-info .agentlet-message-content {
-            background-color: #007bff !important;
-        }
-        
-        /* Override the specific rule for center info messages */
-        .agentlet-message-overlay.center .agentlet-message-content.info {
-            background: #007bff !important;
-            color: #FFF !important;
-            border-left: 4px solid #0056b3 !important;
-        }
-        
-        /* Fix progress bar hierarchy - start from the top level */
-        .agentlet-progress-bar {
-            width: 100% !important;
-            display: block !important;
-            margin: 5px 0 !important;
-        }
-        
-        .agentlet-progress-container {
-            width: 100% !important;
-            margin: 10px 0 !important;
-            display: block !important;
-        }
-        
-        /* Ensure progress bar track/container has proper styling */
-        .agentlet-progress {
-            height: 6px !important;
-            background-color: rgba(255, 255, 255, 0.3) !important;
-            border-radius: 3px !important;
-            overflow: hidden !important;
-            width: 100% !important;
-            position: relative !important;
-            display: block !important;
-            margin: 5px 0 !important;
-        }
-        
-        /* Fix progress bar fill display */
-        .agentlet-progress-fill {
-            height: 6px !important;
-            min-height: 6px !important;
-            background-color: #28a745 !important;
-            transition: width 0.3s ease !important;
-            display: block !important;
-            border-radius: 3px !important;
-            /* Don't override width - let inline styles control it */
-        }
-        
-        /* Also target any potential wrapper elements */
-        .agentlet-message-content .agentlet-progress {
-            width: 100% !important;
-            display: block !important;
-        }
-        
-        .agentlet-overlay .agentlet-progress {
-            width: 100% !important;
-            display: block !important;
-        }
-        
-        /* Set blue background for progress overlays */
-        .agentlet-overlay[data-type="progress"] {
-            background-color: #007bff !important;
-        }
-        
-        .agentlet-message-content[data-type="progress"] {
-            background-color: #007bff !important;
-        }
-        
-        .agentlet-overlay.agentlet-overlay-progress .agentlet-message-content {
-            background-color: #007bff !important;
-        }
-        
-        /* Override the general center overlay styling */
-        .agentlet-message-overlay.center .agentlet-message-content {
-            background: #007bff !important;
-            color: #FFF !important;
-        }
-        
-        
-        /* Make sure tooltips/messages are clearly visible */
-        .agentlet-message-content {
-            z-index: 10002 !important;
-        }
-    </style>
+    <!-- Use default PageHighlighter styles from core library -->
 </head>
 <body>
     <div class="container">
@@ -132,12 +20,12 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">ui</a> → highlighting
+                    <a href="../">Examples</a> → ui → highlighting
                 </div>
 
-                <h1>🎯 Page Highlighting - Agentlet Core UI Components</h1>
-                
-                <p>The PageHighlighter utility enables dynamic highlighting of page elements and displaying overlays with messages or progress indicators. Perfect for drawing attention to elements and providing contextual feedback.</p>
+                <h1>Page highlighting</h1>
+
+                <p>The PageHighlighter utility enables dynamic highlighting of page elements and displaying overlays with messages or progress indicators.</p>
 
                 <div class="example-section">
                     <h3>What this example shows:</h3>
@@ -151,13 +39,13 @@
                 </div>
 
                 <div class="controls">
-                    <h4>🚀 Initialize</h4>
+                    <h4>Initialize</h4>
                     <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
                     <button onclick="checkStatus()">Check Status</button>
                 </div>
-                
+
                 <div class="controls">
-                    <h4>📱 Overlay Examples</h4>
+                    <h4>Overlay examples</h4>
                     <button onclick="showTopBanner()" id="topBannerBtn">Top Banner</button>
                     <button onclick="showBottomBanner()" id="bottomBannerBtn">Bottom Banner</button>
                     <button onclick="showCenterOverlay()" id="centerBtn">Centered Banner</button>
@@ -166,7 +54,7 @@
                 </div>
 
                 <div class="controls">
-                    <h4>📊 Progress Examples</h4>
+                    <h4>Progress examples</h4>
                     <button onclick="showProgressOverlay()" id="progressBtn">Center Progress</button>
                     <button onclick="showTopProgress()" id="topProgressBtn">Top Progress Banner</button>
                     <button onclick="showBottomProgress()" id="bottomProgressBtn">Bottom Progress Banner</button>
@@ -174,68 +62,25 @@
                 </div>
 
                 <div class="controls">
-                    <h4>🎯 Element Highlighting Examples</h4>
+                    <h4>Element highlighting examples</h4>
                     <button onclick="highlightWithBorder()" id="borderBtn">Border Highlight</button>
                     <button onclick="highlightWithArrow()" id="arrowBtn">Arrow Pointer</button>
                     <button onclick="highlightWithSticker()" id="stickerBtn">Sticker Badge</button>
+                    <button onclick="showClickableHighlight()" id="clickableBtn">Clickable Highlight</button>
+                    <button onclick="updateHighlightDemo()" id="updateBtn">Update Highlight</button>
                     <button onclick="clearAllHighlights()" id="clearHighlightsBtn">Clear All Highlights</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🗂️ Advanced Features</h4>
-                    <button onclick="showClickableHighlight()" id="clickableBtn">Clickable Highlight</button>
-                    <button onclick="updateHighlightDemo()" id="updateBtn">Update Highlight</button>
-                </div>
-
-                <div class="controls">
-                    <h4>📍 Scroll Controls</h4>
+                    <h4>Scroll controls</h4>
                     <button onclick="scrollToTop()" id="scrollTopBtn">Scroll to Top</button>
                     <button onclick="scrollToBottom()" id="scrollBottomBtn">Scroll to Bottom</button>
-                    <button onclick="scrollToTable()" id="scrollTableBtn">Scroll to Table</button>
                     <button onclick="scrollToAndHighlightDemo()" id="scrollHighlightBtn">Scroll + Highlight Demo</button>
-                    <button onclick="scrollWithOffset()" id="scrollOffsetBtn">Scroll with Offset</button>
-                    <button onclick="clearAll()" id="clearAllBtn">Clear Everything</button>
                 </div>
 
-                <!-- Demo elements for highlighting -->
-                <div class="example-section">
-                    <h3 id="demo-title">🎯 Demo Elements (for highlighting)</h3>
-                    <p id="demo-paragraph">This paragraph can be highlighted with different styles and effects.</p>
-                    
-                    <div style="display: flex; gap: 20px; margin: 20px 0;">
-                        <button id="demo-button" style="background: #28a745; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Demo Button</button>
-                        <input id="demo-input" type="text" placeholder="Demo Input Field" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-                        <select id="demo-select" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option>Option 1</option>
-                            <option>Option 2</option>
-                        </select>
-                    </div>
-
-                    <table id="demo-table" style="margin-top: 20px; width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-                        <thead>
-                            <tr style="background-color: #f8f9fa;">
-                                <th style="padding: 10px; border: 1px solid #ddd;">Column 1</th>
-                                <th style="padding: 10px; border: 1px solid #ddd;">Column 2</th>
-                                <th style="padding: 10px; border: 1px solid #ddd;">Column 3</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 1, Cell 1</td>
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 1, Cell 2</td>
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 1, Cell 3</td>
-                            </tr>
-                            <tr id="demo-table-row">
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 2, Cell 1</td>
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 2, Cell 2</td>
-                                <td style="padding: 8px; border: 1px solid #ddd;">Row 2, Cell 3</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
 
                 <div class="example-section">
-                    <h3>📜 PageHighlighter API Reference:</h3>
+                    <h3>PageHighlighter API reference:</h3>
                     <div class="code-block">
                         <h4>1. Show Overlays</h4>
                         <pre><code class="language-javascript">// Top banner (full width, sticks to top)
@@ -714,14 +559,16 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
             if (!ph) return;
 
             setButtonLoading('borderBtn', true);
-            const highlight = ph.highlight('#demo-paragraph', {
+            // Target the controls div that contains the "🎯 Element Highlighting Examples" heading
+            const targetElement = document.getElementById('borderBtn').parentElement;
+            const highlight = ph.highlight(targetElement, {
                 type: 'border',
                 style: 'primary',
-                message: 'This paragraph is highlighted with a border!',
+                message: 'This section contains element highlighting examples!',
                 animation: 'pulse',
                 offset: 5
             });
-            
+
             if (highlight) {
                 currentHighlights.push(highlight);
                 trackHighlight('Border');
@@ -735,13 +582,13 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
             if (!ph) return;
 
             setButtonLoading('arrowBtn', true);
-            const highlight = ph.highlight('#demo-input', {
+            const highlight = ph.highlight('#arrowBtn', {
                 type: 'arrow',
                 position: 'top',
-                message: 'Fill out this input field!',
+                message: 'This is the arrow pointer button!',
                 style: 'warning'
             });
-            
+
             if (highlight) {
                 currentHighlights.push(highlight);
                 trackHighlight('Arrow');
@@ -754,13 +601,13 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
             if (!ph) return;
 
             setButtonLoading('stickerBtn', true);
-            const highlight = ph.highlight('#demo-select', {
+            const highlight = ph.highlight('#stickerBtn', {
                 type: 'sticker',
                 message: '!',
                 style: 'danger',
                 position: 'top-right'
             });
-            
+
             if (highlight) {
                 currentHighlights.push(highlight);
                 trackHighlight('Sticker');
@@ -791,20 +638,22 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
             if (!ph) return;
 
             setButtonLoading('clickableBtn', true);
-            const highlight = ph.highlight('#demo-table', {
+            // Target the controls div that contains the "🎯 Element Highlighting Examples" heading
+            const targetElement = document.getElementById('clickableBtn').parentElement;
+            const highlight = ph.highlight(targetElement, {
                 type: 'border',
                 style: 'warning',
-                message: 'Click this table!',
+                message: 'Click anywhere in this section to dismiss!',
                 clickable: true,
                 onClick: () => {
-                    log('🎉 Table was clicked!', 'success');
-                    updateStatus('Table clicked! Great job!', 'success');
+                    log('🎉 Element Highlighting Examples section was clicked!', 'success');
+                    updateStatus('Section clicked! Highlight dismissed!', 'success');
                     highlight.destroy();
                     currentHighlights = currentHighlights.filter(h => h !== highlight);
                     updateHighlightingStats();
                 }
             });
-            
+
             if (highlight) {
                 currentHighlights.push(highlight);
                 trackHighlight('Clickable');
@@ -829,20 +678,6 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 trackHighlight('Updated');
             }
             setTimeout(() => setButtonLoading('updateBtn', false), 300);
-        }
-
-        function clearAll() {
-            const ph = ensurePageHighlighter();
-            if (!ph) return;
-
-            setButtonLoading('clearAllBtn', true);
-            log('🧹 Clearing everything...', 'info');
-            ph.clearAll();
-            currentHighlights = [];
-            currentOverlays = [];
-            progressOverlay = null;
-            updateHighlightingStats();
-            setTimeout(() => setButtonLoading('clearAllBtn', false), 300);
         }
 
         // Scroll Functions
@@ -874,35 +709,25 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
             setTimeout(() => setButtonLoading('scrollBottomBtn', false), 1000);
         }
 
-        function scrollToTable() {
-            const ph = ensurePageHighlighter();
-            if (!ph) return;
-
-            setButtonLoading('scrollTableBtn', true);
-            log('📊 Scrolling to demo table...', 'info');
-            ph.scrollTo('#demo-table', {
-                block: 'center',
-                behavior: 'smooth',
-                onComplete: () => {
-                    log('✅ Scrolled to table successfully', 'success');
-                }
-            }).catch(error => {
-                log('❌ Scroll failed: ' + error.message, 'error');
-            });
-            setTimeout(() => setButtonLoading('scrollTableBtn', false), 1000);
-        }
-
         function scrollToAndHighlightDemo() {
             const ph = ensurePageHighlighter();
             if (!ph) return;
 
             setButtonLoading('scrollHighlightBtn', true);
-            log('🎯 Scrolling to paragraph and highlighting...', 'info');
-            ph.scrollToAndHighlight('#demo-paragraph', {
+            log('🎯 Scrolling to API Reference section and highlighting...', 'info');
+            // Target the div surrounding the "📜 PageHighlighter API Reference:" heading
+            let apiSection = null;
+            for (let h3 of document.querySelectorAll('h3')) {
+                if (h3.textContent.includes('📜 PageHighlighter API Reference')) {
+                    apiSection = h3.parentElement;
+                    break;
+                }
+            }
+            ph.scrollToAndHighlight(apiSection, {
                 block: 'center',
                 highlightDuration: 4000,
                 onComplete: () => {
-                    log('✅ Scrolled and highlighted paragraph', 'success');
+                    log('✅ Scrolled and highlighted API Reference section', 'success');
                 }
             }).then(result => {
                 log('🎉 Scroll and highlight completed!', 'success');
@@ -914,32 +739,6 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 log('❌ Scroll and highlight failed: ' + error.message, 'error');
             });
             setTimeout(() => setButtonLoading('scrollHighlightBtn', false), 1000);
-        }
-
-        function scrollWithOffset() {
-            const ph = ensurePageHighlighter();
-            if (!ph) return;
-
-            setButtonLoading('scrollOffsetBtn', true);
-            log('📍 Scrolling to input with offset...', 'info');
-            ph.scrollTo('#demo-input', {
-                block: 'start',
-                offset: { x: 0, y: -100 }, // 100px above the element
-                highlight: true,
-                highlightDuration: 3000,
-                onComplete: () => {
-                    log('✅ Scrolled with offset successfully', 'success');
-                }
-            }).then(result => {
-                log('🎯 Offset scroll completed!', 'success');
-                if (result.highlight) {
-                    currentHighlights.push(result.highlight);
-                    trackHighlight('Offset Scroll');
-                }
-            }).catch(error => {
-                log('❌ Offset scroll failed: ' + error.message, 'error');
-            });
-            setTimeout(() => setButtonLoading('scrollOffsetBtn', false), 1000);
         }
 
         // Initialize page

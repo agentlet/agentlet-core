@@ -217,7 +217,7 @@
 
 /* Example section styling (inherits from main examples.css but with adjustments) */
 .example-section {
-    margin: 20px 0;
+    margin: 0px;
     padding: 15px;
     background: #ffffff;
     border-radius: 5px;

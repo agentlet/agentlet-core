@@ -14,11 +14,11 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">ui</a> → shortcuts
+                    <a href="../">Examples</a> → ui → shortcuts
                 </div>
 
-                <h1>⌨️ Keyboard Shortcuts - Agentlet Core</h1>
-                
+                <h1>Keyboard shortcuts</h1>
+
                 <p>This example demonstrates the keyboard shortcuts system in Agentlet Core using hotkeys-js.</p>
 
                 <div class="example-section">
@@ -34,11 +34,11 @@
 
                 <div class="controls">
                     <h4>Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">🚀 Initialize Agentlet</button>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet</button>
                 </div>
 
                 <div class="controls">
-                    <h4>Try Default Shortcuts</h4>
+                    <h4>Try default shortcuts</h4>
                     <div class="shortcut-demo">
                         <kbd>Ctrl</kbd> + <kbd>;</kbd> (or <kbd>Cmd</kbd> + <kbd>;</kbd>) - Quick Command<br>
                         <kbd>Esc</kbd> - Close Active Dialog
@@ -46,11 +46,11 @@
                 </div>
 
                 <div class="controls">
-                    <h4>Practical Shortcuts</h4>
-                    <button onclick="registerCustomShortcuts()" id="customBtn">⚡ Register Practical Shortcuts</button>
-                    <button onclick="showShortcutsHelp()" id="helpBtn">❓ Show All Shortcuts</button>
-                    <button onclick="toggleShortcuts()" id="toggleBtn">🔄 Toggle Shortcuts</button>
-                    
+                    <h4>Practical shortcuts</h4>
+                    <button onclick="registerCustomShortcuts()" id="customBtn">Register practical shortcuts</button>
+                    <button onclick="showShortcutsHelp()" id="helpBtn">Show all shortcuts</button>
+                    <button onclick="toggleShortcuts()" id="toggleBtn">Toggle shortcuts</button>
+
                     <div class="practical-demo" style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 6px; font-size: 13px;">
                         <strong>Practical examples:</strong><br>
                         <kbd>Ctrl+M</kbd> Minimize/maximize • <kbd>Alt+H</kbd> Help • <kbd>Alt+T</kbd> Focus input
@@ -58,13 +58,13 @@
                 </div>
 
                 <div class="controls">
-                    <h4>Test Area</h4>
+                    <h4>Test area</h4>
                     <input type="text" id="testInput" placeholder="Test typing here - some shortcuts work in inputs, others don't">
                     <textarea id="testTextarea" placeholder="Test with textarea too..." rows="3"></textarea>
                 </div>
 
                 <div class="example-section">
-                    <h3>📜 Shortcuts API Examples:</h3>
+                    <h3>Shortcuts API examples:</h3>
                     <div class="code-block">
                         <h4>Register a Global Help Shortcut</h4>
                         <pre><code class="language-javascript">// Register F1 for help (works everywhere, even in inputs)

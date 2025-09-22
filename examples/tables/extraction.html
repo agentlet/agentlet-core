@@ -18,11 +18,11 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → <a href="./">tables</a> → extraction → simple-table
+                    <a href="../">Examples</a> → tables → extraction → simple-table
                 </div>
 
-                <h1>📊 Simple Table Extraction - Agentlet Core</h1>
-                
+                <h1>Simple table extraction</h1>
+
                 <p>This example demonstrates how to extract structured data from HTML tables using Agentlet Core.</p>
 
                 <div class="example-section">
@@ -35,12 +35,11 @@
                     </ul>
                 </div>
 
-                <!-- Sample Tables for Testing -->
                 <div class="example-section">
-                    <h3>Sample Tables</h3>
+                    <h3>Sample tables</h3>
                     
                     <table id="employees-table" class="sample-table">
-                        <caption>Employee Directory</caption>
+                        <caption>Employee directory</caption>
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -48,7 +47,7 @@
                                 <th>Department</th>
                                 <th>Position</th>
                                 <th>Salary</th>
-                                <th>Start Date</th>
+                                <th>Start date</th>
                                 <th>Active</th>
                             </tr>
                         </thead>
@@ -57,7 +56,7 @@
                                 <td>001</td>
                                 <td>Alice Johnson</td>
                                 <td>Engineering</td>
-                                <td>Senior Developer</td>
+                                <td>Senior developer</td>
                                 <td>$85,000</td>
                                 <td>2021-03-15</td>
                                 <td>✓</td>
@@ -66,7 +65,7 @@
                                 <td>002</td>
                                 <td>Bob Smith</td>
                                 <td>Marketing</td>
-                                <td>Marketing Manager</td>
+                                <td>Marketing manager</td>
                                 <td>$72,000</td>
                                 <td>2020-08-22</td>
                                 <td>✓</td>
@@ -75,7 +74,7 @@
                                 <td>003</td>
                                 <td>Carol Davis</td>
                                 <td>Sales</td>
-                                <td>Sales Representative</td>
+                                <td>Sales representative</td>
                                 <td>$58,000</td>
                                 <td>2022-01-10</td>
                                 <td>✓</td>
@@ -84,7 +83,7 @@
                                 <td>004</td>
                                 <td>David Wilson</td>
                                 <td>Engineering</td>
-                                <td>Junior Developer</td>
+                                <td>Junior developer</td>
                                 <td>$65,000</td>
                                 <td>2023-06-05</td>
                                 <td>✓</td>
@@ -93,7 +92,7 @@
                                 <td>005</td>
                                 <td>Emma Brown</td>
                                 <td>HR</td>
-                                <td>HR Specialist</td>
+                                <td>HR specialist</td>
                                 <td>$62,000</td>
                                 <td>2021-11-30</td>
                                 <td>○</td>
@@ -180,35 +179,35 @@
                 </div>
 
                 <div class="controls">
-                    <h4>🚀 Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
-                    <button onclick="checkStatus()">Check Status</button>
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
                 </div>
 
                 <div class="controls">
-                    <h4>📊 Table Extraction</h4>
-                    <button onclick="extractEmployeesTable()" id="employeesBtn">👥 Extract Employees Table</button>
-                    <button onclick="extractProductsTable()" id="productsBtn">📦 Extract Products Table</button>
-                    <button onclick="extractSimpleTable()" id="simpleBtn">📋 Extract Simple Table</button>
-                    <button onclick="extractAllTables()" id="allBtn">📊 Extract All Tables</button>
+                    <h4>Table extraction</h4>
+                    <button onclick="extractEmployeesTable()" id="employeesBtn">Extract employees table</button>
+                    <button onclick="extractProductsTable()" id="productsBtn">Extract products table</button>
+                    <button onclick="extractSimpleTable()" id="simpleBtn">Extract simple table</button>
+                    <button onclick="extractAllTables()" id="allBtn">Extract all tables</button>
                 </div>
 
                 <div class="controls">
-                    <h4>💾 Export Options</h4>
-                    <button onclick="downloadAsExcel()" id="excelBtn">📥 Download as Excel</button>
-                    <button onclick="downloadAsCSV()" id="csvBtn">📄 Download as CSV</button>
-                    <button onclick="copyAsJSON()" id="jsonBtn">📋 Copy as JSON</button>
+                    <h4>Export options</h4>
+                    <button onclick="downloadAsExcel()" id="excelBtn">Download as Excel</button>
+                    <button onclick="downloadAsCSV()" id="csvBtn">Download as CSV</button>
+                    <button onclick="copyAsJSON()" id="jsonBtn">Copy as JSON</button>
                 </div>
 
                 <div class="controls">
-                    <h4>🔍 Advanced Features</h4>
-                    <button onclick="extractWithMetadata()" id="metadataBtn">Extract with Metadata</button>
-                    <button onclick="analyzeTableStructure()" id="analyzeBtn">🏗️ Analyze Structure</button>
-                    <button onclick="detectDataTypes()" id="typesBtn">🔢 Detect Data Types</button>
+                    <h4>Advanced features</h4>
+                    <button onclick="extractWithMetadata()" id="metadataBtn">Extract with metadata</button>
+                    <button onclick="analyzeTableStructure()" id="analyzeBtn">Analyze structure</button>
+                    <button onclick="detectDataTypes()" id="typesBtn">Detect data types</button>
                 </div>
 
                 <div class="example-section">
-                    <h3>📜 Table Extraction API Reference:</h3>
+                    <h3>Table extraction API reference:</h3>
                     <div class="code-block">
                         <h4>Basic Extraction</h4>
                         <pre><code class="language-javascript">// Extract table data
@@ -252,13 +251,13 @@ const data = window.agentlet.tables.extract(tableElement, {
                 </div>
                 <div class="console-section" id="console"></div>
                 
-                <h3>📊 Status</h3>
+                <h3>Status</h3>
                 <div class="status-section" id="status">
                     Click "Initialize Agentlet Core" to start the demo.
                 </div>
                 
                 
-                <h3>📊 Table Activity</h3>
+                <h3>Table activity</h3>
                 <div class="stats-section" id="tableStats">
                     <div>Tables API available: <span id="tablesAvailable">No</span></div>
                     <div>Tables extracted: <span id="tablesExtracted">0</span></div>
