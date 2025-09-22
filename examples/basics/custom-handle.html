@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Handle - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → basics → custom-handle
+                </div>
+
+                <h1>Custom handle</h1>
+
+                <p>This example demonstrates using a custom image handle instead of the default side arrow to control the agentlet panel.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Custom image handle configuration using minimizeWithImage option</li>
+                        <li>Replacing the default side arrow with a custom SVG image</li>
+                        <li>Interactive panel control via the custom handle</li>
+                        <li>Panel minimize/maximize behavior with custom visuals</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet with custom handle</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Custom handle API example:</h3>
+                    <div class="code-block">
+                        <h4>Using minimizeWithImage Configuration</h4>
+                        <pre><code class="language-javascript">// Initialize agentlet with custom image handle
+const agentlet = new AgentletCore({
+    minimizeWithImage: './tux.svg',
+    startMinimized: false,
+    debugMode: true
+});
+
+// The custom image will replace the default side arrow
+// Users can click the image to minimize/maximize the panel</code></pre>
+                    </div>
+                </div>
+
+                <div class="example-section">
+                    <h3>Custom handle image</h3>
+                    <p>In this example, we're using the Tux penguin (Linux mascot) as our custom handle:</p>
+                    <img src="tux.svg" alt="Tux penguin" style="width: 100px; height: 100px; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo with custom handle.
+                </div>
+
+                <h3>🎛️ Handle Status</h3>
+                <div class="stats-section" id="handleStats">
+                    <div>Custom handle enabled: <span id="customHandleEnabled">No</span></div>
+                    <div>Handle image: <span id="handleImage">Default arrow</span></div>
+                    <div>Panel state: <span id="panelState">Not initialized</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <script>
+        // Configure Agentlet with custom handle
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: true,
+            minimizeWithImage: './tux.svg'  // Custom Tux image handle
+        };
+
+        // Update handle stats display
+        function updateHandleStats() {
+            const elements = {
+                customHandleEnabled: document.getElementById('customHandleEnabled'),
+                handleImage: document.getElementById('handleImage'),
+                panelState: document.getElementById('panelState')
+            };
+
+            if (elements.customHandleEnabled) {
+                const hasCustomHandle = !!(window.agentletConfig.minimizeWithImage);
+                elements.customHandleEnabled.textContent = hasCustomHandle ? 'Yes' : 'No';
+            }
+
+            if (elements.handleImage) {
+                elements.handleImage.textContent = window.agentletConfig.minimizeWithImage || 'Default arrow';
+            }
+
+            if (elements.panelState && window.agentlet) {
+                elements.panelState.textContent = window.agentlet.isMinimized ? 'Minimized' : 'Maximized';
+            }
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core with custom handle...', 'info');
+                log('🤖 Initializing Agentlet Core with custom handle...');
+
+                if (window.agentlet) {
+                    log('⚠️ Agentlet already loaded', 'warning');
+                    updateStatus('Ready! Try clicking the Tux handle to minimize/maximize.', 'success');
+                    setButtonLoading('initBtn', false);
+                    updateHandleStats();
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+
+                    if (window.AgentletCore) {
+                        log('📦 AgentletCore is available');
+
+                        const AgentletConstructor = window.AgentletCore.default;
+
+                        if (AgentletConstructor) {
+                            try {
+                                log('🚀 Creating AgentletCore instance with custom handle...');
+                                const agentletInstance = new AgentletConstructor(window.agentletConfig);
+
+                                log('⚙️ Starting initialization...');
+                                agentletInstance.init().then(() => {
+                                    log('✅ Agentlet Core loaded with custom Tux handle', 'success');
+                                    log('🐧 Look for the Tux penguin handle to control the panel!', 'info');
+                                    updateStatus('Ready! Click the Tux handle to minimize/maximize the panel.', 'success');
+                                    updateHandleStats();
+                                    setButtonLoading('initBtn', false);
+                                }).catch(error => {
+                                    log(`❌ Initialization failed: ${error.message}`, 'error');
+                                    updateStatus('Initialization failed: ' + error.message, 'error');
+                                    setButtonLoading('initBtn', false);
+                                });
+
+                            } catch (error) {
+                                log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                                updateStatus('Error creating instance: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            }
+                        } else {
+                            log('❌ AgentletCore constructor not available', 'error');
+                            updateStatus('AgentletCore constructor not found', 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore not found in window object', 'error');
+                        updateStatus('AgentletCore not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                updateStatus('Initialization error', 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Custom handle example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization with custom handle', 'info');
+            updateHandleStats();
+        });
+
+        // Update handle stats periodically
+        setInterval(updateHandleStats, 2000);
+    </script>
+</body>
+</html>
