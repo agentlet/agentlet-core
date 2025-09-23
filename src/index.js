@@ -146,11 +146,8 @@ class AgentletCore {
             uiRenderTime: 0
         };
         
-        // Set up global access (preserve UI references)
-        const originalUIReferences = this.ui; // Backup DOM references
+        // Set up global access - will be finalized after UI is created
         this.globalAPI.setupGlobalAccess();
-        // Merge original DOM references with the API methods added by setupGlobalAccess
-        Object.assign(window.agentlet.ui, originalUIReferences);
         
         console.log('AgentletCore 📎 initialized with config:', this.config);
     }
@@ -258,14 +255,13 @@ class AgentletCore {
             this.styleInjector.injectStyles();
 
             this.setupBaseUI(); // Call our delegation method to maintain compatibility
+
+            // Finalize global access with the actual UI references
+            this.finalizeGlobalAccess();
+
             this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
 
-            // Set up module change callback AFTER UI is ready but BEFORE modules are initialized
-            this.moduleRegistry.setModuleChangeCallback((activeModule) => {
-                this.onModuleChange(activeModule);
-            });
-
-            // Initialize module registry with shared registry data
+            // Initialize module registry with shared registry data FIRST
             const moduleStartTime = performance.now();
             if (registryData) {
                 await this.moduleRegistry.initializeWithRegistry(registryData);
@@ -273,6 +269,23 @@ class AgentletCore {
                 await this.moduleRegistry.initialize();
             }
             this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
+
+            // Set up module change callback AFTER modules are loaded and UI is ready
+            this.moduleRegistry.setModuleChangeCallback((activeModule) => {
+                this.onModuleChange(activeModule);
+            });
+
+            // Trigger initial content update for any active modules after DOM is ready
+            const activeModule = this.moduleRegistry.activeModule;
+            if (activeModule) {
+                console.log('🔄 Initial content update for active module:', activeModule.name);
+                console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
+                // Use requestAnimationFrame to ensure DOM is fully ready
+                requestAnimationFrame(() => {
+                    console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
+                    this.onModuleChange(activeModule);
+                });
+            }
 
             // Set up storage change listener
             this.setupLocalStorageListener();
@@ -477,7 +490,10 @@ class AgentletCore {
      */
     updateModuleContent() {
         const content = this.ui.content;
-        if (!content) return;
+        if (!content) {
+            console.warn('⚠️ updateModuleContent called but UI content element not ready');
+            return;
+        }
 
         // Clear existing content
         content.innerHTML = '';
@@ -518,7 +534,7 @@ class AgentletCore {
                 </div>
             `;
         }
-        
+
         this.eventBus.emit('ui:contentUpdated', {
             module: activeModule?.name || null
         });
@@ -872,6 +888,17 @@ class AgentletCore {
     setupBaseUI() {
         if (this.uiManager) {
             return this.uiManager.setupBaseUI();
+        }
+    }
+
+    /**
+     * Finalize global access with actual UI references after UI creation
+     */
+    finalizeGlobalAccess() {
+        // Ensure window.agentlet.ui exists and merge with actual DOM references
+        if (window.agentlet && window.agentlet.ui) {
+            // Merge the actual DOM references created by UIManager
+            Object.assign(window.agentlet.ui, this.ui);
         }
     }
 

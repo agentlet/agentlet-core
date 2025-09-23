@@ -67,11 +67,17 @@ export class UIManager {
             document.body.appendChild(container);
         }
         
-        // Store UI references
+        // Store UI references in both UIManager and AgentletCore
         this.ui.container = container;
         this.ui.content = content;
         this.ui.header = header;
         this.ui.actions = actions;
+
+        // Also directly update AgentletCore's references to ensure sync
+        this.core.ui.container = container;
+        this.core.ui.content = content;
+        this.core.ui.header = header;
+        this.core.ui.actions = actions;
         
         // Ensure image overlay is shown if panel is minimized and image is configured
         this.ensureImageOverlay();
@@ -145,7 +151,8 @@ export class UIManager {
         const content = document.createElement('div');
         content.id = 'agentlet-content';
         content.className = 'agentlet-content';
-        
+
+        console.log('🔧 UIManager createContentArea created:', content);
         return content;
     }
 

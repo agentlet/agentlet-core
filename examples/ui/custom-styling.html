@@ -90,12 +90,6 @@ window.agentlet.theme.applyTheme(customTheme);</code></pre>
                     Click "Initialize agentlet" to start the demo.
                 </div>
 
-                <h3>🎨 Theme Status</h3>
-                <div class="stats-section" id="themeStats">
-                    <div>Current theme: <span id="currentTheme">Default</span></div>
-                    <div>Theme available: <span id="themeAvailable">No</span></div>
-                    <div>Themes switched: <span id="themeSwitchCount">0</span></div>
-                </div>
             </div>
         </div>
     </div>
@@ -175,6 +169,7 @@ window.agentlet.theme.applyTheme(customTheme);</code></pre>
             backdrop-filter: blur(20px) !important;
             border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
         }
+
 
         /* Glass Theme - Side Handle Styling */
         body.theme-glass .agentlet-toggle {
@@ -645,33 +640,17 @@ window.agentlet.theme.applyTheme(customTheme);</code></pre>
         let themeSwitchCount = 0;
         let currentTheme = 'default';
 
-        // Generate demo panel content
-        function getContent() {
-            return `
-                <div style="padding: 15px;">
-                    <h3>Theme Demo Panel</h3>
-                    <p>Try these interactive elements to see how dialogs are themed:</p>
-                    <div style="margin: 15px 0;">
-                        <button onclick="showProgressDemo()" class="panel-demo-btn">📊 Show Progress Bar</button>
-                        <button onclick="showInfoDemo()" class="panel-demo-btn">ℹ️ Show Info Dialog</button>
-                        <button onclick="showFullscreenDemo()" class="panel-demo-btn">🖥️ Fullscreen Dialog</button>
-                    </div>
-                    <div style="border-top: 1px solid #ddd; padding-top: 15px; margin-top: 15px;">
-                        <h4>Panel Action Buttons</h4>
-                        <p>These buttons showcase theme-specific styling:</p>
-                        <button onclick="handleAction1()" class="panel-action-btn primary">🚀 Primary Action</button>
-                        <button onclick="handleAction2()" class="panel-action-btn secondary">⚙️ Secondary Action</button>
-                    </div>
-                </div>
-            `;
-        }
+        // Registry-based module loading (no manual loading needed)
 
-        // Configure Agentlet
+
+        // Configure Agentlet with registry
         window.agentletConfig = {
             debugMode: true,
             theme: 'default',
             startMinimized: false,  // Start maximized to show theming better
-            customContent: getContent()
+            resizablePanel: true,
+            minimumPanelWidth: 400,  // Ensure minimum width for content visibility
+            registryUrl: './agentlets-registry.json'  // Use registry for module discovery
         };
 
         // Update theme stats display
@@ -799,129 +778,41 @@ window.agentlet.theme.applyTheme(customTheme);</code></pre>
         });
 
         // Interactive demo functions for panel buttons
-        function showProgressDemo() {
+
+
+
+        // Localhost module dialog functions
+        function showLocalhostInfoDialog() {
             if (!window.agentlet) {
                 log('❌ Agentlet not initialized', 'error');
                 return;
             }
 
-            log('📊 Showing progress bar demo...', 'info');
-            window.agentlet.utils.Dialog.progress({
-                title: 'Theme Demo Progress',
-                message: 'Processing theme demonstration...',
-                icon: '🎨'
-            }, (progressDialog) => {
-                let progress = 0;
-                const interval = setInterval(() => {
-                    progress += 10;
-                    progressDialog.setProgress(progress);
-                    progressDialog.setMessage(`Theme processing: ${progress}%`);
-
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        setTimeout(() => {
-                            progressDialog.close();
-                            log('✅ Progress demo completed', 'success');
-                        }, 500);
-                    }
-                }, 300);
+            window.agentlet.utils.Dialog.show('info', {
+                title: 'Info dialog',
+                message: 'Hello world!',
+                icon: ''
             });
         }
 
-        function showInfoDemo() {
+        function showLocalhostFullscreenDialog() {
             if (!window.agentlet) {
                 log('❌ Agentlet not initialized', 'error');
                 return;
             }
 
-            log('ℹ️ Showing info dialog demo...', 'info');
-            window.agentlet.utils.Dialog.info({
-                title: 'Theme Information',
-                message: `
-                    <h4>Current Theme: ${currentTheme}</h4>
-                    <p>This dialog demonstrates how themes are applied to all Agentlet UI components.</p>
-                    <ul>
-                        <li><strong>Glass:</strong> Transparent with backdrop blur</li>
-                        <li><strong>Material:</strong> Bold colors and elevation</li>
-                        <li><strong>VS Code:</strong> Dark developer-focused design</li>
-                        <li><strong>Tux:</strong> Linux-inspired with Tux penguin mascot</li>
-                    </ul>
-                    <p>Notice how the dialog styling changes with each theme!</p>
-                `,
-                icon: '🎨',
-                allowHtml: true
-            });
-        }
-
-        function showFullscreenDemo() {
-            if (!window.agentlet) {
-                log('❌ Agentlet not initialized', 'error');
-                return;
-            }
-
-            log('🖥️ Showing fullscreen dialog demo...', 'info');
-            window.agentlet.utils.Dialog.fullscreen({
-                title: 'Fullscreen Theme Demo',
-                message: `
-                    <div style="text-align: center; padding: 20px;">
-                        <h2>🎨 Theme Showcase</h2>
-                        <p>This fullscreen dialog demonstrates comprehensive theme coverage.</p>
-                        <div style="margin: 20px 0;">
-                            <h3>Current Theme: ${currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1)}</h3>
-                            <p>Switch themes using the buttons in the left panel to see this dialog update in real-time!</p>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">
-                            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-                                <h4>✨ Glass Theme</h4>
-                                <p>Transparent glass with blur effects</p>
-                            </div>
-                            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-                                <h4>🎨 Material Design</h4>
-                                <p>Bold colors and elevation shadows</p>
-                            </div>
-                            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-                                <h4>💻 VS Code Dark</h4>
-                                <p>Developer-focused dark theme</p>
-                            </div>
-                            <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-                                <h4>🐧 Tux Linux</h4>
-                                <p>Linux-inspired theme with Tux mascot</p>
-                            </div>
-                        </div>
-                    </div>
-                `,
-                icon: '🖥️',
-                allowHtml: true,
+            window.agentlet.utils.Dialog.show('fullscreen', {
+                title: 'Fullscreen dialog',
+                message: 'Hello world!',
+                icon: '',
                 buttons: [
                     { text: 'Close', value: 'close', primary: true }
                 ]
             });
         }
 
-        // Panel action button handlers
-        function handleAction1() {
-            log('🚀 Primary action triggered!', 'success');
-            if (window.agentlet && window.agentlet.utils && window.agentlet.utils.MessageBubble) {
-                window.agentlet.utils.MessageBubble.show({
-                    message: `Primary action executed with ${currentTheme} theme!`,
-                    type: 'success',
-                    duration: 3000,
-                    icon: '🚀'
-                });
-            }
-        }
 
-        function handleAction2() {
-            log('⚙️ Secondary action triggered!', 'info');
-            if (window.agentlet && window.agentlet.utils && window.agentlet.utils.MessageBubble) {
-                window.agentlet.utils.MessageBubble.show({
-                    message: `Secondary action executed with ${currentTheme} theme!`,
-                    type: 'info',
-                    duration: 3000,
-                    icon: '⚙️'
-                });
-            }
-        }
+
 
         // Update theme stats periodically
         setInterval(updateThemeStats, 2000);
