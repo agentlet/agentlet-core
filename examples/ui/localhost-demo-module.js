@@ -8,8 +8,8 @@ class LocalhostDemoModule extends window.agentlet.Module {
         super({
             name: 'localhost-demo',
             version: '1.0.0',
-            description: 'Demo module for localhost:3000 with dialog buttons',
-            patterns: ['localhost:3000']
+            description: 'Demo module for localhost with dialog buttons',
+            patterns: ['localhost']
         });
     }
 

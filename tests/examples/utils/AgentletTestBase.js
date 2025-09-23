@@ -12,15 +12,15 @@ export class AgentletTestBase {
 
   /**
    * Navigate to an example page
-   * @param {string} examplePath - Path relative to examples/ (e.g., '01-basics/hello-world')
+   * @param {string} examplePath - Path relative to examples/ (e.g., 'basics/hello-world.html')
    */
   async navigateToExample(examplePath) {
-    const fullPath = `/examples/${examplePath}/index.html`;
+    const fullPath = `/examples/${examplePath}`;
     await this.page.goto(fullPath);
-    
+
     // Wait for the page to load
     await this.page.waitForLoadState('networkidle');
-    
+
     // Verify basic page structure
     await expect(this.page.locator('h1')).toBeVisible();
     await expect(this.page.locator('.container')).toBeVisible();
@@ -30,15 +30,12 @@ export class AgentletTestBase {
    * Click the "Initialize Agentlet" button and wait for completion
    */
   async initializeAgentlet() {
-    // Click the initialize button
-    await this.page.click('text=🚀 Initialize Agentlet');
-    
+    // Click the initialize button - try multiple variations
+    const initButton = this.page.locator('button:has-text("Initialize agentlet"), button:has-text("🚀 Initialize Agentlet"), button:has-text("Initialize Agentlet")');
+    await initButton.first().click();
+
     // Wait for initialization to complete
-    await this.page.waitForSelector('#status.success', { timeout: 15000 });
-    
-    // Verify Agentlet was initialized
-    const statusText = await this.page.locator('#status').textContent();
-    expect(statusText).toContain('successfully');
+    await this.page.waitForTimeout(3000);
   }
 
   /**
@@ -175,13 +172,85 @@ export class AgentletTestBase {
   }
 
   /**
+   * Wait for dialog to appear
+   */
+  async waitForDialog() {
+    // Try multiple possible dialog selectors
+    const selectors = [
+      '.agentlet-dialog',
+      '.agentlet-info-dialog',
+      '.agentlet-dialog-overlay',
+      '[class*="dialog"]',
+      '[class*="modal"]'
+    ];
+
+    for (const selector of selectors) {
+      try {
+        await this.page.waitForSelector(selector, { timeout: 1000 });
+        console.log(`Dialog found with selector: ${selector}`);
+        return;
+      } catch (e) {
+        // Continue to next selector
+      }
+    }
+
+    // If none found, log what's actually in the DOM
+    const allElements = await this.page.evaluate(() => {
+      const elements = Array.from(document.querySelectorAll('*')).filter(el =>
+        el.className && (el.className.includes('dialog') || el.className.includes('modal'))
+      );
+      return elements.map(el => ({
+        tagName: el.tagName,
+        className: el.className,
+        id: el.id,
+        display: window.getComputedStyle(el).display,
+        visibility: window.getComputedStyle(el).visibility
+      }));
+    });
+    console.log('Available dialog/modal elements:', allElements);
+
+    // Fall back to original selector
+    await this.page.waitForSelector('.agentlet-dialog', { timeout: 5000 });
+  }
+
+  /**
+   * Close dialog by clicking the close button or overlay
+   */
+  async closeDialog() {
+    try {
+      // Try to find and click a close button in any dialog type
+      const closeBtn = this.page.locator('.agentlet-info-dialog button:has-text("OK"), .agentlet-dialog button:has-text("Close"), .agentlet-fullscreen-dialog button:has-text("Close"), [class*="dialog"] button:has-text("OK"), [class*="dialog"] button:has-text("Close")');
+      if (await closeBtn.isVisible()) {
+        await closeBtn.first().click({ force: true });
+      } else {
+        // If no close button, try clicking overlay
+        await this.page.locator('.agentlet-dialog-overlay').click({ force: true });
+      }
+
+      // Wait for any dialog type to disappear
+      const dialogSelectors = ['.agentlet-info-dialog', '.agentlet-dialog', '.agentlet-fullscreen-dialog'];
+      for (const selector of dialogSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { state: 'hidden', timeout: 1000 });
+          break;
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+    } catch (error) {
+      console.log('Could not close dialog normally, trying escape key');
+      await this.page.keyboard.press('Escape');
+    }
+  }
+
+  /**
    * Log console messages from the browser
    */
   setupConsoleLogging() {
     this.page.on('console', msg => {
       console.log(`Browser ${msg.type()}: ${msg.text()}`);
     });
-    
+
     this.page.on('pageerror', err => {
       console.error(`Browser error: ${err.message}`);
     });

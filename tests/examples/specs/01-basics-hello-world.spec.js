@@ -14,7 +14,7 @@ test.describe('Hello World Example', () => {
     agentletTest.setupConsoleLogging();
     
     // Navigate to the hello-world example
-    await agentletTest.navigateToExample('01-basics/hello-world');
+    await agentletTest.navigateToExample('basics/hello-world.html');
   });
 
   test('should load the hello-world page correctly', async ({ page }) => {

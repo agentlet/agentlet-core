@@ -41,7 +41,7 @@ export default defineConfig({
   // Shared settings for all the projects below
   use: {
     // Base URL for tests
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost:3030',
     
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -94,8 +94,8 @@ export default defineConfig({
 
   // Run your local dev server before starting the tests
   webServer: {
-    command: 'python3 -m http.server 8080',
-    port: 8080,
+    command: 'python3 -m http.server 3030',
+    port: 3030,
     timeout: 10000,
     reuseExistingServer: true,
     cwd: findProjectRoot()
