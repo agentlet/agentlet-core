@@ -188,10 +188,12 @@ export class UIManager {
         actions.id = 'agentlet-actions';
         actions.className = 'agentlet-actions';
         
-        // Core action buttons
-        const refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => this.core.refreshContent());
-        
         // Optional action buttons based on configuration
+        let refreshBtn = null;
+        if (this.core.config.showRefreshButton) {
+            refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => this.core.refreshContent());
+        }
+
         let settingsBtn = null;
         if (this.core.config.showSettingsButton) {
             settingsBtn = this.core.createActionButton('⚙️', 'Settings', () => this.core.showSettings());
@@ -213,23 +215,39 @@ export class UIManager {
         
         // Create discrete close button
         const closeBtn = this.core.createDiscreteCloseButton();
-        
-        // Add buttons to actions area
-        actions.appendChild(refreshBtn);
+
+        // Create left container for main buttons
+        const leftActions = document.createElement('div');
+        leftActions.className = 'agentlet-actions-left';
+
+        // Create right container for auth and close buttons
+        const rightActions = document.createElement('div');
+        rightActions.className = 'agentlet-actions-right';
+
+        // Add main buttons to left side
+        if (refreshBtn) {
+            leftActions.appendChild(refreshBtn);
+        }
         if (settingsBtn) {
-            actions.appendChild(settingsBtn);
+            leftActions.appendChild(settingsBtn);
         }
         if (helpBtn) {
-            actions.appendChild(helpBtn);
+            leftActions.appendChild(helpBtn);
         }
         if (envVarsBtn) {
-            actions.appendChild(envVarsBtn);
+            leftActions.appendChild(envVarsBtn);
         }
+        leftActions.appendChild(closeBtn);
+
+        // Add auth button to right side
         if (authBtn) {
-            actions.appendChild(authBtn);
+            rightActions.appendChild(authBtn);
         }
-        actions.appendChild(closeBtn);
-        
+
+        // Add containers to main actions area
+        actions.appendChild(leftActions);
+        actions.appendChild(rightActions);
+
         return actions;
     }
 

@@ -42,19 +42,19 @@ export default defineConfig({
   use: {
     // Base URL for tests
     baseURL: 'http://localhost:3030',
-    
+
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
-    
+
     // Disable video recording
     video: 'off',
-    
+
     // Take screenshot on failure
     screenshot: 'only-on-failure',
-    
+
     // Timeout for each action (e.g. click, fill, etc.)
     actionTimeout: 10000,
-    
+
     // Global test timeout
     testTimeout: 30000
   },
@@ -63,9 +63,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { 
+      use: {
         ...devices['Desktop Chrome'],
         headless: process.env.CI ? true : undefined, // Force headless in CI
+        launchOptions: {
+          args: ['--disable-popup-blocking', '--disable-web-security']
+        }
       },
     },
     {

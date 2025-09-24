@@ -108,12 +108,6 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
                 </div>
                 
                 
-                <h3>📸 Capture Activity</h3>
-                <div class="stats-section" id="captureStats">
-                    <div>ScreenCapture available: <span id="captureAvailable">No</span></div>
-                    <div>Screenshots taken: <span id="screenshotsTaken">0</span></div>
-                    <div>Last capture type: <span id="lastCaptureType">None</span></div>
-                </div>
             </div>
         </div>
     </div>
@@ -155,8 +149,6 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
     </style>
 
     <script>
-        let screenshotsTaken = 0;
-        let lastCaptureType = 'None';
 
         // Configure Agentlet
         window.agentletConfig = {
@@ -165,34 +157,7 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
             startMinimized: true  // Start with panel minimized
         };
 
-        // Update capture stats display
-        function updateCaptureStats() {
-            const elements = {
-                captureAvailable: document.getElementById('captureAvailable'),
-                screenshotsTaken: document.getElementById('screenshotsTaken'),
-                lastCaptureType: document.getElementById('lastCaptureType')
-            };
 
-            if (elements.captureAvailable) {
-                const available = !!(window.agentlet && window.agentlet.utils && window.agentlet.utils.ScreenCapture);
-                elements.captureAvailable.textContent = available ? 'Yes' : 'No';
-            }
-
-            if (elements.screenshotsTaken) {
-                elements.screenshotsTaken.textContent = screenshotsTaken;
-            }
-
-            if (elements.lastCaptureType) {
-                elements.lastCaptureType.textContent = lastCaptureType;
-            }
-        }
-
-        function trackCapture(type) {
-            screenshotsTaken++;
-            lastCaptureType = type;
-            updateCaptureStats();
-            log(`📸 ${type} capture completed`, 'success');
-        }
 
         async function initAgentlet() {
             try {
@@ -238,7 +203,6 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
                                     if (window.agentlet && window.agentlet.utils && window.agentlet.utils.ScreenCapture) {
                                         log('✅ Agentlet Core loaded with ScreenCapture utilities', 'success');
                                         updateStatus('Ready! Try the screen capture buttons above.', 'success');
-                                        updateCaptureStats();
                                     } else {
                                         log('❌ ScreenCapture utilities not available', 'error');
                                         updateStatus('ScreenCapture utilities not available', 'error');
@@ -348,8 +312,7 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
 
                 const canvas = await window.agentlet.utils.ScreenCapture.captureElement(tableElement);
                 log('✅ Table screenshot captured', 'success');
-
-                trackCapture('Table');
+                log('📸 Table capture completed', 'success');
                 updateStatus('Table screenshot ready', 'success');
                 showScreenshotDialog(canvas, 'Sample Table Screenshot');
 
@@ -371,8 +334,7 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
 
                 const canvas = await window.agentlet.utils.ScreenCapture.capturePage();
                 log('✅ Full page screenshot captured', 'success');
-
-                trackCapture('Full Page');
+                log('📸 Full Page capture completed', 'success');
                 updateStatus('Full page screenshot ready', 'success');
                 showScreenshotDialog(canvas, 'Full Page Screenshot');
 
@@ -400,8 +362,7 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
                         updateStatus('Capturing selected element...', 'info');
                         const canvas = await window.agentlet.utils.ScreenCapture.captureElement(element);
                         log('✅ Element screenshot captured', 'success');
-
-                        trackCapture('Selected Element');
+                        log('📸 Selected Element capture completed', 'success');
                         updateStatus('Element screenshot ready', 'success');
                         showScreenshotDialog(canvas, `Screenshot of ${elementInfo.cssSelector}`);
                     } catch (captureError) {
@@ -426,11 +387,7 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
         document.addEventListener('DOMContentLoaded', () => {
             log('📄 Screen capture example loaded', 'success');
             updateStatus('Ready for Agentlet initialization', 'info');
-            updateCaptureStats();
         });
-
-        // Update capture stats periodically
-        setInterval(updateCaptureStats, 2000);
     </script>
 </body>
 </html>

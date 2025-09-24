@@ -35,7 +35,9 @@ class AuthManager {
         this.isAuthenticating = false;
         this.authPopup = null;
         this.messageListener = null;
-        
+        this.loginButton = null;
+        this.authenticatedUser = null;
+
         console.log('AuthManager initialized with config:', this.config);
     }
 
@@ -57,8 +59,13 @@ class AuthManager {
         const button = document.createElement('button');
         button.className = 'agentlet-action-btn agentlet-auth-btn';
         button.title = this.config.buttonText;
-        button.innerHTML = `${this.config.buttonIcon} ${this.config.buttonText}`;
-        button.onclick = onClick || (() => this.startAuthentication());
+        button.onclick = onClick || (() => this.handleButtonClick());
+
+        // Store reference to button for updates
+        this.loginButton = button;
+
+        // Set initial button content
+        this.updateButtonContent();
         
         // Apply button styling (will be styled via theme in main application)
         button.style.cssText = `
@@ -236,16 +243,23 @@ class AuthManager {
      */
     handleSuccess(token, additionalData = {}) {
         console.log('Authentication successful');
-        
+
         this.cleanup();
-        
+
+        // Store user info from authentication result
+        this.authenticatedUser = additionalData.user_info || additionalData.userInfo || null;
+
+        // Update button to show user info
+        this.updateButtonContent();
+
         const result = {
             success: true,
             token,
             timestamp: new Date().toISOString(),
+            userInfo: this.authenticatedUser,
             ...additionalData
         };
-        
+
         if (this.config.onSuccess) {
             try {
                 this.config.onSuccess(result);
@@ -359,13 +373,154 @@ class AuthManager {
     }
 
     /**
+     * Handle button click - either logout if authenticated or start authentication
+     */
+    async handleButtonClick() {
+        if (this.authenticatedUser) {
+            await this.logout();
+        } else {
+            this.startAuthentication();
+        }
+    }
+
+    /**
+     * Update button content based on authentication state
+     */
+    updateButtonContent() {
+        if (!this.loginButton) return;
+
+        if (this.authenticatedUser) {
+            // Show user initials or name
+            const initials = this.getUserInitials(this.authenticatedUser);
+            const displayName = this.authenticatedUser.name || this.authenticatedUser.username || initials;
+
+            this.loginButton.innerHTML = `👤 ${initials}`;
+            this.loginButton.title = `Logged in as ${displayName}. Click to logout.`;
+
+            // Update styling for authenticated state
+            this.loginButton.style.background = '#007bff';
+            this.loginButton.style.borderColor = '#0056b3';
+        } else {
+            // Show login state
+            this.loginButton.innerHTML = `${this.config.buttonIcon} ${this.config.buttonText}`;
+            this.loginButton.title = this.config.buttonText;
+
+            // Reset to login styling
+            this.loginButton.style.background = '#28a745';
+            this.loginButton.style.borderColor = '#1e7e34';
+        }
+    }
+
+    /**
+     * Extract user initials from user info
+     */
+    getUserInitials(userInfo) {
+        if (!userInfo) return 'U';
+
+        // Try to get initials from name first
+        if (userInfo.name) {
+            const nameParts = userInfo.name.trim().split(/\s+/);
+            if (nameParts.length >= 2) {
+                return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
+            } else if (nameParts.length === 1) {
+                return nameParts[0].substring(0, 2).toUpperCase();
+            }
+        }
+
+        // Fallback to username
+        if (userInfo.username) {
+            const username = userInfo.username;
+            if (username.includes('.')) {
+                // For usernames like "john.doe", extract "JD"
+                const parts = username.split('.');
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            } else if (username.includes('_')) {
+                // For usernames like "john_doe", extract "JD"
+                const parts = username.split('_');
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            } else {
+                // Single word username, take first 2 characters
+                return username.substring(0, 2).toUpperCase();
+            }
+        }
+
+        // Final fallback
+        return 'U';
+    }
+
+    /**
+     * Logout user and reset authentication state
+     */
+    async logout() {
+        if (!this.authenticatedUser) {
+            console.warn('No user is currently authenticated');
+            return;
+        }
+
+        // Show confirmation dialog
+        const userName = this.authenticatedUser.name || this.authenticatedUser.username || 'Unknown User';
+        const confirmed = await this.showLogoutConfirmation(userName);
+
+        if (!confirmed) {
+            console.log('Logout cancelled by user');
+            return;
+        }
+
+        console.log('Logging out user');
+
+        this.authenticatedUser = null;
+        this.updateButtonContent();
+
+        // Emit logout event if eventBus is available
+        if (window.agentlet && window.agentlet.eventBus) {
+            window.agentlet.eventBus.emit('auth:logout', {
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    /**
+     * Show logout confirmation dialog
+     */
+    async showLogoutConfirmation(userName) {
+        // Check if Dialog utility is available
+        if (!window.agentlet || !window.agentlet.utils || !window.agentlet.utils.Dialog) {
+            console.warn('Dialog utility not available, proceeding with logout');
+            return true;
+        }
+
+        try {
+            const Dialog = window.agentlet.utils.Dialog;
+
+            // Wrap the callback-based Dialog.confirm in a Promise
+            return new Promise((resolve) => {
+                Dialog.confirm(
+                    `You're currently logged in as ${userName}, do you want to logout?`,
+                    'Confirm Logout',
+                    (result) => {
+                        console.log('Dialog result received:', result);
+                        resolve(result === 'confirm');
+                    }
+                );
+            });
+        } catch (error) {
+            console.error('Error showing logout confirmation dialog:', error);
+            // If dialog fails, default to proceeding with logout
+            return true;
+        }
+    }
+
+    /**
      * Create a proxy for safe external access
      */
     createProxy() {
         return {
             isEnabled: () => this.isEnabled(),
             startAuthentication: () => this.startAuthentication(),
+            logout: () => this.logout(),
             getState: () => this.getState(),
+            getAuthenticatedUser: () => this.authenticatedUser,
             updateConfig: (config) => this.updateConfig(config)
         };
     }

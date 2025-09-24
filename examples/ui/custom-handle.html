@@ -14,7 +14,9 @@
             <!-- Left Column: Content and Controls -->
             <div class="left-column">
                 <div class="nav-breadcrumb">
-                    <a href="../">Examples</a> → basics → custom-handle
+                    <a href="../index.html">Examples</a> →
+                    <a href="../index.html#ui">ui</a> →
+                    <span>custom-handle</span>
                 </div>
 
                 <h1>Custom handle</h1>
@@ -72,12 +74,6 @@ const agentlet = new AgentletCore({
                     Click "Initialize agentlet" to start the demo with custom handle.
                 </div>
 
-                <h3>🎛️ Handle Status</h3>
-                <div class="stats-section" id="handleStats">
-                    <div>Custom handle enabled: <span id="customHandleEnabled">No</span></div>
-                    <div>Handle image: <span id="handleImage">Default arrow</span></div>
-                    <div>Panel state: <span id="panelState">Not initialized</span></div>
-                </div>
             </div>
         </div>
     </div>
@@ -94,27 +90,6 @@ const agentlet = new AgentletCore({
             minimizeWithImage: './tux.svg'  // Custom Tux image handle
         };
 
-        // Update handle stats display
-        function updateHandleStats() {
-            const elements = {
-                customHandleEnabled: document.getElementById('customHandleEnabled'),
-                handleImage: document.getElementById('handleImage'),
-                panelState: document.getElementById('panelState')
-            };
-
-            if (elements.customHandleEnabled) {
-                const hasCustomHandle = !!(window.agentletConfig.minimizeWithImage);
-                elements.customHandleEnabled.textContent = hasCustomHandle ? 'Yes' : 'No';
-            }
-
-            if (elements.handleImage) {
-                elements.handleImage.textContent = window.agentletConfig.minimizeWithImage || 'Default arrow';
-            }
-
-            if (elements.panelState && window.agentlet) {
-                elements.panelState.textContent = window.agentlet.isMinimized ? 'Minimized' : 'Maximized';
-            }
-        }
 
         async function initAgentlet() {
             try {
@@ -126,7 +101,6 @@ const agentlet = new AgentletCore({
                     log('⚠️ Agentlet already loaded', 'warning');
                     updateStatus('Ready! Try clicking the Tux handle to minimize/maximize.', 'success');
                     setButtonLoading('initBtn', false);
-                    updateHandleStats();
                     return;
                 }
 
@@ -154,7 +128,6 @@ const agentlet = new AgentletCore({
                                     log('✅ Agentlet Core loaded with custom Tux handle', 'success');
                                     log('🐧 Look for the Tux penguin handle to control the panel!', 'info');
                                     updateStatus('Ready! Click the Tux handle to minimize/maximize the panel.', 'success');
-                                    updateHandleStats();
                                     setButtonLoading('initBtn', false);
                                 }).catch(error => {
                                     log(`❌ Initialization failed: ${error.message}`, 'error');
@@ -198,11 +171,7 @@ const agentlet = new AgentletCore({
         document.addEventListener('DOMContentLoaded', () => {
             log('📄 Custom handle example loaded', 'success');
             updateStatus('Ready for Agentlet initialization with custom handle', 'info');
-            updateHandleStats();
         });
-
-        // Update handle stats periodically
-        setInterval(updateHandleStats, 2000);
     </script>
 </body>
 </html>

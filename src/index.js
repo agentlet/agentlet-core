@@ -53,6 +53,7 @@ class AgentletCore {
             minimizeWithImage: config.minimizeWithImage || null, // URL of image to show when minimized
             startMinimized: config.startMinimized || false, // Start in minimized state
             showEnvVarsButton: config.showEnvVarsButton || false, // Show environment variables button
+            showRefreshButton: config.showRefreshButton || false, // Show refresh content button
             showSettingsButton: config.showSettingsButton !== false, // Show settings button
             showHelpButton: config.showHelpButton !== false, // Show help button
             envManager: config.envManager, // Custom EnvironmentVariablesManager instance or null to disable
@@ -402,9 +403,9 @@ class AgentletCore {
      */
     createDiscreteCloseButton() {
         const closeButton = document.createElement('button');
-        closeButton.className = 'agentlet-action-btn agentlet-action-btn--close';
+        closeButton.className = 'agentlet-action-btn';
         closeButton.id = 'agentlet-close-btn';
-        closeButton.innerHTML = '×';
+        closeButton.innerHTML = '╳';
         closeButton.title = 'Close Agentlet';
         
         // Click handler to cleanup and close

@@ -215,6 +215,19 @@ export class StyleInjector {
                 border-top: 1px solid var(--agentlet-border-color);
                 background: var(--agentlet-background-color);
                 flex-shrink: 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .agentlet-actions-left {
+                display: flex;
+                align-items: center;
+            }
+
+            .agentlet-actions-right {
+                display: flex;
+                align-items: center;
             }
 
             /* Action Buttons */
@@ -223,7 +236,6 @@ export class StyleInjector {
                 border: 1px solid var(--agentlet-action-button-border);
                 border-radius: 4px;
                 padding: 6px 8px;
-                margin-right: 8px;
                 cursor: pointer;
                 font-size: 12px;
                 color: var(--agentlet-action-button-text);
@@ -235,15 +247,6 @@ export class StyleInjector {
                 border-color: var(--agentlet-action-button-border);
             }
 
-            .agentlet-action-btn--close {
-                margin-left: 5px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                min-width: 32px;
-                height: 32px;
-                font-size: 14px;
-            }
 
             /* Module Content Styles */
             .agentlet-module-content {
