@@ -35,6 +35,30 @@
                     </ul>
                 </div>
 
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Form extraction and export</h4>
+                    <button onclick="extractContactForm()" id="extractContactBtn">Extract contact form</button>
+                    <button onclick="extractAllForms()" id="extractAllBtn">Extract all forms</button>
+                    <button onclick="quickExportContact()" id="quickExportBtn">Quick export</button>
+                    <button onclick="aiExportContact()" id="aiExportBtn">AI export</button>
+                    <button onclick="debugFormMethods()" id="debugBtn">Debug form methods</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Fill sample data</h3>
+                    <p>Click to fill forms with sample data for testing extraction:</p>
+                    <div class="controls">
+                        <button onclick="fillContactForm()" id="fillContactBtn">Fill contact form</button>
+                        <button onclick="fillRegistrationForm()" id="fillRegistrationBtn">Fill registration form</button>
+                    </div>
+                </div>
+
                 <div class="example-section">
                     <h3>Sample forms</h3>
                     
@@ -110,41 +134,6 @@
                     </form>
                 </div>
 
-                <div class="controls">
-                    <h4>Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
-                    <button onclick="checkStatus()">Check status</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Form extraction</h4>
-                    <button onclick="extractContactForm()" id="extractContactBtn">Extract contact form</button>
-                    <button onclick="extractRegistrationForm()" id="extractRegistrationBtn">Extract registration form</button>
-                    <button onclick="extractAllForms()" id="extractAllBtn">Extract all forms</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Export formats</h4>
-                    <button onclick="quickExportContact()" id="quickExportBtn">Quick export (contact)</button>
-                    <button onclick="aiExportContact()" id="aiExportBtn">AI export (contact)</button>
-                    <button onclick="fullExportContact()" id="fullExportBtn">Full export (contact)</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Debug and troubleshooting</h4>
-                    <button onclick="debugFormMethods()" id="debugBtn">Debug form methods</button>
-                    <button onclick="manualExtraction()" id="manualBtn">Manual extraction</button>
-                    <button onclick="testFormAccess()" id="testBtn">Test form access</button>
-                </div>
-
-                <div class="example-section">
-                    <h3>Fill sample data</h3>
-                    <p>Click to fill forms with sample data for testing extraction:</p>
-                    <div class="controls">
-                        <button onclick="fillContactForm()" id="fillContactBtn">Fill contact form</button>
-                        <button onclick="fillRegistrationForm()" id="fillRegistrationBtn">Fill registration form</button>
-                    </div>
-                </div>
 
                 <div class="example-section">
                     <h3>Form extraction API reference:</h3>
@@ -184,13 +173,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 </div>
                 
                 
-                <h3>Form activity</h3>
-                <div class="stats-section" id="formStats">
-                    <div>Forms API available: <span id="formsAvailable">No</span></div>
-                    <div>Forms extracted: <span id="formsExtracted">0</span></div>
-                    <div>Fields extracted: <span id="fieldsExtracted">0</span></div>
-                    <div>Last extraction type: <span id="lastExtractionType">None</span></div>
-                </div>
             </div>
         </div>
     </div>
@@ -265,9 +247,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
     </style>
 
     <script>
-        let formsExtracted = 0;
-        let fieldsExtracted = 0;
-        let lastExtractionType = 'None';
         
         // Configure Agentlet
         window.agentletConfig = {
@@ -276,40 +255,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
             startMinimized: true  // Start with panel minimized
         };
 
-        // Update form stats display
-        function updateFormStats() {
-            const elements = {
-                formsAvailable: document.getElementById('formsAvailable'),
-                formsExtracted: document.getElementById('formsExtracted'),
-                fieldsExtracted: document.getElementById('fieldsExtracted'),
-                lastExtractionType: document.getElementById('lastExtractionType')
-            };
-
-            if (elements.formsAvailable) {
-                const available = !!(window.agentlet && window.agentlet.forms);
-                elements.formsAvailable.textContent = available ? 'Yes' : 'No';
-            }
-            
-            if (elements.formsExtracted) {
-                elements.formsExtracted.textContent = formsExtracted;
-            }
-            
-            if (elements.fieldsExtracted) {
-                elements.fieldsExtracted.textContent = fieldsExtracted;
-            }
-            
-            if (elements.lastExtractionType) {
-                elements.lastExtractionType.textContent = lastExtractionType;
-            }
-        }
-
-        function trackExtraction(type, fieldCount = 0) {
-            formsExtracted++;
-            fieldsExtracted += fieldCount;
-            lastExtractionType = type;
-            updateFormStats();
-            log(`📋 ${type} extraction completed`, 'success');
-        }
 
         function checkStatus() {
             log('🔍 Checking Agentlet and forms status...');
@@ -326,7 +271,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 updateStatus('Please initialize Agentlet Core first', 'warning');
             }
             
-            updateFormStats();
         }
 
         async function initAgentlet() {
@@ -339,8 +283,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                     log('⚠️ Agentlet already loaded', 'warning');
                     updateStatus('Ready! Try the form extraction buttons above.', 'success');
                     setButtonLoading('initBtn', false);
-                    updateFormStats();
-                    return;
+                            return;
                 }
 
                 // Simulate loading delay for demonstration
@@ -372,8 +315,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                                     log('❌ Form utilities not available', 'error');
                                     updateStatus('Form utilities not available', 'error');
                                 }
-                                updateFormStats();
-                                setButtonLoading('initBtn', false);
+                                                    setButtonLoading('initBtn', false);
                             }).catch(error => {
                                 log(`❌ Initialization failed: ${error.message}`, 'error');
                                 updateStatus('Initialization failed: ' + error.message, 'error');
@@ -449,7 +391,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 }
                 
                 log(`📊 Full extraction data: ${JSON.stringify(extractedData, null, 2)}`);
-                trackExtraction('Contact Form', extractedData.fields?.length || 0);
+                log('📋 Contact Form extraction completed', 'success');
                 updateStatus(`Contact form extracted: ${extractedData.fields?.length || 0} fields found`, 'success');
                 setTimeout(() => setButtonLoading('extractContactBtn', false), 300);
             } catch (error) {
@@ -462,7 +404,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                     if (window.agentlet.forms.quickExport) {
                         const quickData = window.agentlet.forms.quickExport(document.getElementById('contact-form'));
                         log(`✅ Fallback quickExport successful: ${JSON.stringify(quickData, null, 2)}`, 'success');
-                        trackExtraction('Contact Form (fallback)', Array.isArray(quickData) ? quickData.length : 0);
+                        log('📋 Contact Form (fallback) extraction completed', 'success');
                         updateStatus('Fallback extraction successful', 'warning');
                     } else {
                         log('❌ No fallback methods available', 'error');
@@ -476,33 +418,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
             }
         }
 
-        function extractRegistrationForm() {
-            if (!checkForms()) return;
-
-            try {
-                setButtonLoading('extractRegistrationBtn', true);
-                const registrationForm = document.getElementById('registration-form');
-                const extractedData = window.agentlet.forms.extract(registrationForm);
-                
-                log('📋 Registration form extracted:');
-                log(`   Fields found: ${extractedData.fields.length}`);
-                
-                // Count different field types
-                const fieldTypes = extractedData.fields.reduce((acc, field) => {
-                    acc[field.type] = (acc[field.type] || 0) + 1;
-                    return acc;
-                }, {});
-                
-                log(`   Field types: ${JSON.stringify(fieldTypes)}`);
-                trackExtraction('Registration Form', extractedData.fields.length);
-                updateStatus(`Registration form extracted: ${extractedData.fields.length} fields found`, 'success');
-                setTimeout(() => setButtonLoading('extractRegistrationBtn', false), 300);
-            } catch (error) {
-                log(`❌ Error extracting registration form: ${error.message}`, 'error');
-                updateStatus('Error extracting form', 'error');
-                setButtonLoading('extractRegistrationBtn', false);
-            }
-        }
 
         function extractAllForms() {
             if (!checkForms()) return;
@@ -511,21 +426,27 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 setButtonLoading('extractAllBtn', true);
                 const allForms = document.querySelectorAll('form');
                 log(`📋 Extracting ${allForms.length} forms...`);
-                
+
                 let totalFields = 0;
                 allForms.forEach((form, index) => {
                     const formId = form.id || `form-${index}`;
                     const extractedData = window.agentlet.forms.extract(form);
-                    const fieldCount = extractedData.fields.length;
+
+                    // Check if fields array exists
+                    const fieldCount = (extractedData && extractedData.fields && Array.isArray(extractedData.fields))
+                        ? extractedData.fields.length
+                        : 0;
+
                     totalFields += fieldCount;
                     log(`   Form "${formId}": ${fieldCount} fields`);
                 });
-                
-                trackExtraction('All Forms', totalFields);
-                updateStatus(`Extracted ${allForms.length} forms successfully`, 'success');
+
+                log('📋 All Forms extraction completed', 'success');
+                updateStatus(`Extracted ${allForms.length} forms successfully (${totalFields} total fields)`, 'success');
                 setTimeout(() => setButtonLoading('extractAllBtn', false), 300);
             } catch (error) {
                 log(`❌ Error extracting all forms: ${error.message}`, 'error');
+                log(`❌ Error stack: ${error.stack}`);
                 updateStatus('Error extracting forms', 'error');
                 setButtonLoading('extractAllBtn', false);
             }
@@ -541,7 +462,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 
                 log('⚡ Quick export of contact form:');
                 log(`📊 Quick export data: ${JSON.stringify(quickData, null, 2)}`);
-                trackExtraction('Quick Export', Array.isArray(quickData) ? quickData.length : 0);
+                log('📋 Quick Export extraction completed', 'success');
                 updateStatus('Quick export completed', 'success');
                 setTimeout(() => setButtonLoading('quickExportBtn', false), 300);
             } catch (error) {
@@ -561,7 +482,7 @@ const fullData = window.agentlet.forms.extract(formElement, {
                 
                 log('🤖 AI-ready export of contact form:');
                 log(`📊 AI export data: ${JSON.stringify(aiData, null, 2)}`);
-                trackExtraction('AI Export', aiData.fields?.length || 0);
+                log('📋 AI Export extraction completed', 'success');
                 updateStatus('AI export completed', 'success');
                 setTimeout(() => setButtonLoading('aiExportBtn', false), 300);
             } catch (error) {
@@ -571,29 +492,6 @@ const fullData = window.agentlet.forms.extract(formElement, {
             }
         }
 
-        function fullExportContact() {
-            if (!checkForms()) return;
-
-            try {
-                setButtonLoading('fullExportBtn', true);
-                const contactForm = document.getElementById('contact-form');
-                const fullData = window.agentlet.forms.extract(contactForm, {
-                    includeBoundingBoxes: true,
-                    includeStyles: true,
-                    includeValidation: true
-                });
-                
-                log('📊 Full export of contact form:');
-                log(`📊 Full export data: ${JSON.stringify(fullData, null, 2)}`);
-                trackExtraction('Full Export', fullData.fields?.length || 0);
-                updateStatus('Full export completed', 'success');
-                setTimeout(() => setButtonLoading('fullExportBtn', false), 300);
-            } catch (error) {
-                log(`❌ Error with full export: ${error.message}`, 'error');
-                updateStatus('Full export failed', 'error');
-                setButtonLoading('fullExportBtn', false);
-            }
-        }
 
         // Sample data fillers
         function fillContactForm() {
@@ -677,94 +575,14 @@ const fullData = window.agentlet.forms.extract(formElement, {
             setTimeout(() => setButtonLoading('debugBtn', false), 300);
         }
 
-        function manualExtraction() {
-            setButtonLoading('manualBtn', true);
-            log('🛠️ Attempting manual form data extraction...');
-            
-            try {
-                const contactForm = document.getElementById('contact-form');
-                const formData = new FormData(contactForm);
-                const elements = contactForm.elements;
-                
-                log(`📋 Form has ${elements.length} elements`);
-                
-                // Manual extraction
-                const extractedFields = [];
-                for (let i = 0; i < elements.length; i++) {
-                    const element = elements[i];
-                    if (element.name) {
-                        const fieldData = {
-                            name: element.name,
-                            type: element.type,
-                            value: element.value,
-                            required: element.required,
-                            placeholder: element.placeholder,
-                            id: element.id
-                        };
-                        
-                        // Get label
-                        const label = document.querySelector(`label[for="${element.id}"]`);
-                        if (label) {
-                            fieldData.label = label.textContent.trim();
-                        }
-                        
-                        extractedFields.push(fieldData);
-                        log(`   Field: ${fieldData.name} (${fieldData.type}) - "${fieldData.label || 'no label'}"`);
-                    }
-                }
-                
-                log(`📊 Manual extraction result: ${JSON.stringify(extractedFields, null, 2)}`);
-                trackExtraction('Manual Extraction', extractedFields.length);
-                updateStatus(`Manual extraction: ${extractedFields.length} fields found`, 'success');
-                setTimeout(() => setButtonLoading('manualBtn', false), 300);
-            } catch (error) {
-                log(`❌ Manual extraction failed: ${error.message}`, 'error');
-                updateStatus('Manual extraction failed', 'error');
-                setButtonLoading('manualBtn', false);
-            }
-        }
 
-        function testFormAccess() {
-            setButtonLoading('testBtn', true);
-            log('🧪 Testing form access...');
-            
-            const contactForm = document.getElementById('contact-form');
-            if (!contactForm) {
-                log('❌ Contact form not found', 'error');
-                updateStatus('Form access test failed', 'error');
-                setButtonLoading('testBtn', false);
-                return;
-            }
-            
-            log('✅ Contact form found', 'success');
-            log(`   Tag name: ${contactForm.tagName}`);
-            log(`   ID: ${contactForm.id}`);
-            log(`   Action: ${contactForm.action || 'none'}`);
-            log(`   Method: ${contactForm.method || 'GET'}`);
-            log(`   Elements count: ${contactForm.elements.length}`);
-            
-            // Test FormData
-            try {
-                const formData = new FormData(contactForm);
-                log('✅ FormData creation successful', 'success');
-                log(`   FormData entries: ${Array.from(formData.keys()).join(', ')}`);
-            } catch (error) {
-                log(`❌ FormData creation failed: ${error.message}`, 'error');
-            }
-            
-            updateStatus('Form access test completed', 'success');
-            setTimeout(() => setButtonLoading('testBtn', false), 300);
-        }
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', () => {
             log('📄 Form extraction demo ready', 'success');
             updateStatus('Ready for Agentlet initialization', 'info');
-            updateFormStats();
         });
 
-        // Update form stats periodically
-        setInterval(updateFormStats, 2000);
     </script>
 </body>
 </html>
