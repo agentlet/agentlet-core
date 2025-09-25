@@ -5,23 +5,23 @@
 
 import ModuleRegistry from './core/ModuleRegistry.js';
 import ModuleManager from './core/ModuleManager.js';
-import Module from './core/Module.js';
-import ElementSelector from './utils/ui/ElementSelector.js';
+// import Module from './core/Module.js';
+// import ElementSelector from './utils/ui/ElementSelector.js';
 import Dialog from './utils/ui/Dialog.js';
-import MessageBubble from './utils/ui/MessageBubble.js';
-import ScreenCapture from './utils/ui/ScreenCapture.js';
-import ScriptInjector from './utils/system/ScriptInjector.js';
+// import MessageBubble from './utils/ui/MessageBubble.js';
+// import ScreenCapture from './utils/ui/ScreenCapture.js';
+// import ScriptInjector from './utils/system/ScriptInjector.js';
 import { LocalStorageEnvironmentVariablesManager } from './utils/config-persistence/EnvManager.js';
 import CookieManager from './utils/config-persistence/CookieManager.js';
 import StorageManager from './utils/config-persistence/StorageManager.js';
-import { Z_INDEX, createZIndexConstants, detectMaxZIndex, suggestAgentletZIndexBase, analyzeZIndexDistribution } from './utils/ui/ZIndex.js';
+import { Z_INDEX } from './utils/ui/ZIndex.js';
 import AuthManager from './utils/system/AuthManager.js';
 import FormExtractor from './utils/data-processing/FormExtractor.js';
 import FormFiller from './utils/data-processing/FormFiller.js';
 import TableExtractor from './utils/data-processing/TableExtractor.js';
 import AIManager from './utils/ai/AIProvider.js';
-import PageHighlighter from './utils/ui/PageHighlighter.js';
-import PDFProcessor from './utils/ai/PDFProcessor.js';
+// import PageHighlighter from './utils/ui/PageHighlighter.js';
+// import PDFProcessor from './utils/ai/PDFProcessor.js';
 import ShortcutManager from './utils/ui/ShortcutManager.js';
 import { LibrarySetup } from './libraries/LibrarySetup.js';
 import { ThemeManager } from './core/ThemeManager.js';
@@ -194,12 +194,12 @@ class AgentletCore {
             try {
                 // Handle absolute URLs
                 const registryUrl = new URL(this.config.registryUrl);
-                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^\/]+$/, '');
-            } catch (error) {
+                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
+            } catch (_error) {
                 // Handle relative URLs - use current page location as base
                 const currentLocation = window.location.href;
                 const registryUrl = new URL(this.config.registryUrl, currentLocation);
-                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^\/]+$/, '');
+                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
             }
 
             // Add base URL to registry data
@@ -282,7 +282,7 @@ class AgentletCore {
                 console.log('🔄 Initial content update for active module:', activeModule.name);
                 console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
                 // Use requestAnimationFrame to ensure DOM is fully ready
-                requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
                     console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
                     this.onModuleChange(activeModule);
                 });
@@ -328,17 +328,17 @@ class AgentletCore {
      */
     setupEventListeners() {
         // Module events
-        this.eventBus.on('module:registered', (data) => {
+        this.eventBus.on('module:registered', (_data) => {
             // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
 
-        this.eventBus.on('module:activated', (data) => {
+        this.eventBus.on('module:activated', (_data) => {
             // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
 
-        this.eventBus.on('module:deactivated', (data) => {
+        this.eventBus.on('module:deactivated', (_data) => {
             // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
@@ -456,7 +456,7 @@ class AgentletCore {
      */
     updateApplicationDisplay() {
         const appNameElement = document.getElementById('agentlet-app-display');
-        const moduleCountElement = document.getElementById('agentlet-module-count');
+        const _moduleCountElement = document.getElementById('agentlet-module-count');
         
         // Use provided activeModule parameter, fallback to moduleLoader's activeModule
         const activeModule = this.moduleRegistry.activeModule;
@@ -648,7 +648,7 @@ class AgentletCore {
             }, (result) => {
                 if (result === 'refresh') {
                     this.refreshContent();
-                    InfoDialog.success('Settings refreshed!', 'Updated');
+                    Dialog.success('Settings refreshed!', 'Updated');
                 }
             });
         } else {
@@ -741,7 +741,7 @@ class AgentletCore {
                     }, (debugResult) => {
                         if (debugResult === 'copy') {
                             console.log('Agentlet Debug Info 📎:', debugInfo);
-                            InfoDialog.success('Debug info copied to console!', 'Copied');
+                            Dialog.success('Debug info copied to console!', 'Copied');
                         }
                     });
                 }

@@ -54,7 +54,7 @@ class ShortcutManager {
         this.hotkeys = hotkeysLib;
         
         // Configure hotkeys-js
-        this.hotkeys.filter = (event) => {
+        this.hotkeys.filter = (_event) => {
             // Allow shortcuts to work even in input fields if explicitly configured
             return true;
         };

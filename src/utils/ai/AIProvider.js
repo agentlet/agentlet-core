@@ -30,7 +30,7 @@ export class BaseAIProvider {
      * @param {Object} options - Request options
      * @returns {Promise<string>} AI response
      */
-    async sendPrompt(prompt, images = [], options = {}) {
+    async sendPrompt(_prompt, _images = [], _options = {}) {
         throw new Error('sendPrompt must be implemented by subclass');
     }
 

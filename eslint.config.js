@@ -35,6 +35,9 @@ export default [
                 Node: 'readonly',
                 NodeFilter: 'readonly',
                 CSS: 'readonly',
+                File: 'readonly',
+                FileReader: 'readonly',
+                requestAnimationFrame: 'readonly',
                 
                 // Node.js environment
                 process: 'readonly',

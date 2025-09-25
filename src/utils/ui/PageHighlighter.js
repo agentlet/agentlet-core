@@ -731,7 +731,7 @@ class PageHighlighter {
 
         // Create highlight based on type
         switch (config.type) {
-        case 'border':
+        case 'border': {
             const border = document.createElement('div');
             border.className = `agentlet-highlight-border ${config.style}`;
             if (config.animation !== 'none') {
@@ -744,23 +744,26 @@ class PageHighlighter {
             document.body.appendChild(border);
             highlightElements.push(border);
             break;
+        }
 
-        case 'arrow':
+        case 'arrow': {
             const arrow = document.createElement('div');
             arrow.className = `agentlet-arrow ${config.position.split('-')[0]}`;
-            const arrowRect = this.positionArrow(arrow, rect, scrollLeft, scrollTop, config.position);
+            const _arrowRect = this.positionArrow(arrow, rect, scrollLeft, scrollTop, config.position);
             document.body.appendChild(arrow);
             highlightElements.push(arrow);
             break;
+        }
 
-        case 'sticker':
+        case 'sticker': {
             const sticker = document.createElement('div');
             sticker.className = `agentlet-sticker ${config.style}`;
             sticker.textContent = config.message || '!';
-            const stickerPos = this.positionSticker(sticker, rect, scrollLeft, scrollTop, config.position);
+            const _stickerPos = this.positionSticker(sticker, rect, scrollLeft, scrollTop, config.position);
             document.body.appendChild(sticker);
             highlightElements.push(sticker);
             break;
+        }
 
         case 'pulse':
             targetElement.style.animation = 'agentletPulse 1s infinite';

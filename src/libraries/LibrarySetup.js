@@ -67,7 +67,7 @@ export class LibrarySetup {
                 // e.g., https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.js
                 try {
                     const registryUrl = new URL(this.config.registryUrl);
-                    registryUrl.pathname = registryUrl.pathname.replace(/[^\/]+$/, 'pdf.worker.min.js');
+                    registryUrl.pathname = registryUrl.pathname.replace(/[^/]+$/, 'pdf.worker.min.js');
                     workerSrc = registryUrl.toString();
                 } catch (error) {
                     console.warn('Failed to derive PDF worker URL from registry URL:', error);

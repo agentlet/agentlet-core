@@ -166,11 +166,11 @@ export default class Module {
         // Override in your module
     }
 
-    async activateModule(context = {}) {
+    async activateModule(_context = {}) {
         // Override in your module
     }
 
-    async cleanupModule(context = {}) {
+    async cleanupModule(_context = {}) {
         // Override in your module
     }
 

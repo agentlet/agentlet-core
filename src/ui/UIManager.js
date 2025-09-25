@@ -3,7 +3,7 @@
  * Handles UI creation, management, and interactions for the Agentlet panel
  */
 
-import { Z_INDEX } from '../utils/ui/ZIndex.js';
+// import { Z_INDEX } from '../utils/ui/ZIndex.js';
 
 export class UIManager {
     constructor(agentletCore) {

@@ -87,7 +87,7 @@ class TableExtractor {
             bodyRows = Array.from(allRows).slice(config.includeHeaderRow ? 1 : 0);
         }
 
-        data.rows = Array.from(bodyRows).map((row, rowIndex) => {
+        data.rows = Array.from(bodyRows).map((row, _rowIndex) => {
             const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
                 let text = cell.textContent || cell.innerText || '';
                 if (config.trimWhitespace) {

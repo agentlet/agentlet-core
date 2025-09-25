@@ -349,7 +349,7 @@ export default class ModuleRegistry {
             console.log(`📦 Loading agentlet module: ${name} from ${url}`);
             
             // Dynamically import the module
-            const moduleScript = await this.loadScript(url);
+            const _moduleScript = await this.loadScript(url);
             
             // Get the module class from global scope
             const ModuleClass = window[moduleClass];
@@ -451,7 +451,7 @@ export default class ModuleRegistry {
     /**
      * Load agentlets from pre-parsed registry data (avoids duplicate downloads)
      */
-    async loadAgentletsFromData(agentletsArray, baseUrl) {
+    async loadAgentletsFromData(agentletsArray, _baseUrl) {
         if (!Array.isArray(agentletsArray)) {
             console.warn('📦 Invalid agentlets data - must be an array');
             return;
