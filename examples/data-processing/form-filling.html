@@ -23,16 +23,29 @@
 
                 <h1>Auto fill forms</h1>
 
-                <p>This example demonstrates automatic form filling using Agentlet Core's FormFiller utility.</p>
+                <p>This example demonstrates form filling using Agentlet Core's FormFiller utility.</p>
 
                 <div class="example-section">
-                    <h3>What this example shows:</h3>
+                    <h3>What this example shows</h3>
                     <ul>
                         <li>Programmatic form filling with structured data</li>
-                        <li>AI-powered form completion</li>
-                        <li>Multiple form filling strategies</li>
+                        <li>AI form completion</li>
+                        <li>Multiple form filling</li>
                         <li>Field validation and error handling</li>
                     </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Basic form filling</h4>
+                    <button onclick="fillUserProfile()" id="fillUserBtn">Fill user profile</button>
+                    <button onclick="fillSurvey()" id="fillSurveyBtn">Fill survey</button>
+                    <button onclick="clearAllForms()" id="clearBtn">Clear all forms</button>
                 </div>
 
                 <div class="example-section">
@@ -112,37 +125,10 @@
                     </form>
                 </div>
 
-                <div class="controls">
-                    <h4>Initialize</h4>
-                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
-                    <button onclick="checkStatus()">Check status</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Basic form filling</h4>
-                    <button onclick="fillUserProfile()" id="fillUserBtn">Fill user profile</button>
-                    <button onclick="fillSurvey()" id="fillSurveyBtn">Fill survey</button>
-                    <button onclick="clearAllForms()" id="clearBtn">Clear all forms</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Advanced filling</h4>
-                    <button onclick="fillWithAI()" id="aiBtn">AI-powered fill</button>
-                    <button onclick="fillMultipleForms()" id="multiBtn">Fill multiple forms</button>
-                    <button onclick="fillWithValidation()" id="validateBtn">Fill with validation</button>
-                </div>
-
-                <div class="controls">
-                    <h4>Demonstration and testing</h4>
-                    <button onclick="showSampleData()" id="sampleBtn">Show sample data</button>
-                    <button onclick="testFieldMapping()" id="mappingBtn">Test field mapping</button>
-                    <button onclick="debugFormFilling()" id="debugBtn">Debug form filling</button>
-                </div>
-
                 <div class="example-section">
-                    <h3>Form filling API reference:</h3>
+                    <h3>Form filling API reference</h3>
                     <div class="code-block">
-                        <h4>Basic Form Filling</h4>
+                        <h4>Basic form filling</h4>
                         <pre><code class="language-javascript">// Fill form with data object
 const result = window.agentlet.forms.fill(formElement, {
     firstName: 'John',
@@ -157,7 +143,7 @@ const result = window.agentlet.forms.fill(formElement, data, {
     reportErrors: true
 });</code></pre>
                         
-                        <h4>AI-Powered Filling</h4>
+                        <h4>AI-powered filling</h4>
                         <pre><code class="language-javascript">// AI form filling with intelligent mapping
 const aiData = {
     personalInfo: { fullName: 'John Doe', email: 'john@example.com' },
@@ -179,24 +165,16 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
             <!-- Right Column: Console and Status -->
             <div class="right-column">
                 <div class="console-header">
-                    <h3>📟 Console Output</h3>
-                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                    <h3>Console output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">Clear</button>
                 </div>
                 <div class="console-section" id="console"></div>
-                
-                <h3>📊 Status</h3>
+
+                <h3>Status</h3>
                 <div class="status-section" id="status">
-                    Click "Initialize Agentlet Core" to start the demo.
+                    Click "Initialize agentlet core" to start the demo.
                 </div>
-                
-                
-                <h3>✏️ Form Filling Activity</h3>
-                <div class="stats-section" id="formStats">
-                    <div>Forms API available: <span id="formsAvailable">No</span></div>
-                    <div>Forms filled: <span id="formsFilled">0</span></div>
-                    <div>Fields filled: <span id="fieldsFilled">0</span></div>
-                    <div>Last fill method: <span id="lastFillMethod">None</span></div>
-                </div>
+
             </div>
         </div>
     </div>
@@ -287,10 +265,6 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
     </style>
 
     <script>
-        let formsFilled = 0;
-        let fieldsFilled = 0;
-        let lastFillMethod = 'None';
-        
         // Configure Agentlet
         window.agentletConfig = {
             debugMode: true,
@@ -300,112 +274,53 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
 
         // Sample data for form filling
         const sampleUserData = {
-            firstName: 'Alice',
-            lastName: 'Johnson',
-            emailAddress: 'alice.johnson@example.com',
-            phoneNumber: '+1 (555) 987-6543',
-            dateOfBirth: '1985-03-22',
-            profession: 'developer',
-            bio: 'Experienced software developer with a passion for creating innovative solutions. Specialized in web technologies and user experience design.',
-            terms: 'accepted',
-            newsletter: 'subscribed'
+            '#firstName': 'Alice',
+            '#lastName': 'Johnson',
+            '#emailAddress': 'alice.johnson@example.com',
+            '#phoneNumber': '+1 (555) 987-6543',
+            '#dateOfBirth': '1985-03-22',
+            '#profession': 'developer',
+            '#bio': 'Software developer with experience in web technologies and user experience design.',
+            '[name="terms"]': true,
+            '[name="newsletter"]': true
         };
 
         const sampleSurveyData = {
-            customerName: 'Alice Johnson',
-            customerEmail: 'alice.johnson@example.com',
-            source: 'friend',
-            rating: '5',
-            feedback: 'Excellent service! Very satisfied with the quality and support provided. Would definitely recommend to others.'
+            '#customerName': 'Alice Johnson',
+            '#customerEmail': 'alice.johnson@example.com',
+            '[name="source"][value="friend"]': true,
+            '#rating': '5',
+            '#feedback': 'Good service and support. Would recommend to others.'
         };
 
-        const aiFormData = {
-            personalInfo: {
-                fullName: 'Alice Johnson',
-                email: 'alice.johnson@example.com',
-                phone: '+1 (555) 987-6543',
-                birthDate: '1985-03-22'
-            },
-            professional: {
-                jobTitle: 'Software Developer',
-                experience: '8 years',
-                skills: ['JavaScript', 'React', 'Node.js', 'Python']
-            },
-            preferences: {
-                agreeToTerms: true,
-                wantsNewsletter: true
-            },
-            feedback: {
-                rating: 'excellent',
-                comments: 'Great platform with intuitive interface and helpful features.',
-                referralSource: 'colleague recommendation'
-            }
-        };
 
-        // Update form stats display
-        function updateFormStats() {
-            const elements = {
-                formsAvailable: document.getElementById('formsAvailable'),
-                formsFilled: document.getElementById('formsFilled'),
-                fieldsFilled: document.getElementById('fieldsFilled'),
-                lastFillMethod: document.getElementById('lastFillMethod')
-            };
-
-            if (elements.formsAvailable) {
-                const available = !!(window.agentlet && window.agentlet.forms);
-                elements.formsAvailable.textContent = available ? 'Yes' : 'No';
-            }
-            
-            if (elements.formsFilled) {
-                elements.formsFilled.textContent = formsFilled;
-            }
-            
-            if (elements.fieldsFilled) {
-                elements.fieldsFilled.textContent = fieldsFilled;
-            }
-            
-            if (elements.lastFillMethod) {
-                elements.lastFillMethod.textContent = lastFillMethod;
-            }
-        }
-
-        function trackFilling(method, fieldsCount = 0, formsCount = 1) {
-            formsFilled += formsCount;
-            fieldsFilled += fieldsCount;
-            lastFillMethod = method;
-            updateFormStats();
-            log(`✏️ ${method} completed`, 'success');
-        }
 
         function checkStatus() {
-            log('🔍 Checking Agentlet and forms status...');
+            log('Checking Agentlet and forms status...');
             
             if (window.agentlet && window.agentlet.forms) {
-                log('✅ Forms API is available', 'success');
-                log(`📝 Available methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
+                log('Forms API is available', 'success');
+                log(`Available methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
                 updateStatus('Forms API ready for use!', 'success');
             } else if (window.agentlet) {
-                log('⚠️ Agentlet loaded but forms API not found', 'warning');
+                log('Agentlet loaded but forms API not found', 'warning');
                 updateStatus('Agentlet loaded but forms API not available', 'warning');
             } else {
-                log('❌ Agentlet not initialized yet', 'warning');
+                log('Agentlet not initialized yet', 'warning');
                 updateStatus('Please initialize Agentlet Core first', 'warning');
             }
-            
-            updateFormStats();
         }
 
         async function initAgentlet() {
             try {
                 setButtonLoading('initBtn', true);
                 updateStatus('Loading Agentlet Core...', 'info');
-                log('🤖 Initializing Agentlet Core...');
+                log('Initializing Agentlet Core...');
 
                 if (window.agentlet) {
-                    log('⚠️ Agentlet already loaded', 'warning');
-                    updateStatus('Ready! Try the form filling buttons above.', 'success');
+                    log('Agentlet already loaded', 'warning');
+                    updateStatus('Ready to test form filling.', 'success');
                     setButtonLoading('initBtn', false);
-                    updateFormStats();
                     return;
                 }
 
@@ -416,7 +331,7 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                 script.src = '../../../dist/agentlet-core.js?' + Date.now();
                 
                 script.onload = () => {
-                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    log('Agentlet Core script loaded successfully', 'success');
                     
                     let AgentletConstructor = null;
                     if (window.AgentletCore) {
@@ -425,41 +340,40 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                     
                     if (AgentletConstructor) {
                         try {
-                            log('🚀 Creating AgentletCore instance...');
+                            log('Creating AgentletCore instance...');
                             const agentletInstance = new AgentletConstructor(window.agentletConfig);
                                 
-                            log('⚙️ Starting initialization...');
+                            log('Starting initialization...');
                             agentletInstance.init().then(() => {
                                 if (window.agentlet && window.agentlet.forms) {
-                                    log('✅ Agentlet Core loaded with Form utilities', 'success');
-                                    log(`📝 Available form methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
-                                    updateStatus('Ready! Try the form filling buttons above.', 'success');
+                                    log('Agentlet Core loaded with Form utilities', 'success');
+                                    log(`Available form methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
+                                    updateStatus('Ready to test form filling.', 'success');
                                 } else {
-                                    log('❌ Form utilities not available', 'error');
+                                    log('Form utilities not available', 'error');
                                     updateStatus('Form utilities not available', 'error');
                                 }
-                                updateFormStats();
                                 setButtonLoading('initBtn', false);
                             }).catch(error => {
-                                log(`❌ Initialization failed: ${error.message}`, 'error');
+                                log(`Initialization failed: ${error.message}`, 'error');
                                 updateStatus('Initialization failed: ' + error.message, 'error');
                                 setButtonLoading('initBtn', false);
                             });
                                 
                         } catch (error) {
-                            log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                            log(`Error creating AgentletCore instance: ${error.message}`, 'error');
                             updateStatus('Error creating instance: ' + error.message, 'error');
                             setButtonLoading('initBtn', false);
                         }
                     } else {
-                        log('❌ AgentletCore constructor not available', 'error');
+                        log('AgentletCore constructor not available', 'error');
                         updateStatus('AgentletCore constructor not found', 'error');
                         setButtonLoading('initBtn', false);
                     }
                 };
 
                 script.onerror = () => {
-                    log('❌ Failed to load Agentlet Core script', 'error');
+                    log('Failed to load Agentlet Core script', 'error');
                     updateStatus('Failed to load Agentlet Core. Make sure you ran "npm run build" first.', 'error');
                     setButtonLoading('initBtn', false);
                 };
@@ -467,7 +381,7 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                 document.head.appendChild(script);
 
             } catch (error) {
-                log(`❌ Error: ${error.message}`, 'error');
+                log(`Error: ${error.message}`, 'error');
                 updateStatus('Initialization error: ' + error.message, 'error');
                 setButtonLoading('initBtn', false);
             }
@@ -489,21 +403,22 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                 const userForm = document.getElementById('user-profile-form');
                 const result = window.agentlet.forms.fill(userForm, sampleUserData);
                 
-                log('👤 User profile filling result:');
-                log(`   Fields filled: ${result.filledCount}`);
-                log(`   Fields failed: ${result.failedCount}`);
-                log(`   Success rate: ${Math.round((result.filledCount / (result.filledCount + result.failedCount)) * 100)}%`);
-                
+                log('User profile filling result:');
+                log(`   Fields filled: ${result.successful}`);
+                log(`   Fields failed: ${result.failed}`);
+                log(`   Fields skipped: ${result.skipped}`);
+                log(`   Success rate: ${Math.round((result.successful / result.total) * 100)}%`);
+
                 if (result.errors && result.errors.length > 0) {
                     log(`   Errors: ${result.errors.join(', ')}`, 'warning');
                 }
-                
+
                 highlightFilledFields(userForm);
-                trackFilling('User Profile Fill', result.filledCount);
-                updateStatus(`User profile filled: ${result.filledCount} fields`, 'success');
+                log('User profile fill completed', 'success');
+                updateStatus(`User profile filled: ${result.successful} fields`, 'success');
                 setTimeout(() => setButtonLoading('fillUserBtn', false), 300);
             } catch (error) {
-                log(`❌ Error filling user profile: ${error.message}`, 'error');
+                log(`Error filling user profile: ${error.message}`, 'error');
                 updateStatus('Error filling form', 'error');
                 setButtonLoading('fillUserBtn', false);
             }
@@ -517,122 +432,25 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                 const surveyForm = document.getElementById('survey-form');
                 const result = window.agentlet.forms.fill(surveyForm, sampleSurveyData);
                 
-                log('📊 Survey filling result:');
-                log(`   Fields filled: ${result.filledCount}`);
-                log(`   Fields failed: ${result.failedCount}`);
-                
+                log('Survey filling result:');
+                log(`   Fields filled: ${result.successful}`);
+                log(`   Fields failed: ${result.failed}`);
+                log(`   Fields skipped: ${result.skipped}`);
+                log(`   Success rate: ${Math.round((result.successful / result.total) * 100)}%`);
+
                 highlightFilledFields(surveyForm);
-                trackFilling('Survey Fill', result.filledCount);
-                updateStatus(`Survey filled: ${result.filledCount} fields`, 'success');
+                log('Survey fill completed', 'success');
+                updateStatus(`Survey filled: ${result.successful} fields`, 'success');
                 setTimeout(() => setButtonLoading('fillSurveyBtn', false), 300);
             } catch (error) {
-                log(`❌ Error filling survey: ${error.message}`, 'error');
+                log(`Error filling survey: ${error.message}`, 'error');
                 updateStatus('Error filling form', 'error');
                 setButtonLoading('fillSurveyBtn', false);
             }
         }
 
-        function fillWithAI() {
-            if (!checkForms()) return;
 
-            try {
-                setButtonLoading('aiBtn', true);
-                const userForm = document.getElementById('user-profile-form');
-                const result = window.agentlet.forms.fillFromAI(userForm, aiFormData);
-                
-                log('🤖 AI-powered filling result:');
-                log(`   Fields processed: ${result.processed || 'unknown'}`);
-                log(`   Fields filled: ${result.filledCount}`);
-                log(`   Mapping strategy: ${result.strategy || 'intelligent'}`);
-                
-                highlightFilledFields(userForm);
-                trackFilling('AI Fill', result.filledCount);
-                updateStatus(`AI fill completed: ${result.filledCount} fields`, 'success');
-                setTimeout(() => setButtonLoading('aiBtn', false), 300);
-            } catch (error) {
-                log(`❌ Error with AI filling: ${error.message}`, 'error');
-                updateStatus('AI filling failed', 'error');
-                setButtonLoading('aiBtn', false);
-            }
-        }
 
-        function fillMultipleForms() {
-            if (!checkForms()) return;
-
-            try {
-                setButtonLoading('multiBtn', true);
-                const formsContainer = document.querySelector('.container');
-                const formDataArray = [
-                    { selector: '#user-profile-form', data: sampleUserData },
-                    { selector: '#survey-form', data: sampleSurveyData }
-                ];
-                
-                log('📝 Filling multiple forms...');
-                
-                window.agentlet.forms.fillMultiple(formsContainer, formDataArray).then(results => {
-                    log('📝 Multiple forms filling results:');
-                    let totalFields = 0;
-                    results.forEach((result, index) => {
-                        log(`   Form ${index + 1}: ${result.filledCount} fields filled`);
-                        totalFields += result.filledCount;
-                    });
-                    
-                    // Highlight all filled forms
-                    document.querySelectorAll('form').forEach(form => {
-                        highlightFilledFields(form);
-                    });
-                    
-                    trackFilling('Multiple Forms', totalFields, results.length);
-                    updateStatus(`Multiple forms filled: ${results.length} forms processed`, 'success');
-                    setTimeout(() => setButtonLoading('multiBtn', false), 300);
-                }).catch(error => {
-                    log(`❌ Error filling multiple forms: ${error.message}`, 'error');
-                    updateStatus('Multiple forms filling failed', 'error');
-                    setButtonLoading('multiBtn', false);
-                });
-                
-            } catch (error) {
-                log(`❌ Error with multiple forms: ${error.message}`, 'error');
-                updateStatus('Multiple forms error', 'error');
-                setButtonLoading('multiBtn', false);
-            }
-        }
-
-        function fillWithValidation() {
-            if (!checkForms()) return;
-
-            try {
-                setButtonLoading('validateBtn', true);
-                const userForm = document.getElementById('user-profile-form');
-                
-                // Fill with validation options
-                const result = window.agentlet.forms.fill(userForm, sampleUserData, {
-                    validateFields: true,
-                    skipInvalidFields: true,
-                    reportErrors: true
-                });
-                
-                log('✅ Validated filling result:');
-                log(`   Fields validated: ${result.validatedCount || 'unknown'}`);
-                log(`   Fields filled: ${result.filledCount}`);
-                log(`   Validation errors: ${result.validationErrors?.length || 0}`);
-                
-                if (result.validationErrors && result.validationErrors.length > 0) {
-                    result.validationErrors.forEach(error => {
-                        log(`   ⚠️ Validation: ${error}`, 'warning');
-                    });
-                }
-                
-                highlightFilledFields(userForm);
-                trackFilling('Validated Fill', result.filledCount);
-                updateStatus(`Validated fill: ${result.filledCount} fields filled`, 'success');
-                setTimeout(() => setButtonLoading('validateBtn', false), 300);
-            } catch (error) {
-                log(`❌ Error with validated filling: ${error.message}`, 'error');
-                updateStatus('Validated filling failed', 'error');
-                setButtonLoading('validateBtn', false);
-            }
-        }
 
         function clearAllForms() {
             setButtonLoading('clearBtn', true);
@@ -644,85 +462,12 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
                 });
             });
             
-            log('🗑️ All forms cleared', 'info');
+            log('All forms cleared', 'info');
             updateStatus('All forms cleared', 'info');
             setTimeout(() => setButtonLoading('clearBtn', false), 300);
         }
 
-        function showSampleData() {
-            setButtonLoading('sampleBtn', true);
-            log('📋 Sample user data:');
-            log(JSON.stringify(sampleUserData, null, 2));
-            log('📋 Sample survey data:');
-            log(JSON.stringify(sampleSurveyData, null, 2));
-            log('📋 AI form data:');
-            log(JSON.stringify(aiFormData, null, 2));
-            
-            updateStatus('Sample data displayed in output', 'info');
-            setTimeout(() => setButtonLoading('sampleBtn', false), 300);
-        }
 
-        function testFieldMapping() {
-            if (!checkForms()) return;
-
-            try {
-                setButtonLoading('mappingBtn', true);
-                const userForm = document.getElementById('user-profile-form');
-                
-                // Test different mapping strategies
-                const mappingTests = [
-                    { firstName: 'John' },  // Direct name match
-                    { first_name: 'Jane' }, // Underscore variation
-                    { 'first-name': 'Bob' }, // Dash variation
-                    { fname: 'Alice' }      // Abbreviated form
-                ];
-                
-                log('🎯 Testing field mapping strategies:');
-                
-                mappingTests.forEach((testData, index) => {
-                    clearAllForms();
-                    const result = window.agentlet.forms.fill(userForm, testData);
-                    log(`   Test ${index + 1}: ${JSON.stringify(testData)} → ${result.filledCount} fields filled`);
-                });
-                
-                updateStatus('Field mapping tests completed', 'info');
-                setTimeout(() => setButtonLoading('mappingBtn', false), 300);
-            } catch (error) {
-                log(`❌ Error testing field mapping: ${error.message}`, 'error');
-                updateStatus('Field mapping test failed', 'error');
-                setButtonLoading('mappingBtn', false);
-            }
-        }
-
-        function debugFormFilling() {
-            setButtonLoading('debugBtn', true);
-            log('🔍 Debugging form filling capabilities...');
-            
-            if (!window.agentlet) {
-                log('❌ window.agentlet not available', 'error');
-                setButtonLoading('debugBtn', false);
-                return;
-            }
-            
-            log('✅ window.agentlet available', 'success');
-            log(`📝 Agentlet properties: ${Object.keys(window.agentlet).join(', ')}`);
-            
-            if (window.agentlet.forms) {
-                log('✅ window.agentlet.forms available', 'success');
-                log(`📝 Forms methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
-                
-                // Check each method
-                ['fill', 'fillFromAI', 'fillMultiple', 'extract', 'quickExport'].forEach(method => {
-                    const available = typeof window.agentlet.forms[method] === 'function';
-                    log(`   ${method}: ${available ? '✅ available' : '❌ missing'}`, available ? 'success' : 'error');
-                });
-            } else {
-                log('❌ window.agentlet.forms not available', 'error');
-            }
-            
-            updateStatus('Debug information logged', 'info');
-            setTimeout(() => setButtonLoading('debugBtn', false), 300);
-        }
 
         function highlightFilledFields(form) {
             form.querySelectorAll('input, select, textarea').forEach(field => {
@@ -743,18 +488,14 @@ const results = await window.agentlet.forms.fillMultiple(container, forms);</cod
         // Prevent actual form submission
         document.addEventListener('submit', (e) => {
             e.preventDefault();
-            log('📝 Form submission prevented (demo mode)', 'info');
+            log('Form submission prevented (demo mode)', 'info');
         });
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', () => {
-            log('📄 Form filling demo ready', 'success');
+            log('Form filling demo ready', 'success');
             updateStatus('Ready for Agentlet initialization', 'info');
-            updateFormStats();
         });
-
-        // Update form stats periodically
-        setInterval(updateFormStats, 2000);
     </script>
 </body>
 </html>
