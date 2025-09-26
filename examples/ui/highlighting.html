@@ -170,19 +170,41 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 lastHighlightType: document.getElementById('lastHighlightType')
             };
 
+            const ph = window.agentlet && window.agentlet.utils && window.agentlet.utils.PageHighlighter;
+
             if (elements.highlighterAvailable) {
-                const available = !!(window.agentlet && window.agentlet.utils && window.agentlet.utils.PageHighlighter);
-                elements.highlighterAvailable.textContent = available ? 'Yes' : 'No';
+                elements.highlighterAvailable.textContent = ph ? 'Yes' : 'No';
             }
-            
-            if (elements.activeHighlights) {
-                elements.activeHighlights.textContent = currentHighlights.length;
+
+            // Use PageHighlighter's internal stats instead of manual tracking
+            if (ph) {
+                try {
+                    const stats = ph.getStats();
+                    if (elements.activeHighlights) {
+                        elements.activeHighlights.textContent = stats.highlights;
+                    }
+                    if (elements.activeOverlays) {
+                        elements.activeOverlays.textContent = stats.overlays;
+                    }
+                } catch (error) {
+                    // Fallback to manual tracking if getStats fails
+                    if (elements.activeHighlights) {
+                        elements.activeHighlights.textContent = currentHighlights.length;
+                    }
+                    if (elements.activeOverlays) {
+                        elements.activeOverlays.textContent = currentOverlays.length;
+                    }
+                }
+            } else {
+                // No PageHighlighter available, show 0
+                if (elements.activeHighlights) {
+                    elements.activeHighlights.textContent = '0';
+                }
+                if (elements.activeOverlays) {
+                    elements.activeOverlays.textContent = '0';
+                }
             }
-            
-            if (elements.activeOverlays) {
-                elements.activeOverlays.textContent = currentOverlays.length;
-            }
-            
+
             if (elements.lastHighlightType) {
                 elements.lastHighlightType.textContent = lastHighlightType;
             }
@@ -337,8 +359,7 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 message: '🎯 This is a top banner that stays fixed even when you scroll!',
                 position: 'top',
                 type: 'info',
-                duration: 5000
-            });
+                duration: 5000            });
             currentOverlays.push(overlay);
             trackHighlight('Top Banner');
             setTimeout(() => setButtonLoading('topBannerBtn', false), 300);
@@ -353,8 +374,7 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 message: '⚠️ Important notification at the bottom of your screen',
                 position: 'bottom',
                 type: 'info',
-                duration: 5000
-            });
+                duration: 5000            });
             currentOverlays.push(overlay);
             trackHighlight('Bottom Banner');
             setTimeout(() => setButtonLoading('bottomBannerBtn', false), 300);
@@ -369,8 +389,7 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 message: 'This is a centered banner message with blue background.',
                 position: 'center',
                 type: 'info',
-                duration: 8000
-            });
+                duration: 8000            });
             currentOverlays.push(overlay);
             trackHighlight('Centered Banner');
             setTimeout(() => setButtonLoading('centerBtn', false), 300);
@@ -386,8 +405,7 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
                 position: 'center',
                 type: 'info',
                 overlay: true,
-                duration: 4000
-            });
+                duration: 4000            });
             currentOverlays.push(overlay);
             trackHighlight('Background Overlay');
             setTimeout(() => setButtonLoading('backgroundBtn', false), 300);
@@ -715,10 +733,10 @@ const arrow = window.agentlet.utils.PageHighlighter.highlight('#important-elemen
 
             setButtonLoading('scrollHighlightBtn', true);
             log('🎯 Scrolling to API Reference section and highlighting...', 'info');
-            // Target the div surrounding the "📜 PageHighlighter API Reference:" heading
+            // Target the div surrounding the "PageHighlighter API reference:" heading
             let apiSection = null;
             for (let h3 of document.querySelectorAll('h3')) {
-                if (h3.textContent.includes('📜 PageHighlighter API Reference')) {
+                if (h3.textContent.includes('PageHighlighter API reference')) {
                     apiSection = h3.parentElement;
                     break;
                 }
