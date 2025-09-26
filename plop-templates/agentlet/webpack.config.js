@@ -9,6 +9,9 @@ module.exports = {
     filename: '[name]-bundle.js',
     path: path.resolve(__dirname, 'dist'),
   },
+  resolve: {
+    fullySpecified: false, // Allow importing .mjs files without full extension
+  },
   module: {
     rules: [
       {
@@ -21,6 +24,11 @@ module.exports = {
             plugins: ['@babel/plugin-transform-class-properties']
           }
         }
+      },
+      {
+        test: /\.mjs$/,
+        include: /node_modules/,
+        type: 'javascript/auto',
       }
     ]
   },

@@ -135,6 +135,101 @@ window.updateStatus = (message, type) => window.consoleUtils.updateStatus(messag
 window.clearConsole = () => window.consoleUtils.clearConsole();
 window.setButtonLoading = (buttonId, loading) => window.consoleUtils.setButtonLoading(buttonId, loading);
 
+/**
+ * Standard Agentlet initialization helper for examples
+ * Provides consistent initialization pattern and error handling
+ */
+window.initializeAgentletExample = async function(options = {}) {
+    const {
+        onBeforeInit = () => {},
+        onAfterInit = () => {},
+        onError = (error) => console.error('Agentlet initialization failed:', error),
+        buttonId = 'initBtn',
+        config = { debugMode: true, theme: 'default' }
+    } = options;
+
+    try {
+        setButtonLoading(buttonId, true);
+        updateStatus('Loading Agentlet Core...', 'info');
+        log('🤖 Starting Agentlet Core initialization...');
+
+        // Allow custom pre-initialization logic
+        await onBeforeInit();
+
+        // Check if already loaded
+        if (window.agentlet) {
+            log('⚠️ Agentlet Core already loaded, cleaning up first...', 'warning');
+            if (typeof window.agentlet.cleanup === 'function') {
+                await window.agentlet.cleanup();
+            }
+        }
+
+        // Configure Agentlet
+        window.agentletConfig = { ...config };
+
+        // Load script dynamically
+        await loadAgentletScript();
+
+        // Initialize
+        const AgentletConstructor = window.AgentletCore?.default;
+        if (!AgentletConstructor) {
+            throw new Error('AgentletCore constructor not found');
+        }
+
+        log('🚀 Creating AgentletCore instance...');
+        const agentletInstance = new AgentletConstructor(window.agentletConfig);
+
+        log('⚙️ Starting initialization...');
+        await agentletInstance.init();
+
+        log('✅ Agentlet Core initialized successfully', 'success');
+        log(`📊 Available APIs: ${Object.keys(window.agentlet || {}).join(', ')}`);
+        updateStatus('Agentlet Core loaded successfully! Panel should be visible.', 'success');
+
+        // Allow custom post-initialization logic
+        await onAfterInit(agentletInstance);
+
+        setButtonLoading(buttonId, false);
+        return agentletInstance;
+
+    } catch (error) {
+        log(`❌ Error: ${error.message}`, 'error');
+        updateStatus('Initialization failed: ' + error.message, 'error');
+        setButtonLoading(buttonId, false);
+        onError(error);
+        throw error;
+    }
+};
+
+/**
+ * Load Agentlet script dynamically
+ */
+function loadAgentletScript() {
+    return new Promise((resolve, reject) => {
+        // Remove existing script if present
+        const existingScript = document.querySelector('script[src*="agentlet-core.js"]');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        const script = document.createElement('script');
+        script.src = '../../../dist/agentlet-core.js?' + Date.now();
+
+        script.onload = () => {
+            log('✅ Agentlet Core script loaded successfully', 'success');
+            resolve();
+        };
+
+        script.onerror = () => {
+            const error = new Error('Failed to load Agentlet Core. Make sure you ran "npm run build" first.');
+            log('❌ Failed to load Agentlet Core script', 'error');
+            reject(error);
+        };
+
+        document.head.appendChild(script);
+    });
+}
+
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', () => {
     window.consoleUtils.log('Console utilities loaded', 'success');

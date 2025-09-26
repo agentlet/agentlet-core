@@ -3,29 +3,35 @@
  * Main application entry point with plugin architecture
  */
 
-import ModuleLoader from './plugin-system/ModuleLoader.js';
-import BaseModule from './core/BaseModule.js';
-import BaseSubmodule from './core/BaseSubmodule.js';
-import ElementSelector from './utils/ElementSelector.js';
-import Dialog from './utils/Dialog.js';
-import MessageBubble from './utils/MessageBubble.js';
-import ScreenCapture from './utils/ScreenCapture.js';
-import ScriptInjector from './utils/ScriptInjector.js';
-import { LocalStorageEnvironmentVariablesManager } from './utils/EnvManager.js';
-import CookieManager from './utils/CookieManager.js';
-import StorageManager from './utils/StorageManager.js';
-import { Z_INDEX, createZIndexConstants } from './utils/ZIndexConstants.js';
-import ZIndexDetector, { detectMaxZIndex, suggestAgentletZIndexBase, analyzeZIndexDistribution } from './utils/ZIndexDetector.js';
-import AuthManager from './utils/AuthManager.js';
-import FormExtractor from './utils/FormExtractor.js';
-import FormFiller from './utils/FormFiller.js';
-import TableExtractor from './utils/TableExtractor.js';
-import AIManager from './utils/AIProvider.js';
-import PageHighlighter from './utils/PageHighlighter.js';
-import PDFProcessor from './utils/PDFProcessor.js';
-import ShortcutManager from './utils/ShortcutManager.js';
+import ModuleRegistry from './core/ModuleRegistry.js';
+import ModuleManager from './core/ModuleManager.js';
+// import Module from './core/Module.js';
+// import ElementSelector from './utils/ui/ElementSelector.js';
+import Dialog from './utils/ui/Dialog.js';
+// import MessageBubble from './utils/ui/MessageBubble.js';
+// import ScreenCapture from './utils/ui/ScreenCapture.js';
+// import ScriptInjector from './utils/system/ScriptInjector.js';
+import { LocalStorageEnvironmentVariablesManager } from './utils/config-persistence/EnvManager.js';
+import CookieManager from './utils/config-persistence/CookieManager.js';
+import StorageManager from './utils/config-persistence/StorageManager.js';
+import { Z_INDEX } from './utils/ui/ZIndex.js';
+import AuthManager from './utils/system/AuthManager.js';
+import FormExtractor from './utils/data-processing/FormExtractor.js';
+import FormFiller from './utils/data-processing/FormFiller.js';
+import TableExtractor from './utils/data-processing/TableExtractor.js';
+import AIManager from './utils/ai/AIProvider.js';
+// import PageHighlighter from './utils/ui/PageHighlighter.js';
+// import PDFProcessor from './utils/ai/PDFProcessor.js';
+import ShortcutManager from './utils/ui/ShortcutManager.js';
+import { LibrarySetup } from './libraries/LibrarySetup.js';
+import { ThemeManager } from './core/ThemeManager.js';
+import { EventBus } from './core/EventBus.js';
+import { StyleInjector } from './ui/StyleInjector.js';
+import { UIManager } from './ui/UIManager.js';
+import { PanelManager } from './ui/PanelManager.js';
+import { GlobalAPI } from './core/GlobalAPI.js';
 
-// Import external libraries
+// Import external libraries (jQuery removed)
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -37,7 +43,6 @@ import hotkeys from 'hotkeys-js';
 class AgentletCore {
     constructor(config = {}) {
         this.initialized = false;
-        this.isMinimized = false;
         
         // Configuration
         this.config = {
@@ -48,17 +53,19 @@ class AgentletCore {
             minimizeWithImage: config.minimizeWithImage || null, // URL of image to show when minimized
             startMinimized: config.startMinimized || false, // Start in minimized state
             showEnvVarsButton: config.showEnvVarsButton || false, // Show environment variables button
+            showRefreshButton: config.showRefreshButton || false, // Show refresh content button
             showSettingsButton: config.showSettingsButton !== false, // Show settings button
             showHelpButton: config.showHelpButton !== false, // Show help button
             envManager: config.envManager, // Custom EnvironmentVariablesManager instance or null to disable
             resizablePanel: config.resizablePanel !== false, // Enable panel resizing
             minimumPanelWidth: config.minimumPanelWidth || 320, // Minimum panel width in pixels
-            ...config,
-            theme: this.processThemeConfig(config.theme)
+            quickCommandDialogShortcut: config.quickCommandDialogShortcut || false, // Enable Ctrl/Cmd+; quick command dialog
+            quickCommandCallback: config.quickCommandCallback || null, // Custom callback for quick command dialog
+            ...config
         };
         
         // Event system
-        this.eventBus = this.createEventBus();
+        this.eventBus = new EventBus(this.config.debugMode);
         
         // Initialize environment manager
         this.envManager = this.initializeEnvManager();
@@ -79,25 +86,21 @@ class AgentletCore {
 
         // Initialize form extractor and filler
         this.formExtractor = new FormExtractor();
-        this.formFiller = new FormFiller(); // jQuery will be passed during setupGlobalAccess
+        this.formFiller = new FormFiller(); // Uses native DOM methods
         
         // Initialize table extractor
-        this.tableExtractor = new TableExtractor();
+        this.tableExtractor = new TableExtractor(this.librarySetup);
         
         // Initialize AI manager
-        this.aiManager = new AIManager(this.envManager);
+        this.aiManager = new AIManager(this.envManager, this.librarySetup);
         
         // Initialize shortcut manager
-        this.shortcutManager = new ShortcutManager();
+        this.shortcutManager = new ShortcutManager(this.librarySetup);
 
-        // Initialize module loader with configuration
-        this.moduleLoader = new ModuleLoader({
-            eventBus: this.eventBus,
-            moduleRegistry: this.config.moduleRegistry,
-            registryUrl: this.config.registryUrl
-        });
-        
-        // UI management
+        // Initialize library setup
+        this.librarySetup = new LibrarySetup(this.config);
+
+        // UI references (must be initialized before UIManager)
         this.ui = {
             container: null,
             content: null,
@@ -106,6 +109,37 @@ class AgentletCore {
             imageOverlay: null
         };
         
+        // UI state (synchronized with UIManager)
+        this.isMinimized = false;
+
+        // Initialize theme manager
+        this.themeManager = new ThemeManager(this.config);
+
+        // Initialize style injector
+        this.styleInjector = new StyleInjector(this.themeManager);
+
+        // Initialize UI manager
+        this.uiManager = new UIManager(this);
+
+        // Initialize panel manager
+        this.panelManager = new PanelManager(this);
+
+        // Initialize global API manager
+        this.globalAPI = new GlobalAPI(this);
+
+        // Initialize module registry with configuration
+        this.moduleRegistry = new ModuleRegistry({
+            eventBus: this.eventBus,
+            registryUrl: this.config.registryUrl,
+            skipRegistryModuleRegistration: this.config.skipRegistryModuleRegistration
+        });
+
+        // Initialize centralized module manager
+        this.moduleManager = new ModuleManager(this.moduleRegistry);
+        this.moduleManager.initialize();
+        
+        // UI management (delegated to UIManager)
+        
         // Performance tracking
         this.performanceMetrics = {
             initTime: 0,
@@ -113,8 +147,8 @@ class AgentletCore {
             uiRenderTime: 0
         };
         
-        // Set up global access (jQuery will be set up later in init())
-        this.setupGlobalAccess();
+        // Set up global access - will be finalized after UI is created
+        this.globalAPI.setupGlobalAccess();
         
         console.log('AgentletCore 📎 initialized with config:', this.config);
     }
@@ -142,743 +176,43 @@ class AgentletCore {
     }
 
     /**
-     * Process theme configuration and merge with defaults
+     * Load and parse the agentlets registry (single download for both libraries and modules)
      */
-    processThemeConfig(themeConfig) {
-        const defaultTheme = {
-            // Colors
-            primaryColor: '#1E3A8A',
-            secondaryColor: '#F97316',
-            backgroundColor: '#ffffff',
-            contentBackground: '#f8f9fa',
-            textColor: '#333333',
-            borderColor: '#e0e0e0',
-            
-            // Header
-            headerBackground: '#ffffff',
-            headerTextColor: '#333333',
-            
-            // Actions
-            actionButtonBackground: '#f8f9fa',
-            actionButtonBorder: '#dee2e6',
-            actionButtonHover: '#e9ecef',
-            actionButtonText: '#333333',
-            
-            // Layout
-            panelWidth: '320px',
-            borderRadius: '0px',
-            boxShadow: '-2px 0 10px rgba(0,0,0,0.1)',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            
-            // Spacing
-            headerPadding: '15px',
-            contentPadding: '15px',
-            actionsPadding: '10px 15px',
-            
-            // Borders
-            borderWidth: '2px',
-            
-            // Animation
-            transitionDuration: '0.3s',
-            
-            // Dialog theming (unified across all dialogs)
-            dialogOverlayBackground: 'rgba(0, 0, 0, 0.5)',
-            dialogBackground: '#ffffff',
-            dialogBorderRadius: '8px',
-            dialogBoxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-            dialogHeaderBackground: '#ffffff',
-            dialogHeaderTextColor: '#333333',
-            dialogHeaderTextMargin: '0',
-            dialogContentBackground: '#ffffff',
-            dialogContentTextColor: '#333333',
-            dialogButtonPrimaryBackground: '#1E3A8A',
-            dialogButtonPrimaryHover: '#1E40AF',
-            dialogButtonSecondaryBackground: '#6B7280',
-            dialogButtonSecondaryHover: '#4B5563',
-            dialogButtonDangerBackground: '#DC2626',
-            dialogButtonDangerHover: '#B91C1C',
-            dialogProgressBarBackground: 'linear-gradient(90deg, #1E3A8A, #F97316)',
-            dialogProgressBarTrackBackground: '#f0f0f0',
-
-            // Spinner
-            spinnerTrackColor: '#f3f3f3',
-            spinnerColor: '#667eea',
-            
-            // Image Overlay Theme Variables
-            imageOverlayWidth: '100px',
-            imageOverlayHeight: '100px',
-            imageOverlayBottom: '20px',
-            imageOverlayRight: '20px',
-            imageOverlayZIndex: Z_INDEX.IMAGE_OVERLAY,
-            imageOverlayTransition: 'all 0.3s ease',
-            imageOverlayHoverScale: '1.05'
-        };
-
-        // If theme is just a string (legacy), return defaults
-        if (typeof themeConfig === 'string' || !themeConfig) {
-            return defaultTheme;
-        }
-
-        // Merge user theme with defaults and apply minimum panel width
-        const mergedTheme = {
-            ...defaultTheme,
-            ...themeConfig
-        };
-        
-        // Update panel width based on configuration
-        const minimumWidth = this.config?.minimumPanelWidth || 320;
-        const currentWidth = parseInt(mergedTheme.panelWidth) || 320;
-        mergedTheme.panelWidth = `${Math.max(currentWidth, minimumWidth)}px`;
-        
-        return mergedTheme;
-    }
-
-    /**
-     * Create event bus for internal communication
-     */
-    createEventBus() {
-        const listeners = new Map();
-        
-        return {
-            emit: (event, data) => {
-                const eventListeners = listeners.get(event) || [];
-                eventListeners.forEach(callback => {
-                    try {
-                        callback(data);
-                    } catch (error) {
-                        console.error(`Error in event listener for ${event}:`, error);
-                    }
-                });
-                
-                if (this.config.debugMode) {
-                    console.log(`Event emitted: ${event}`, data);
-                }
-            },
-            
-            on: (event, callback) => {
-                if (!listeners.has(event)) {
-                    listeners.set(event, []);
-                }
-                listeners.get(event).push(callback);
-            },
-            
-            off: (event, callback) => {
-                const eventListeners = listeners.get(event);
-                if (eventListeners) {
-                    const index = eventListeners.indexOf(callback);
-                    if (index > -1) {
-                        eventListeners.splice(index, 1);
-                    }
-                }
-            },
-            
-            // eslint-disable-next-line require-await
-            request: async (event, data) => {
-                return new Promise((resolve, reject) => {
-                    const eventListeners = listeners.get(event) || [];
-                    if (eventListeners.length === 0) {
-                        reject(new Error(`No listeners for event: ${event}`));
-                        return;
-                    }
-                    
-                    try {
-                        const result = eventListeners[0](data);
-                        if (result instanceof Promise) {
-                            result.then(resolve).catch(reject);
-                        } else {
-                            resolve(result);
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-            }
-        };
-    }
-
-    /**
-     * Create a minimal jQuery fallback for basic DOM operations
-     */
-    createjQueryFallback() {
-        return function(selector) {
-            if (typeof selector === 'string') {
-                const elements = document.querySelectorAll(selector);
-                const result = {
-                    0: document.querySelector(selector),
-                    length: elements.length,
-                    remove: function() {
-                        elements.forEach(el => el.remove());
-                        return this;
-                    },
-                    append: function(...appendElements) {
-                        const target = document.querySelector(selector);
-                        if (target) {
-                            appendElements.forEach(el => {
-                                if (typeof el === 'string') {
-                                    target.insertAdjacentHTML('beforeend', el);
-                                } else if (el && el.nodeType) {
-                                    target.appendChild(el);
-                                }
-                            });
-                        }
-                        return this;
-                    },
-                    addClass: function(className) {
-                        elements.forEach(el => {
-                            if (el && el.classList) {
-                                el.classList.add(className);
-                            }
-                        });
-                        return this;
-                    },
-                    removeClass: function(className) {
-                        elements.forEach(el => {
-                            if (el && el.classList) {
-                                el.classList.remove(className);
-                            }
-                        });
-                        return this;
-                    },
-                    hide: function() {
-                        elements.forEach(el => {
-                            if (el && el.style) {
-                                el.style.display = 'none';
-                            }
-                        });
-                        return this;
-                    },
-                    show: function() {
-                        elements.forEach(el => {
-                            if (el && el.style) {
-                                el.style.display = '';
-                            }
-                        });
-                        return this;
-                    },
-                    css: function(property, value) {
-                        if (typeof property === 'object') {
-                            // Handle object of properties
-                            elements.forEach(el => {
-                                if (el && el.style) {
-                                    Object.keys(property).forEach(key => {
-                                        const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-                                        el.style.setProperty(cssKey, property[key]);
-                                    });
-                                }
-                            });
-                        } else if (value !== undefined) {
-                            // Set single property
-                            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
-                            elements.forEach(el => {
-                                if (el && el.style) {
-                                    el.style.setProperty(cssProperty, value);
-                                }
-                            });
-                        }
-                        return this;
-                    },
-                    attr: function(name, value) {
-                        if (value !== undefined) {
-                            elements.forEach(el => {
-                                if (el && el.setAttribute) {
-                                    el.setAttribute(name, value);
-                                }
-                            });
-                            return this;
-                        } else {
-                            const el = elements[0];
-                            return el && el.getAttribute ? el.getAttribute(name) : null;
-                        }
-                    },
-                    html: function(htmlContent) {
-                        if (htmlContent !== undefined) {
-                            elements.forEach(el => {
-                                if (el) {
-                                    el.innerHTML = htmlContent;
-                                }
-                            });
-                            return this;
-                        } else {
-                            const el = elements[0];
-                            return el ? el.innerHTML : '';
-                        }
-                    },
-                    text: function(textContent) {
-                        if (textContent !== undefined) {
-                            elements.forEach(el => {
-                                if (el) {
-                                    el.textContent = textContent;
-                                }
-                            });
-                            return this;
-                        } else {
-                            const el = elements[0];
-                            return el ? el.textContent : '';
-                        }
-                    },
-                    val: function(value) {
-                        if (value !== undefined) {
-                            elements.forEach(el => {
-                                if (el && 'value' in el) {
-                                    el.value = value;
-                                }
-                            });
-                            return this;
-                        } else {
-                            const el = elements[0];
-                            return el && 'value' in el ? el.value : '';
-                        }
-                    },
-                    focus: function() {
-                        const el = elements[0];
-                        if (el && el.focus) {
-                            el.focus();
-                        }
-                        return this;
-                    },
-                    on: function(event, handler) {
-                        elements.forEach(el => {
-                            if (el && el.addEventListener) {
-                                el.addEventListener(event, handler);
-                            }
-                        });
-                        return this;
-                    },
-                    off: function(event, handler) {
-                        elements.forEach(el => {
-                            if (el && el.removeEventListener) {
-                                el.removeEventListener(event, handler);
-                            }
-                        });
-                        return this;
-                    }
-                };
-                
-                // Add array-like access to elements
-                for (let i = 0; i < elements.length; i++) {
-                    result[i] = elements[i];
-                }
-                
-                return result;
-            } else if (selector && selector.nodeType) {
-                // DOM element passed - create a wrapper with all methods
-                const result = {
-                    0: selector,
-                    length: 1,
-                    remove: function() {
-                        if (selector.remove) {
-                            selector.remove();
-                        }
-                        return this;
-                    },
-                    append: function(...appendElements) {
-                        appendElements.forEach(el => {
-                            if (typeof el === 'string') {
-                                selector.insertAdjacentHTML('beforeend', el);
-                            } else if (el && el.nodeType) {
-                                selector.appendChild(el);
-                            }
-                        });
-                        return this;
-                    },
-                    addClass: function(className) {
-                        if (selector.classList) {
-                            selector.classList.add(className);
-                        }
-                        return this;
-                    },
-                    removeClass: function(className) {
-                        if (selector.classList) {
-                            selector.classList.remove(className);
-                        }
-                        return this;
-                    },
-                    hide: function() {
-                        if (selector.style) {
-                            selector.style.display = 'none';
-                        }
-                        return this;
-                    },
-                    show: function() {
-                        if (selector.style) {
-                            selector.style.display = '';
-                        }
-                        return this;
-                    },
-                    css: function(property, value) {
-                        if (typeof property === 'object') {
-                            // Handle object of properties
-                            if (selector.style) {
-                                Object.keys(property).forEach(key => {
-                                    const cssKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-                                    selector.style.setProperty(cssKey, property[key]);
-                                });
-                            }
-                        } else if (value !== undefined) {
-                            // Set single property
-                            const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
-                            if (selector.style) {
-                                selector.style.setProperty(cssProperty, value);
-                            }
-                        }
-                        return this;
-                    },
-                    attr: function(name, value) {
-                        if (value !== undefined) {
-                            if (selector.setAttribute) {
-                                selector.setAttribute(name, value);
-                            }
-                            return this;
-                        } else {
-                            return selector.getAttribute ? selector.getAttribute(name) : null;
-                        }
-                    },
-                    html: function(htmlContent) {
-                        if (htmlContent !== undefined) {
-                            selector.innerHTML = htmlContent;
-                            return this;
-                        } else {
-                            return selector.innerHTML || '';
-                        }
-                    },
-                    text: function(textContent) {
-                        if (textContent !== undefined) {
-                            selector.textContent = textContent;
-                            return this;
-                        } else {
-                            return selector.textContent || '';
-                        }
-                    },
-                    val: function(value) {
-                        if (value !== undefined) {
-                            if ('value' in selector) {
-                                selector.value = value;
-                            }
-                            return this;
-                        } else {
-                            return 'value' in selector ? selector.value : '';
-                        }
-                    },
-                    focus: function() {
-                        if (selector.focus) {
-                            selector.focus();
-                        }
-                        return this;
-                    },
-                    on: function(event, handler) {
-                        if (selector.addEventListener) {
-                            selector.addEventListener(event, handler);
-                        }
-                        return this;
-                    },
-                    off: function(event, handler) {
-                        if (selector.removeEventListener) {
-                            selector.removeEventListener(event, handler);
-                        }
-                        return this;
-                    }
-                };
-                return result;
-            } else if (selector === document) {
-                // Handle document object
-                return {
-                    0: document,
-                    length: 1,
-                    ready: function(callback) {
-                        if (document.readyState === 'loading') {
-                            document.addEventListener('DOMContentLoaded', callback);
-                        } else {
-                            callback();
-                        }
-                        return this;
-                    },
-                    on: function(event, handler) {
-                        document.addEventListener(event, handler);
-                        return this;
-                    },
-                    off: function(event, handler) {
-                        document.removeEventListener(event, handler);
-                        return this;
-                    }
-                };
-            }
-            return { length: 0 };
-        };
-    }
-
-    /**
-     * Set up jQuery instance - can be called multiple times to reinitialize
-     */
-    setupjQuery() {
-        // Set up jQuery with namespace isolation
-        // Load jQuery from global scope or create a minimal fallback
-        let agentletJQuery;
-        if (typeof window.jQuery !== 'undefined' && window.jQuery.fn?.jquery) { // Check for actual jQuery object
-            // Don't use noConflict(true) to preserve bundled jQuery for developers
-            // Instead, use the same instance to avoid conflicts
-            agentletJQuery = window.jQuery;
-            console.log('🔧 Using bundled jQuery version:', window.jQuery.fn.jquery);
-        } else {
-            agentletJQuery = this.createjQueryFallback();
-            console.log('🔧 Using jQuery fallback');
-        }
-        
-        // Update jQuery references
-        window.agentlet.$ = agentletJQuery;
-        window.agentlet.jQuery = agentletJQuery;
-        
-        // Update FormFiller with jQuery instance
-        if (this.formFiller) {
-            this.formFiller.$ = agentletJQuery;
-        }
-        
-    }
-
-    /**
-     * Set up XLSX library for Excel export functionality
-     */
-    setupXLSX() {
-        // Make XLSX available globally for TableExtractor
-        if (typeof window.XLSX === 'undefined') {
-            window.XLSX = XLSX;
-            console.log('📊 XLSX library loaded for Excel export functionality');
-        }
-    }
-
-    /**
-     * Set up html2canvas library for screenshot functionality
-     */
-    setupHTML2Canvas() {
-        // Make html2canvas available globally for ScreenCapture
-        if (typeof window.html2canvas === 'undefined') {
-            window.html2canvas = html2canvas;
-            console.log('📸 html2canvas library loaded for screenshot functionality');
-        }
-    }
-
-    /**
-     * Set up PDF.js library for PDF processing functionality
-     */
-    setupPDFJS() {
-        // Make PDF.js available globally for PDFProcessor
-        if (typeof window.pdfjsLib === 'undefined') {
-            window.pdfjsLib = pdfjsLib;
-            
-            // Configure worker URL - prioritize explicit config, then derive from registry URL
-            let workerSrc = './pdf.worker.min.js'; // fallback
-            
-            if (this.config.pdfWorkerUrl) {
-                // Explicit worker URL provided
-                workerSrc = this.config.pdfWorkerUrl;
-            } else if (this.config.registryUrl) {
-                // Derive worker URL from registry URL
-                // e.g., https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.js
-                try {
-                    const registryUrl = new URL(this.config.registryUrl);
-                    registryUrl.pathname = registryUrl.pathname.replace(/[^\/]+$/, 'pdf.worker.min.js');
-                    workerSrc = registryUrl.toString();
-                } catch (error) {
-                    console.warn('Failed to derive PDF worker URL from registry URL:', error);
-                }
-            }
-            
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-            window.pdfjsLib.GlobalWorkerOptions.verbosity = 0;
-            
-            console.log('📄 PDF.js library loaded for PDF processing functionality');
-            console.log('📄 PDF.js worker URL set to:', workerSrc);
-            
-            // Verify the setting worked
-            console.log('📄 PDF.js GlobalWorkerOptions.workerSrc:', window.pdfjsLib.GlobalWorkerOptions.workerSrc);
-        }
-    }
-
-    /**
-     * Configure PDF.js worker URL manually
-     * @param {string} workerUrl - URL to the PDF.js worker file
-     */
-    configurePDFWorker(workerUrl) {
-        if (window.pdfjsLib) {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-            console.log('📄 PDF.js worker URL manually set to:', workerUrl);
-        } else {
-            console.warn('📄 PDF.js not loaded yet, cannot set worker URL');
-        }
-    }
-    
-    /**
-     * Set up hotkeys library for keyboard shortcuts
-     */
-    setupHotkeys() {
-        // Make hotkeys available globally
-        if (typeof window.hotkeys === 'undefined') {
-            window.hotkeys = hotkeys;
-            console.log('⌨️ hotkeys-js library loaded for keyboard shortcuts');
-        }
-        
-        // Initialize shortcut manager with hotkeys
-        if (this.shortcutManager) {
-            this.shortcutManager.init(hotkeys);
-            console.log('⌨️ ShortcutManager initialized with hotkeys-js');
-        }
-    }
-
-    /**
-     * Set up global access for modules and debugging
-     */
-    setupGlobalAccess() {
-        
-        // Make AgentletCore globally accessible
-        window.agentlet = this;
-        
-        // Expose base classes for modules
-        window.agentlet.BaseModule = BaseModule;
-        window.agentlet.BaseSubmodule = BaseSubmodule;
-        
-        // Expose utility classes for creating new instances
-        window.agentlet.ElementSelectorClass = ElementSelector;
-        window.agentlet.ScriptInjectorClass = ScriptInjector;
-        
-        // Expose utilities (jQuery will be set up later)
-        window.agentlet.utils = {
-            ElementSelector: new ElementSelector(),
-            Dialog: new Dialog({ theme: this.config.theme }),
-            MessageBubble: new MessageBubble(this.config.theme),
-            ScreenCapture: new ScreenCapture(),
-            ScriptInjector: new ScriptInjector(),
-            PDFProcessor: PDFProcessor,
-            shortcuts: this.shortcutManager ? this.shortcutManager.createProxy() : null,
-            // Z-Index utilities for agentlet development
-            zIndex: {
-                detect: detectMaxZIndex,
-                suggest: suggestAgentletZIndexBase,
-                analyze: analyzeZIndexDistribution,
-                constants: Z_INDEX,
-                createConstants: createZIndexConstants
-            }
-        };
-        
-        // Add PageHighlighter with error handling
+    async loadRegistry() {
         try {
-            window.agentlet.utils.PageHighlighter = new PageHighlighter();
-            console.log('✅ PageHighlighter instantiated successfully');
-        } catch (error) {
-            console.error('❌ Failed to instantiate PageHighlighter:', error);
-            window.agentlet.utils.PageHighlighter = null;
-        }
-        
-        // Expose environment manager
-        window.agentlet.env = this.envManager ? this.envManager.createProxy() : null;
-        
-        // Expose cookie manager
-        window.agentlet.cookies = this.cookieManager.createProxy();
-        
-        // Expose storage managers
-        window.agentlet.storage = {
-            local: this.storageManager.createProxy('localStorage'),
-            session: this.storageManager.createProxy('sessionStorage'),
-            manager: this.storageManager
-        };
-        
-        // Expose authentication manager
-        window.agentlet.auth = this.authManager.createProxy();
-        
-        // Expose form extractor and filler with AI-ready functions
-        window.agentlet.forms = {
-            // Form extraction
-            extract: (element, options) => this.formExtractor.extractFormStructure(element, options),
-            exportForAI: (element, options) => this.formExtractor.exportForAI(element, options),
-            quickExport: (element) => this.formExtractor.quickExport(element),
-            
-            // Form filling (NEW)
-            fill: (parentElement, selectorValues, options) => this.formFiller.fillForm(parentElement, selectorValues, options),
-            fillFromAI: (parentElement, aiFormData, userValues, options) => this.formFiller.fillFromAIData(parentElement, aiFormData, userValues, options),
-            fillMultiple: (parentElement, formDataArray, options) => this.formFiller.fillMultipleForms(parentElement, formDataArray, options),
-            
-            // Direct access to utilities
-            extractor: this.formExtractor,
-            filler: this.formFiller
-        };
-        
-        // Expose table extractor with Excel export functions
-        window.agentlet.tables = this.tableExtractor.createProxy();
-        
-        // Expose AI capabilities
-        window.agentlet.ai = {
-            // Main AI functions
-            sendPrompt: (prompt, images, options) => this.aiManager.sendPrompt(prompt, images, options),
-            sendPromptWithPDF: (prompt, pdfData, options) => this.aiManager.sendPromptWithPDF(prompt, pdfData, options),
-            convertPDFToImages: (pdfData, options) => this.aiManager.convertPDFToImages(pdfData, options),
-            isAvailable: () => this.aiManager.isAvailable(),
-            getStatus: () => this.aiManager.getStatus(),
-            validateAPI: () => this.aiManager.validateAPI(),
-            
-            // Provider management
-            setProvider: (providerName) => this.aiManager.setCurrentProvider(providerName),
-            getAvailableProviders: () => this.aiManager.getAvailableProviders(),
-            refresh: () => this.aiManager.refresh(),
-            
-            // Direct access to manager
-            manager: this.aiManager
-        };
-        
-        // Expose PDF worker configuration
-        window.agentlet.configurePDFWorker = (workerUrl) => {
-            if (window.pdfjsLib) {
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-                console.log('📄 PDF.js worker URL manually set to:', workerUrl);
-            } else {
-                console.warn('📄 PDF.js not loaded yet, cannot set worker URL');
+            console.log(`📚 Loading agentlets registry from: ${this.config.registryUrl}`);
+
+            const response = await fetch(this.config.registryUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-        };
-        
-        // jQuery will be set up later in init() via setupjQuery()
-        
-        // Expose initialization status
-        window.agentlet.initialized = this.initialized;
-        
-        // Expose useful APIs for modules
-        window.agentlet.modules = {
-            get: (name) => this.moduleLoader.modules.get(name),
-            getAll: () => this.moduleLoader.getLoadedModules(),
-            load: (url, options) => this.moduleLoader.loadModuleFromUrl(url, options),
-            unload: (name) => this.moduleLoader.unloadModule(name),
-            register: (module, source = 'manual') => this.moduleLoader.registerModule(module, source)
-        };
-        
-        // Also expose moduleLoader directly for advanced use
-        window.agentlet.moduleLoader = this.moduleLoader;
-        
-        window.agentlet.ui = {
-            refreshContent: () => this.updateModuleContent(),
-            show: () => this.show(),
-            hide: () => this.hide(),
-            minimize: () => this.minimize(),
-            maximize: () => this.maximize(),
-            regenerateStyles: () => this.regenerateStyles(),
-            resizePanel: (size) => this.resizePanel(size),
-            getPanelWidth: () => this.getPanelWidth(),
-            setPanelWidth: (width) => this.setPanelWidth(width)
-        };
-        
-        // Expose jQuery refresh method for developers
-        window.agentlet.refreshjQuery = () => this.setupjQuery();
-        
-        // Expose theme for utility classes
-        window.agentlet.theme = this.config.theme;
-        
-        // Development helpers
-        if (this.config.debugMode) {
-            window.agentlet.debug = {
-                getMetrics: () => this.getPerformanceMetrics(),
-                getConfig: () => this.config,
-                getStatistics: () => this.moduleLoader.getStatistics(),
-                clearCache: () => this.moduleLoader.clearCache(),
-                eventBus: this.eventBus,
-                envManager: this.envManager,
-                cookieManager: this.cookieManager,
-                storageManager: this.storageManager
-            };
+
+            const registryData = await response.json();
+
+            // Extract base URL from registry URL for relative library paths
+            let baseUrl;
+            try {
+                // Handle absolute URLs
+                const registryUrl = new URL(this.config.registryUrl);
+                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
+            } catch (_error) {
+                // Handle relative URLs - use current page location as base
+                const currentLocation = window.location.href;
+                const registryUrl = new URL(this.config.registryUrl, currentLocation);
+                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
+            }
+
+            // Add base URL to registry data
+            registryData.baseUrl = baseUrl;
+
+            console.log('📚 Registry loaded successfully');
+            console.log('📚 Available libraries:', Object.keys(registryData.libraries || {}));
+            return registryData;
+
+        } catch (error) {
+            console.error('📚 Failed to load registry:', error);
+            console.warn('📚 External libraries and modules may not load correctly');
+            return null;
         }
     }
 
@@ -896,43 +230,71 @@ class AgentletCore {
         try {
             console.log('🚀 Initializing Agentlet Core 📎...');
             
-            // Set up jQuery now that bundled libraries may be available
-            this.setupjQuery();
+            // Load registry if registryUrl is provided
+            let registryData = null;
+            if (this.config.registryUrl) {
+                registryData = await this.loadRegistry();
+            }
+
+            // Initialize library system with registry data (if any)
+            if (registryData && registryData.libraries) {
+                this.librarySetup.initializeRegistryLoader(registryData);
+            }
             
-            // Set up XLSX for Excel export functionality
-            this.setupXLSX();
-            
-            // Set up html2canvas for screenshot functionality
-            this.setupHTML2Canvas();
-            
-            // Set up PDF.js for PDF processing functionality
-            this.setupPDFJS();
-            
-            // Set up hotkeys for keyboard shortcuts
-            this.setupHotkeys();
+            // Set up all libraries
+            this.librarySetup.initializeAll(
+                { XLSX, html2canvas, pdfjsLib, hotkeys },
+                this.shortcutManager
+            );
             
             // Set up event listeners
             this.setupEventListeners();
             
             const uiStartTime = performance.now();
-            this.setupBaseUI();
+
+            // Inject styles first before creating UI elements
+            this.styleInjector.injectStyles();
+
+            this.setupBaseUI(); // Call our delegation method to maintain compatibility
+
+            // Finalize global access with the actual UI references
+            this.finalizeGlobalAccess();
+
             this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
-            
-            // Set up module change callback BEFORE initializing modules
-            this.moduleLoader.setModuleChangeCallback((activeModule) => {
+
+            // Initialize module registry with shared registry data FIRST
+            const moduleStartTime = performance.now();
+            if (registryData) {
+                await this.moduleRegistry.initializeWithRegistry(registryData);
+            } else {
+                await this.moduleRegistry.initialize();
+            }
+            this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
+
+            // Set up module change callback AFTER modules are loaded and UI is ready
+            this.moduleRegistry.setModuleChangeCallback((activeModule) => {
                 this.onModuleChange(activeModule);
             });
-            
-            // Initialize module loader and load modules
-            const moduleStartTime = performance.now();
-            await this.moduleLoader.initialize();
-            this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
-            
+
+            // Trigger initial content update for any active modules after DOM is ready
+            const activeModule = this.moduleRegistry.activeModule;
+            if (activeModule) {
+                console.log('🔄 Initial content update for active module:', activeModule.name);
+                console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
+                // Use requestAnimationFrame to ensure DOM is fully ready
+                window.requestAnimationFrame(() => {
+                    console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
+                    this.onModuleChange(activeModule);
+                });
+            }
+
             // Set up storage change listener
             this.setupLocalStorageListener();
             
             // Load environment variables from storage
-            this.loadEnvVarsFromStorage();
+            if (this.envManager) {
+                this.envManager.loadFromStorage();
+            }
             
             // Manual refresh to catch modules that were registered early
             this.updateApplicationDisplay();
@@ -940,7 +302,7 @@ class AgentletCore {
             
             // Register default keyboard shortcuts
             if (this.shortcutManager) {
-                this.shortcutManager.registerDefaultShortcuts();
+                await this.shortcutManager.registerDefaultShortcuts(this.config);
             }
             
             this.performanceMetrics.initTime = performance.now() - startTime;
@@ -966,18 +328,18 @@ class AgentletCore {
      */
     setupEventListeners() {
         // Module events
-        this.eventBus.on('module:registered', (data) => {
-            console.log(`📦 Module registered: ${data.module}`);
+        this.eventBus.on('module:registered', (_data) => {
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
-        
-        this.eventBus.on('module:activated', (data) => {
-            console.log(`🔄 Module activated: ${data.module}`);
+
+        this.eventBus.on('module:activated', (_data) => {
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
-        
-        this.eventBus.on('module:deactivated', (data) => {
-            console.log(`⏸️ Module deactivated: ${data.module}`);
+
+        this.eventBus.on('module:deactivated', (_data) => {
+            // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
         
@@ -1012,7 +374,7 @@ class AgentletCore {
         this.updateModuleContent();
         
         // Restore panel width for the module if env vars are available
-        this.restorePanelWidthForModule(activeModule);
+        this.panelManager.restorePanelWidthForModule(activeModule);
         
         // Set up submodule change callback for the active module
         if (activeModule && typeof activeModule.setSubmoduleChangeCallback === 'function') {
@@ -1028,213 +390,12 @@ class AgentletCore {
         });
     }
 
-    /**
-     * Enhanced UI setup with responsive design
-     */
-    setupBaseUI() {
-        // Get jQuery instance
-        const $ = window.agentlet.$;
-        
-        // Remove existing container if present
-        $('#agentlet-container').remove();
-        
-        // Create main container
-        const container = document.createElement('div');
-        container.id = 'agentlet-container';
-        container.className = 'agentlet-panel';
-        
-        // Create toggle button only if minimizeWithImage is not configured
-        let toggleButton = null;
-        if (!this.config.minimizeWithImage || typeof this.config.minimizeWithImage !== 'string') {
-            toggleButton = this.createToggleButton();
-        }
-        
-        // Create header
-        const header = this.createHeader();
-        
-        // Create content area
-        const content = this.createContentArea();
-        
-        // Create actions area
-        const actions = this.createActionsArea();
-        
-        // Create resize handle if resizable is enabled
-        let resizeHandle = null;
-        if (this.config.resizablePanel) {
-            resizeHandle = this.createResizeHandle(container);
-        }
-        
-        // Assemble UI
-        if (resizeHandle) {
-            container.appendChild(resizeHandle);
-        }
-        container.appendChild(header);
-        container.appendChild(content);
-        container.appendChild(actions);
-        
-        // Add to document
-        if (toggleButton) {
-            $(document.body).append(toggleButton, container);
-        } else {
-            $(document.body).append(container);
-        }
-        
-        // Store UI references
-        this.ui.container = container;
-        this.ui.content = content;
-        this.ui.header = header;
-        this.ui.actions = actions;
-        
-        // Add CSS styles
-        this.injectStyles();
-        
-        // Ensure image overlay is shown if panel is minimized and image is configured
-        this.ensureImageOverlay();
-        
-        // Handle startMinimized option
-        if (this.config.startMinimized) {
-            this.isMinimized = true;
-            
-            // Apply minimized state to container
-            if (container) {
-                container.style.transform = 'translateX(100%)';
-            }
-            
-            // Update toggle button if it exists
-            if (toggleButton) {
-                toggleButton.innerHTML = '◀';
-                toggleButton.style.right = '-2px';
-            }
-            
-            // Show image overlay if configured
-            if (this.config.minimizeWithImage && typeof this.config.minimizeWithImage === 'string') {
-                this.showImageOverlay();
-            }
-            
-            console.log('🎨 UI setup completed (started minimized)');
-        } else {
-            console.log('🎨 UI setup completed');
-        }
-    }
 
-    /**
-     * Create toggle button
-     */
-    createToggleButton() {
-        const toggleButton = document.createElement('button');
-        toggleButton.innerHTML = '▶';
-        toggleButton.id = 'agentlet-toggle';
-        toggleButton.className = 'agentlet-toggle';
-        
-        toggleButton.onclick = (e) => {
-            e.stopPropagation();
-            this.toggleCollapse();
-        };
-        
-        return toggleButton;
-    }
 
     /**
      * Create resize handle for the panel
      */
-    createResizeHandle(container) {
-        const resizeHandle = document.createElement('div');
-        resizeHandle.className = 'agentlet-resize-handle';
-        
-        let isResizing = false;
-        let startX = 0;
-        let startWidth = 0;
-        
-        const startResize = (e) => {
-            isResizing = true;
-            startX = e.clientX;
-            startWidth = container.offsetWidth;
-            
-            document.addEventListener('mousemove', handleResize);
-            document.addEventListener('mouseup', stopResize);
-            
-            // Prevent text selection during resize
-            document.body.style.userSelect = 'none';
-            
-            // Disable transitions during resize for smooth dragging
-            container.style.transition = 'none';
-            
-            // Also disable toggle button transitions during resize
-            const toggleButton = document.getElementById('agentlet-toggle');
-            if (toggleButton) {
-                toggleButton.style.transition = 'none';
-            }
-            
-            e.preventDefault();
-        };
-        
-        const handleResize = (e) => {
-            if (!isResizing) return;
-            
-            const diff = startX - e.clientX; // Negative diff means expanding left
-            const newWidth = Math.max(this.config.minimumPanelWidth, startWidth + diff);
-            
-            container.style.width = `${newWidth}px`;
-            
-            // Update CSS custom property for consistent theming
-            document.documentElement.style.setProperty('--agentlet-panel-width', `${newWidth}px`);
-            
-            // Update toggle button position if it exists
-            const toggleButton = document.getElementById('agentlet-toggle');
-            if (toggleButton && !this.isMinimized) {
-                toggleButton.style.right = `${newWidth}px`;
-            }
-        };
-        
-        const stopResize = () => {
-            if (!isResizing) return;
-            
-            isResizing = false;
-            document.removeEventListener('mousemove', handleResize);
-            document.removeEventListener('mouseup', stopResize);
-            
-            // Restore text selection
-            document.body.style.userSelect = '';
-            
-            // Restore transitions
-            container.style.transition = '';
-            
-            // Restore toggle button transitions
-            const toggleButton = document.getElementById('agentlet-toggle');
-            if (toggleButton) {
-                toggleButton.style.transition = '';
-            }
-            
-            // Emit resize complete event
-            this.eventBus.emit('panel:resizeComplete', { width: container.offsetWidth });
-            
-            // Save panel width for the current module if env vars are available
-            this.savePanelWidthForModule(container.offsetWidth);
-        };
-        
-        resizeHandle.addEventListener('mousedown', startResize);
-        
-        return resizeHandle;
-    }
 
-    /**
-     * Create header section
-     */
-    createHeader() {
-        const header = document.createElement('div');
-        header.id = 'agentlet-header';
-        header.className = 'agentlet-header';
-        
-        // Application display
-        const appDisplay = document.createElement('div');
-        appDisplay.id = 'agentlet-app-display';
-        appDisplay.className = 'agentlet-app-display';
-        appDisplay.innerHTML = '<strong>Agentlet:</strong> <span id="agentlet-app-name">Ready</span>';
-        
-        header.appendChild(appDisplay);
-        
-        return header;
-    }
 
 
     /**
@@ -1242,9 +403,9 @@ class AgentletCore {
      */
     createDiscreteCloseButton() {
         const closeButton = document.createElement('button');
-        closeButton.className = 'agentlet-action-btn agentlet-action-btn--close';
+        closeButton.className = 'agentlet-action-btn';
         closeButton.id = 'agentlet-close-btn';
-        closeButton.innerHTML = '×';
+        closeButton.innerHTML = '╳';
         closeButton.title = 'Close Agentlet';
         
         // Click handler to cleanup and close
@@ -1255,69 +416,10 @@ class AgentletCore {
         return closeButton;
     }
 
-    /**
-     * Create content area
-     */
-    createContentArea() {
-        const content = document.createElement('div');
-        content.id = 'agentlet-content';
-        content.className = 'agentlet-content';
-        
-        return content;
-    }
 
     /**
      * Create actions area
      */
-    createActionsArea() {
-        const actions = document.createElement('div');
-        actions.id = 'agentlet-actions';
-        actions.className = 'agentlet-actions';
-        
-        // Core action buttons
-        const refreshBtn = this.createActionButton('🔄', 'Refresh', () => this.refreshContent());
-        
-        // Optional action buttons based on configuration
-        let settingsBtn = null;
-        if (this.config.showSettingsButton) {
-            settingsBtn = this.createActionButton('⚙️', 'Settings', () => this.showSettings());
-        }
-        
-        let helpBtn = null;
-        if (this.config.showHelpButton) {
-            helpBtn = this.createActionButton('❓', 'Help', () => this.showHelp());
-        }
-        
-        // Add environment variables button if enabled and envManager is available
-        let envVarsBtn = null;
-        if (this.config.showEnvVarsButton && this.envManager) {
-            envVarsBtn = this.createActionButton('🔧', 'Environment Variables', () => this.showEnvVarsDialog());
-        }
-        
-        // Add authentication button if enabled
-        const authBtn = this.authManager.createLoginButton();
-        
-        // Create discrete close button
-        const closeBtn = this.createDiscreteCloseButton();
-        
-        // Add buttons to actions area
-        actions.appendChild(refreshBtn);
-        if (settingsBtn) {
-            actions.appendChild(settingsBtn);
-        }
-        if (helpBtn) {
-            actions.appendChild(helpBtn);
-        }
-        if (envVarsBtn) {
-            actions.appendChild(envVarsBtn);
-        }
-        if (authBtn) {
-            actions.appendChild(authBtn);
-        }
-        actions.appendChild(closeBtn);
-        
-        return actions;
-    }
 
     /**
      * Create action button
@@ -1336,114 +438,28 @@ class AgentletCore {
     /**
      * Toggle UI collapse/expand
      */
-    toggleCollapse() {
-        const $ = window.agentlet.$;
-        const container = this.ui.container;
-        const toggleButton = $('#agentlet-toggle')[0];
-        
-        if (!this.isMinimized) {
-            // Collapse
-            container.style.transform = 'translateX(100%)';
-            
-            // Update toggle button if it exists
-            if (toggleButton) {
-                toggleButton.innerHTML = '◀';
-                toggleButton.style.right = '-2px';
-            }
-            
-            this.isMinimized = true;
-            
-            // Show image overlay if minimizeWithImage is configured
-            if (this.config.minimizeWithImage && typeof this.config.minimizeWithImage === 'string') {
-                this.showImageOverlay();
-            }
-            
-            this.eventBus.emit('ui:minimized');
-        } else {
-            // Expand
-            container.style.transform = 'translateX(0)';
-            
-            // Update toggle button if it exists
-            if (toggleButton) {
-                toggleButton.innerHTML = '▶';
-                toggleButton.style.right = '';
-            }
-            
-            this.isMinimized = false;
-            
-            // Restore panel width for current module when maximizing
-            if (this.moduleLoader.activeModule) {
-                this.restorePanelWidthForModule(this.moduleLoader.activeModule);
-            }
-            
-            // Don't hide image overlay - it should always be visible when minimizeWithImage is configured
-            // The image overlay will handle the toggle functionality
-            
-            this.eventBus.emit('ui:maximized');
-        }
-    }
 
     /**
      * Show image overlay when minimized
      */
-    showImageOverlay() {
-        // Only show if minimizeWithImage is configured
-        if (!this.config.minimizeWithImage || typeof this.config.minimizeWithImage !== 'string') {
-            return;
-        }
-        
-        // Remove existing overlay if present
-        this.hideImageOverlay();
-        
-        // Create image overlay
-        const imageOverlay = document.createElement('div');
-        imageOverlay.className = 'agentlet-image-overlay';
-        imageOverlay.innerHTML = `<img src="${this.config.minimizeWithImage}" alt="Agentlet" />`;
-        
-        // Add click handler to toggle collapse
-        imageOverlay.addEventListener('click', () => {
-            this.toggleCollapse();
-        });
-        
-        // Add to document
-        const $ = window.agentlet.$;
-        $(document.body).append(imageOverlay);
-        
-        // Store reference
-        this.ui.imageOverlay = imageOverlay;
-    }
 
     /**
      * Hide image overlay
      */
-    hideImageOverlay() {
-        const $ = window.agentlet.$;
-        
-        if (this.ui.imageOverlay) {
-            $(this.ui.imageOverlay).remove();
-            this.ui.imageOverlay = null;
-        }
-    }
 
     /**
      * Ensure image overlay is shown if minimizeWithImage is configured
      */
-    ensureImageOverlay() {
-        if (this.config.minimizeWithImage && typeof this.config.minimizeWithImage === 'string') {
-            this.showImageOverlay();
-        }
-    }
 
     /**
      * Update application display
      */
     updateApplicationDisplay() {
-        const $ = window.agentlet.$;
-        const appNameElement = $('#agentlet-app-display')[0];
-        const moduleCountElement = $('#agentlet-module-count')[0];
+        const appNameElement = document.getElementById('agentlet-app-display');
+        const _moduleCountElement = document.getElementById('agentlet-module-count');
         
         // Use provided activeModule parameter, fallback to moduleLoader's activeModule
-        const activeModule = this.moduleLoader.activeModule;
+        const activeModule = this.moduleRegistry.activeModule;
         
         if (appNameElement && activeModule) {
             // Check if module has a custom title
@@ -1475,13 +491,16 @@ class AgentletCore {
      */
     updateModuleContent() {
         const content = this.ui.content;
-        if (!content) return;
-        
+        if (!content) {
+            console.warn('⚠️ updateModuleContent called but UI content element not ready');
+            return;
+        }
+
         // Clear existing content
         content.innerHTML = '';
 
-        const activeModule = this.moduleLoader.activeModule;
-        
+        const activeModule = this.moduleRegistry.activeModule;
+
         if (activeModule) {
             try {
                 // Use the module's getContent method
@@ -1512,11 +531,11 @@ class AgentletCore {
                 <div class="agentlet-welcome">
                     <h3>Agentlet</h3>
                     <p>No application-specific module detected for this page.</p>
-                    <p>Available modules: ${this.moduleLoader.modules.size}</p>
+                    <p>Available modules: ${this.moduleRegistry.modules.size}</p>
                 </div>
             `;
         }
-        
+
         this.eventBus.emit('ui:contentUpdated', {
             module: activeModule?.name || null
         });
@@ -1567,11 +586,11 @@ class AgentletCore {
         this.updateModuleContent();
         
         // Notify active module if it requested notifications
-        if (this.moduleLoader.activeModule) {
-            if (this.moduleLoader.activeModule.requiresLocalStorageChangeNotification 
-                && typeof this.moduleLoader.activeModule.onLocalStorageChange === 'function') {
-                console.log(`📦 Notifying module ${this.moduleLoader.activeModule.name} about localStorage change`);
-                this.moduleLoader.activeModule.onLocalStorageChange(key, newValue);
+        if (this.moduleRegistry.activeModule) {
+            if (this.moduleRegistry.activeModule.requiresLocalStorageChangeNotification 
+                && typeof this.moduleRegistry.activeModule.onLocalStorageChange === 'function') {
+                console.log(`📦 Notifying module ${this.moduleRegistry.activeModule.name} about localStorage change`);
+                this.moduleRegistry.activeModule.onLocalStorageChange(key, newValue);
             }
         }
     }
@@ -1589,9 +608,9 @@ class AgentletCore {
         console.log('⚙️ Settings requested');
         
         // Check if active module has custom settings handler
-        if (this.moduleLoader.activeModule && typeof this.moduleLoader.activeModule.showSettings === 'function') {
-            console.log(`📦 Using module settings: ${this.moduleLoader.activeModule.name}`);
-            this.moduleLoader.activeModule.showSettings();
+        if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showSettings === 'function') {
+            console.log(`📦 Using module settings: ${this.moduleRegistry.activeModule.name}`);
+            this.moduleRegistry.activeModule.showSettings();
             return;
         }
         
@@ -1603,8 +622,8 @@ class AgentletCore {
                 icon: '',
                 message: `
                     <h4>Configuration</h4>
-                    <p><strong>Theme:</strong> ${this.config.theme.primaryColor}</p>
-                    <p><strong>Modules loaded:</strong> ${this.moduleLoader.modules.size}</p>
+                    <p><strong>Theme:</strong> ${this.themeManager.getTheme().primaryColor}</p>
+                    <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
                     <p><strong>Debug mode:</strong> ${this.config.debugMode ? 'Enabled' : 'Disabled'}</p>
                     
                     <h4>Performance</h4>
@@ -1618,7 +637,7 @@ class AgentletCore {
                     <p><strong>Available providers:</strong> ${this.aiManager.getAvailableProviders().join(', ') || 'None'}</p>
                     
                     <h4>Active Module</h4>
-                    <p><strong>Current:</strong> ${this.moduleLoader.activeModule?.name || 'None'}</p>
+                    <p><strong>Current:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
                     <p><strong>URL:</strong> ${window.location.href}</p>
                 `,
                 allowHtml: true,
@@ -1629,7 +648,7 @@ class AgentletCore {
             }, (result) => {
                 if (result === 'refresh') {
                     this.refreshContent();
-                    InfoDialog.success('Settings refreshed!', 'Updated');
+                    Dialog.success('Settings refreshed!', 'Updated');
                 }
             });
         } else {
@@ -1642,9 +661,9 @@ class AgentletCore {
         console.log('❓ Help requested');
         
         // Check if active module has custom help handler
-        if (this.moduleLoader.activeModule && typeof this.moduleLoader.activeModule.showHelp === 'function') {
-            console.log(`📦 Using module help: ${this.moduleLoader.activeModule.name}`);
-            this.moduleLoader.activeModule.showHelp();
+        if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showHelp === 'function') {
+            console.log(`📦 Using module help: ${this.moduleRegistry.activeModule.name}`);
+            this.moduleRegistry.activeModule.showHelp();
             return;
         }
         
@@ -1657,8 +676,8 @@ class AgentletCore {
                 message: `
                     <h4>About Agentlet</h4>
                     <p><strong>Version:</strong> 1.0.0</p>
-                    <p><strong>Modules loaded:</strong> ${this.moduleLoader.modules.size}</p>
-                    <p><strong>Active module:</strong> ${this.moduleLoader.activeModule?.name || 'None'}</p>
+                    <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
+                    <p><strong>Active module:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
                     
                     <h4>Core Features</h4>
                     <ul>
@@ -1698,7 +717,7 @@ class AgentletCore {
                     const debugInfo = {
                         metrics: this.getPerformanceMetrics(),
                         config: this.config,
-                        statistics: this.moduleLoader.getStatistics()
+                        statistics: this.moduleRegistry.getStatistics()
                     };
                     
                     Dialog.show('info', {
@@ -1722,7 +741,7 @@ class AgentletCore {
                     }, (debugResult) => {
                         if (debugResult === 'copy') {
                             console.log('Agentlet Debug Info 📎:', debugInfo);
-                            InfoDialog.success('Debug info copied to console!', 'Copied');
+                            Dialog.success('Debug info copied to console!', 'Copied');
                         }
                     });
                 }
@@ -1732,8 +751,8 @@ class AgentletCore {
             const helpContent = `
                 <h3>Agentlet 📎 help</h3>
                 <p><strong>Version:</strong> 1.0.0</p>
-                <p><strong>Modules loaded:</strong> ${this.moduleLoader.modules.size}</p>
-                <p><strong>Active module:</strong> ${this.moduleLoader.activeModule?.name || 'None'}</p>
+                <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
+                <p><strong>Active module:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
                 <hr>
                 <p><strong>Debug commands (console):</strong></p>
                 <ul>
@@ -1750,7 +769,6 @@ class AgentletCore {
      * Show modal dialog
      */
     showModal(title, content) {
-        const $ = window.agentlet.$;
         // Simple modal implementation
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -1802,7 +820,7 @@ class AgentletCore {
         
         modal.className = 'modal';
         modal.appendChild(dialog);
-        $(document.body).append(modal);
+        document.body.appendChild(modal);
         
         // Close on background click
         modal.onclick = (e) => {
@@ -1822,1038 +840,67 @@ class AgentletCore {
     }
 
     /**
-     * Inject CSS styles
-     */
-    injectStyles() {
-        const $ = window.agentlet.$;
-        $('#agentlet-core-styles').remove();
-        
-        const theme = this.config.theme;
-        const style = document.createElement('style');
-        style.id = 'agentlet-core-styles';
-        style.textContent = `
-            /* CSS Custom Properties for Theme */
-            :root {
-                --agentlet-primary-color: ${theme.primaryColor};
-                --agentlet-secondary-color: ${theme.secondaryColor};
-                --agentlet-background-color: ${theme.backgroundColor};
-                --agentlet-content-background: ${theme.contentBackground};
-                --agentlet-text-color: ${theme.textColor};
-                --agentlet-border-color: ${theme.borderColor};
-                --agentlet-header-background: ${theme.headerBackground};
-                --agentlet-header-text-color: ${theme.headerTextColor};
-                --agentlet-action-button-background: ${theme.actionButtonBackground};
-                --agentlet-action-button-border: ${theme.actionButtonBorder};
-                --agentlet-action-button-hover: ${theme.actionButtonHover};
-                --agentlet-action-button-text: ${theme.actionButtonText};
-                --agentlet-panel-width: ${theme.panelWidth};
-                --agentlet-border-radius: ${theme.borderRadius};
-                --agentlet-box-shadow: ${theme.boxShadow};
-                --agentlet-font-family: ${theme.fontFamily};
-                --agentlet-header-padding: ${theme.headerPadding};
-                --agentlet-content-padding: ${theme.contentPadding};
-                --agentlet-actions-padding: ${theme.actionsPadding};
-                --agentlet-border-width: ${theme.borderWidth};
-                --agentlet-transition-duration: ${theme.transitionDuration};
-                
-                /* Dialog Theme Variables */
-                --agentlet-dialog-overlay-background: ${theme.dialogOverlayBackground};
-                --agentlet-dialog-background: ${theme.dialogBackground};
-                --agentlet-dialog-border-radius: ${theme.dialogBorderRadius};
-                --agentlet-dialog-box-shadow: ${theme.dialogBoxShadow};
-                --agentlet-dialog-header-background: ${theme.dialogHeaderBackground};
-                --agentlet-dialog-header-text-color: ${theme.dialogHeaderTextColor};
-                --agentlet-dialog-content-background: ${theme.dialogContentBackground};
-                --agentlet-dialog-content-text-color: ${theme.dialogContentTextColor};
-                --agentlet-dialog-button-primary-background: ${theme.dialogButtonPrimaryBackground};
-                --agentlet-dialog-button-primary-hover: ${theme.dialogButtonPrimaryHover};
-                --agentlet-dialog-button-secondary-background: ${theme.dialogButtonSecondaryBackground};
-                --agentlet-dialog-button-secondary-hover: ${theme.dialogButtonSecondaryHover};
-                --agentlet-dialog-button-danger-background: ${theme.dialogButtonDangerBackground};
-                --agentlet-dialog-button-danger-hover: ${theme.dialogButtonDangerHover};
-                --agentlet-dialog-progress-bar-background: ${theme.dialogProgressBarBackground};
-                --agentlet-dialog-progress-bar-track-background: ${theme.dialogProgressBarTrackBackground};
-                
-                /* WaitDialog Theme Variables */
-                --agentlet-wait-dialog-header-pulse-background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
-                --agentlet-wait-dialog-header-pulse-animation: waitPulse 2s ease-in-out infinite;
-                --agentlet-wait-dialog-button-border-color: #ddd;
-                --agentlet-wait-dialog-button-hover-background: #f8f9fa;
-                --agentlet-wait-dialog-button-hover-border-color: #bbb;
-                
-                /* Spinner Theme Variables */
-                --agentlet-spinner-track-color: #f3f3f3;
-                --agentlet-spinner-color: #667eea;
-                
-                /* InfoDialog Theme Variables */
-                --agentlet-info-dialog-overlay-background: rgba(0, 0, 0, 0.5);
-                --agentlet-info-dialog-background: white;
-                --agentlet-info-dialog-border-radius: 8px;
-                --agentlet-info-dialog-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-                --agentlet-info-dialog-header-background: var(--agentlet-dialog-header-background);
-                --agentlet-info-dialog-header-text-color: var(--agentlet-dialog-header-text-color);
-                --agentlet-info-dialog-content-background: white;
-                --agentlet-info-dialog-content-text-color: #333;
-                --agentlet-info-dialog-content-padding: 20px;
-                --agentlet-info-dialog-message-color: #333;
-                --agentlet-info-dialog-message-font-size: 14px;
-                --agentlet-info-dialog-message-line-height: 1.5;
-                --agentlet-info-dialog-button-gap: 10px;
-                --agentlet-info-dialog-button-padding: 8px 16px;
-                --agentlet-info-dialog-button-border-radius: 4px;
-                --agentlet-info-dialog-button-font-size: 14px;
-                --agentlet-info-dialog-button-transition: all 0.2s ease;
-                --agentlet-info-dialog-button-min-width: 80px;
-                --agentlet-info-dialog-button-gap-inner: 6px;
-                --agentlet-info-dialog-button-icon-font-size: 12px;
-                --agentlet-info-dialog-button-focus-outline: 2px solid #007bff;
-                --agentlet-info-dialog-button-focus-outline-offset: 2px;
-                
-                /* InputDialog Theme Variables */
-                --agentlet-input-dialog-overlay-background: rgba(0, 0, 0, 0.5);
-                --agentlet-input-dialog-background: white;
-                --agentlet-input-dialog-border-radius: 8px;
-                --agentlet-input-dialog-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-                --agentlet-input-dialog-header-background: var(--agentlet-dialog-header-background);
-                --agentlet-input-dialog-header-text-color: var(--agentlet-dialog-header-text-color);
-                --agentlet-input-dialog-content-background: white;
-                --agentlet-input-dialog-content-text-color: #333;
-                --agentlet-input-dialog-content-padding: 20px;
-                --agentlet-input-dialog-message-color: #333;
-                --agentlet-input-dialog-message-font-size: 14px;
-                --agentlet-input-dialog-message-line-height: 1.4;
-                --agentlet-input-dialog-message-margin-bottom: 16px;
-                --agentlet-input-dialog-input-border: 2px solid #e0e0e0;
-                --agentlet-input-dialog-input-border-radius: 4px;
-                --agentlet-input-dialog-input-padding: 10px 12px;
-                --agentlet-input-dialog-input-font-size: 14px;
-                --agentlet-input-dialog-input-transition: border-color 0.2s ease;
-                --agentlet-input-dialog-input-margin-bottom: 20px;
-                --agentlet-input-dialog-button-gap: 10px;
-                --agentlet-input-dialog-button-padding: 8px 16px;
-                --agentlet-input-dialog-button-border-radius: 4px;
-                --agentlet-input-dialog-button-font-size: 14px;
-                --agentlet-input-dialog-button-transition: all 0.2s ease;
-                --agentlet-input-dialog-button-min-width: 80px;
-                
-                /* ProgressBar Theme Variables */
-                --agentlet-progress-dialog-overlay-background: rgba(0, 0, 0, 0.5);
-                --agentlet-progress-dialog-background: white;
-                --agentlet-progress-dialog-border-radius: 8px;
-                --agentlet-progress-dialog-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-                --agentlet-progress-dialog-header-background: var(--agentlet-dialog-header-background);
-                --agentlet-progress-dialog-header-text-color: var(--agentlet-dialog-header-text-color);
-                --agentlet-progress-dialog-content-background: white;
-                --agentlet-progress-dialog-content-text-color: #333;
-                --agentlet-progress-dialog-content-padding: 20px;
-                --agentlet-progress-message-color: #333;
-                --agentlet-progress-message-font-size: 14px;
-                --agentlet-progress-message-text-align: center;
-                --agentlet-progress-message-min-height: 20px;
-                --agentlet-progress-message-margin-bottom: 16px;
-                --agentlet-progress-bar-container-height: 8px;
-                --agentlet-progress-bar-container-border-radius: 4px;
-                --agentlet-progress-bar-container-margin-bottom: 12px;
-                --agentlet-progress-bar-border-radius: 4px;
-                --agentlet-progress-bar-transition: width 0.3s ease;
-                --agentlet-progress-info-font-size: 12px;
-                --agentlet-progress-info-color: #666;
-                --agentlet-progress-info-margin-bottom: 12px;
-                --agentlet-progress-actions-margin-top: 16px;
-                --agentlet-progress-actions-gap: 8px;
-                
-                /* Image Overlay Theme Variables */
-                --agentlet-image-overlay-width: ${theme.imageOverlayWidth};
-                --agentlet-image-overlay-height: ${theme.imageOverlayHeight};
-                --agentlet-image-overlay-bottom: ${theme.imageOverlayBottom};
-                --agentlet-image-overlay-right: ${theme.imageOverlayRight};
-                --agentlet-image-overlay-z-index: ${theme.imageOverlayZIndex};
-                --agentlet-image-overlay-transition: ${theme.imageOverlayTransition};
-                --agentlet-image-overlay-hover-scale: ${theme.imageOverlayHoverScale};
-            }
-
-            /* Main Panel */
-            .agentlet-panel {
-                position: fixed;
-                top: 0;
-                height: 100vh;
-                z-index: ${Z_INDEX.PANEL};
-                background: var(--agentlet-background-color);
-                font-family: var(--agentlet-font-family);
-                transition: all var(--agentlet-transition-duration) ease;
-                user-select: auto;
-                display: flex;
-                flex-direction: column;
-                width: var(--agentlet-panel-width);
-                max-width: 90vw;
-                border-radius: var(--agentlet-border-radius);
-            }
-
-            .agentlet-panel {
-                right: 0;
-                border-left: var(--agentlet-border-width) solid var(--agentlet-border-color);
-                box-shadow: var(--agentlet-box-shadow);
-            }
-
-            /* Toggle Button */
-            .agentlet-toggle {
-                position: fixed;
-                top: 50%;
-                right: var(--agentlet-panel-width);
-                background: var(--agentlet-secondary-color);
-                border: var(--agentlet-border-width) solid var(--agentlet-border-color);
-                border-radius: 5px 0px 0px 5px;
-                box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-                font-size: 12px;
-                cursor: pointer;
-                color: #FFF;
-                padding: 8px 4px;
-                margin: 0px;
-                width: 20px;
-                height: 40px;
-                line-height: 1;
-                transition: all var(--agentlet-transition-duration) ease;
-                z-index: ${Z_INDEX.CRITICAL_OVERLAY};
-            }
-
-            /* Resize Handle */
-            .agentlet-resize-handle {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 4px;
-                height: 100%;
-                cursor: ew-resize;
-                background: transparent;
-                z-index: 1000001;
-            }
-
-            .agentlet-resize-handle:hover {
-                background: var(--agentlet-primary-color);
-                opacity: 0.3;
-            }
-
-            .agentlet-resize-handle:active {
-                background: var(--agentlet-primary-color);
-                opacity: 0.5;
-            }
-
-            /* Header */
-            .agentlet-header {
-                padding: var(--agentlet-header-padding);
-                border-bottom: 1px solid var(--agentlet-border-color);
-                background: var(--agentlet-header-background);
-                color: var(--agentlet-header-text-color);
-                flex-shrink: 0;
-                cursor: default;
-            }
-
-            .agentlet-app-display {
-                font-size: 14px;
-                text-align: center;
-                font-weight: 500;
-            }
-
-            #agentlet-app-name {
-                
-            }
-
-            /* Content Area */
-            .agentlet-content {
-                flex: 1;
-                overflow-y: auto;
-                padding: var(--agentlet-content-padding);
-                background: var(--agentlet-content-background);
-            }
-
-            /* Actions Area */
-            .agentlet-actions {
-                padding: var(--agentlet-actions-padding);
-                border-top: 1px solid var(--agentlet-border-color);
-                background: var(--agentlet-background-color);
-                flex-shrink: 0;
-            }
-
-            /* Action Buttons */
-            .agentlet-action-btn {
-                background: var(--agentlet-action-button-background);
-                border: 1px solid var(--agentlet-action-button-border);
-                border-radius: 4px;
-                padding: 6px 8px;
-                margin-right: 8px;
-                cursor: pointer;
-                font-size: 12px;
-                color: var(--agentlet-action-button-text);
-                transition: all var(--agentlet-transition-duration) ease;
-            }
-
-            .agentlet-action-btn:hover {
-                background: var(--agentlet-action-button-hover);
-                border-color: var(--agentlet-action-button-border);
-            }
-
-            .agentlet-action-btn--close {
-                margin-left: 5px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                min-width: 32px;
-                height: 32px;
-                font-size: 14px;
-            }
-
-            /* Module Content Styles */
-            .agentlet-module-content {
-                margin-bottom: 15px;
-                padding: 12px;
-                border: 1px solid #dee2e6;
-                border-radius: 6px;
-                background: white;
-            }
-            
-            .agentlet-module-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 10px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #e9ecef;
-            }
-            
-            .agentlet-module-header h3 {
-                margin: 0;
-                font-size: 14px;
-                color: #495057;
-            }
-            
-            .agentlet-module-version {
-                font-size: 11px;
-                color: #6c757d;
-                background: #f8f9fa;
-                padding: 2px 6px;
-                border-radius: 10px;
-            }
-            
-            .agentlet-btn {
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-                margin: 2px;
-                transition: background-color 0.2s ease;
-            }
-            
-            .agentlet-btn:hover {
-                background: #0056b3;
-            }
-            
-            .agentlet-btn-secondary {
-                background: #6c757d;
-            }
-            
-            .agentlet-btn-secondary:hover {
-                background: #545b62;
-            }
-            
-            .agentlet-btn-sm {
-                padding: 4px 8px;
-                font-size: 11px;
-            }
-            
-            .agentlet-submodule-content {
-                margin-top: 10px;
-                padding: 8px;
-                background: #f8f9fa;
-                border-radius: 4px;
-                border-left: 3px solid #007bff;
-            }
-            
-            .agentlet-submodule-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 6px;
-            }
-            
-            .agentlet-submodule-header h4 {
-                margin: 0;
-                font-size: 12px;
-                color: #495057;
-            }
-            
-            .agentlet-submodule-status.active {
-                color: #28a745;
-                font-weight: bold;
-            }
-            
-            .agentlet-submodule-status.inactive {
-                color: #6c757d;
-            }
-            
-            .agentlet-welcome {
-                text-align: center;
-                padding: 20px;
-                color: #6c757d;
-            }
-            
-            .agentlet-error {
-                background: #f8d7da;
-                color: #721c24;
-                padding: 10px;
-                border-radius: 4px;
-                border: 1px solid #f5c6cb;
-            }
-            
-            /* Unified Dialog Styles - Applied to all utility dialogs */
-            .agentlet-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: var(--agentlet-dialog-overlay-background);
-                z-index: ${Z_INDEX.DIALOG_OVERLAY};
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-family: var(--agentlet-font-family);
-            }
-            
-            .agentlet-dialog-container {
-                background: var(--agentlet-dialog-background);
-                border-radius: var(--agentlet-dialog-border-radius);
-                box-shadow: var(--agentlet-dialog-box-shadow);
-                max-width: 90vw;
-                max-height: 90vh;
-                overflow: hidden;
-                animation: agentlet-dialog-fadein 0.3s ease;
-            }
-            
-            .agentlet-dialog-header {
-                background: var(--agentlet-dialog-header-background);
-                color: var(--agentlet-dialog-header-text-color);
-                padding: 16px 20px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-weight: 600;
-                font-size: 16px;
-            }
-            
-            .agentlet-dialog-content {
-                background: var(--agentlet-dialog-content-background);
-                color: var(--agentlet-dialog-content-text-color);
-                padding: 20px;
-                font-size: 14px;
-                line-height: 1.5;
-            }
-            
-            .agentlet-dialog-actions {
-                background: var(--agentlet-dialog-content-background);
-                padding: 16px 20px;
-                border-top: 1px solid var(--agentlet-border-color);
-                display: flex;
-                gap: 8px;
-                justify-content: flex-end;
-            }
-            
-            .agentlet-dialog-btn {
-                padding: 8px 16px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all var(--agentlet-transition-duration) ease;
-                min-width: 80px;
-            }
-            
-            .agentlet-dialog-btn-primary {
-                background: var(--agentlet-dialog-button-primary-background);
-                color: white;
-            }
-            
-            .agentlet-dialog-btn-primary:hover {
-                background: var(--agentlet-dialog-button-primary-hover);
-            }
-            
-            .agentlet-dialog-btn-secondary {
-                background: var(--agentlet-dialog-button-secondary-background);
-                color: white;
-            }
-            
-            .agentlet-dialog-btn-secondary:hover {
-                background: var(--agentlet-dialog-button-secondary-hover);
-            }
-            
-            .agentlet-dialog-btn-danger {
-                background: var(--agentlet-dialog-button-danger-background);
-                color: white;
-            }
-            
-            .agentlet-dialog-btn-danger:hover {
-                background: var(--agentlet-dialog-button-danger-hover);
-            }
-            
-            .agentlet-progress-bar-themed {
-                background: var(--agentlet-dialog-progress-bar-background);
-            }
-            
-            .agentlet-progress-track-themed {
-                background: var(--agentlet-dialog-progress-bar-track-background);
-            }
-            
-            /* WaitDialog Styles */
-            .agentlet-wait-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: var(--agentlet-dialog-overlay-background);
-                z-index: 1000002;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .agentlet-wait-dialog {
-                background: var(--agentlet-dialog-background);
-                border-radius: 12px;
-                box-shadow: var(--agentlet-dialog-box-shadow);
-                padding: 0;
-                min-width: 400px;
-                max-width: 90vw;
-                font-family: var(--agentlet-font-family);
-                z-index: 1000003;
-                animation: waitDialogFadeIn var(--agentlet-transition-duration) ease-out;
-                overflow: hidden;
-                text-align: center;
-            }
-            
-            .agentlet-wait-dialog-header {
-                background: var(--agentlet-dialog-header-background);
-                color: var(--agentlet-dialog-header-text-color);
-                padding: 20px 24px;
-                border-radius: 12px 12px 0 0;
-                font-weight: 600;
-                font-size: 18px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                position: relative;
-            }
-            
-            .agentlet-wait-dialog-header-pulse {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: var(--agentlet-wait-dialog-header-pulse-background);
-                animation: var(--agentlet-wait-dialog-header-pulse-animation);
-                border-radius: 12px 12px 0 0;
-            }
-            
-            .agentlet-wait-dialog-icon {
-                font-size: 24px;
-                line-height: 1;
-                z-index: 1;
-                position: relative;
-            }
-            
-            .agentlet-wait-dialog-title {
-                z-index: 1;
-                position: relative;
-            }
-            
-            .agentlet-wait-dialog-content {
-                padding: 32px 24px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 20px;
-            }
-            
-            .agentlet-wait-spinner-container {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            
-            .agentlet-wait-spinner {
-                width: 40px;
-                height: 40px;
-                border: 4px solid var(--agentlet-spinner-track-color);
-                border-top: 4px solid var(--agentlet-spinner-color);
-                border-radius: 50%;
-                animation: waitSpin 1s linear infinite;
-            }
-            
-            .agentlet-wait-message {
-                color: var(--agentlet-dialog-content-text-color);
-                font-size: 16px;
-                line-height: 1.5;
-                text-align: center;
-                max-width: 350px;
-            }
-            
-            .agentlet-wait-cancel-button {
-                padding: 10px 20px;
-                border: 2px solid var(--agentlet-wait-dialog-button-border-color);
-                background: var(--agentlet-dialog-background);
-                color: #666;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: 500;
-                transition: all 0.2s ease;
-                margin-top: 10px;
-            }
-            
-            .agentlet-wait-cancel-button:hover {
-                background: var(--agentlet-wait-dialog-button-hover-background);
-                border-color: var(--agentlet-wait-dialog-button-hover-border-color);
-            }
-            
-            @keyframes waitDialogFadeIn {
-                from {
-                    opacity: 0;
-                    transform: scale(0.9) translateY(-20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: scale(1) translateY(0);
-                }
-            }
-            
-            @keyframes waitSpin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            
-            @keyframes waitPulse {
-                0%, 100% { opacity: 0.3; }
-                50% { opacity: 0.6; }
-            }
-            
-            /* InfoDialog Styles */
-            .agentlet-info-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: var(--agentlet-info-dialog-overlay-background);
-                z-index: 1000002;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .agentlet-info-dialog {
-                background: var(--agentlet-info-dialog-background);
-                border-radius: var(--agentlet-info-dialog-border-radius);
-                box-shadow: var(--agentlet-info-dialog-box-shadow);
-                padding: 0;
-                min-width: 400px;
-                max-width: 90vw;
-                max-height: 80vh;
-                font-family: var(--agentlet-font-family);
-                z-index: 1000003;
-                animation: dialogFadeIn 0.2s ease-out;
-                overflow: hidden;
-            }
-            
-            .agentlet-info-dialog-header {
-                background: var(--agentlet-info-dialog-header-background);
-                color: var(--agentlet-info-dialog-header-text-color);
-                padding: 16px 20px;
-                border-radius: var(--agentlet-info-dialog-border-radius) var(--agentlet-info-dialog-border-radius) 0 0;
-                font-weight: 600;
-                font-size: 16px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            
-            .agentlet-info-dialog-content {
-                padding: var(--agentlet-info-dialog-content-padding);
-                overflow-y: auto;
-                max-height: 60vh;
-            }
-            
-            .agentlet-info-dialog-message {
-                margin: 0 0 20px 0;
-                color: var(--agentlet-info-dialog-message-color);
-                font-size: var(--agentlet-info-dialog-message-font-size);
-                line-height: var(--agentlet-info-dialog-message-line-height);
-                word-wrap: break-word;
-            }
-            
-            .agentlet-info-dialog-buttons {
-                display: flex;
-                gap: var(--agentlet-info-dialog-button-gap);
-                justify-content: flex-end;
-                flex-wrap: wrap;
-            }
-            
-            .agentlet-info-btn {
-                padding: var(--agentlet-info-dialog-button-padding);
-                border: 1px solid #dee2e6;
-                background: #f8f9fa;
-                color: #333;
-                border-radius: var(--agentlet-info-dialog-button-border-radius);
-                cursor: pointer;
-                font-size: var(--agentlet-info-dialog-button-font-size);
-                transition: var(--agentlet-info-dialog-button-transition);
-                display: flex;
-                align-items: center;
-                gap: var(--agentlet-info-dialog-button-gap-inner);
-                opacity: 1;
-                min-width: var(--agentlet-info-dialog-button-min-width);
-                justify-content: center;
-            }
-            
-            .agentlet-info-btn:hover {
-                background: #e9ecef;
-            }
-            
-            .agentlet-info-btn:focus {
-                outline: var(--agentlet-info-dialog-button-focus-outline);
-                outline-offset: var(--agentlet-info-dialog-button-focus-outline-offset);
-            }
-            
-            .agentlet-info-btn-primary {
-                background: var(--agentlet-dialog-button-primary-background);
-                color: white;
-                border: none;
-            }
-            
-            .agentlet-info-btn-primary:hover {
-                background: var(--agentlet-dialog-button-primary-hover);
-            }
-            
-            .agentlet-info-btn-secondary {
-                background: var(--agentlet-dialog-button-secondary-background);
-                color: white;
-                border: none;
-            }
-            
-            .agentlet-info-btn-secondary:hover {
-                background: var(--agentlet-dialog-button-secondary-hover);
-            }
-            
-            .agentlet-info-btn-danger {
-                background: var(--agentlet-dialog-button-danger-background);
-                color: white;
-                border: none;
-            }
-            
-            .agentlet-info-btn-danger:hover {
-                background: var(--agentlet-dialog-button-danger-hover);
-            }
-            
-            .agentlet-info-btn-icon {
-                font-size: var(--agentlet-info-dialog-button-icon-font-size);
-            }
-            
-            .agentlet-info-btn:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
-            }
-            
-            /* InputDialog Styles */
-            .agentlet-input-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: var(--agentlet-input-dialog-overlay-background);
-                z-index: 1000002;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .agentlet-input-dialog {
-                background: var(--agentlet-input-dialog-background);
-                border-radius: var(--agentlet-input-dialog-border-radius);
-                box-shadow: var(--agentlet-input-dialog-box-shadow);
-                padding: 0;
-                min-width: 400px;
-                max-width: 90vw;
-                font-family: var(--agentlet-font-family);
-                z-index: 1000003;
-                animation: dialogFadeIn 0.2s ease-out;
-            }
-            
-            .agentlet-input-dialog-header {
-                background: var(--agentlet-input-dialog-header-background);
-                color: var(--agentlet-input-dialog-header-text-color);
-                padding: 16px 20px;
-                border-radius: var(--agentlet-input-dialog-border-radius) var(--agentlet-input-dialog-border-radius) 0 0;
-                font-weight: 600;
-                font-size: 16px;
-            }
-            
-            .agentlet-input-dialog-content {
-                padding: var(--agentlet-input-dialog-content-padding);
-            }
-            
-            .agentlet-input-dialog-message {
-                margin: 0 0 var(--agentlet-input-dialog-message-margin-bottom) 0;
-                color: var(--agentlet-input-dialog-message-color);
-                font-size: var(--agentlet-input-dialog-message-font-size);
-                line-height: var(--agentlet-input-dialog-message-line-height);
-            }
-            
-            .agentlet-input-dialog-input {
-                width: 100%;
-                padding: var(--agentlet-input-dialog-input-padding);
-                border: var(--agentlet-input-dialog-input-border);
-                border-radius: var(--agentlet-input-dialog-input-border-radius);
-                font-size: var(--agentlet-input-dialog-input-font-size);
-                font-family: inherit;
-                margin-bottom: var(--agentlet-input-dialog-input-margin-bottom);
-                transition: var(--agentlet-input-dialog-input-transition);
-                box-sizing: border-box;
-                line-height: 1.5;
-            }
-            
-            .agentlet-input-dialog-input:focus {
-                outline: none;
-                border-color: var(--agentlet-primary-color);
-            }
-            
-            .agentlet-input-dialog-textarea {
-                resize: vertical;
-                min-height: 6em;
-            }
-            
-            .agentlet-input-dialog-textarea:not(.agentlet-input-dialog-textarea--resizable) {
-                resize: none;
-            }
-            
-            .agentlet-input-dialog-buttons {
-                display: flex;
-                gap: var(--agentlet-input-dialog-button-gap);
-                justify-content: flex-end;
-            }
-            
-            .agentlet-input-btn {
-                padding: var(--agentlet-input-dialog-button-padding);
-                border: 1px solid #dee2e6;
-                background: #f8f9fa;
-                color: #333;
-                border-radius: var(--agentlet-input-dialog-button-border-radius);
-                cursor: pointer;
-                font-size: var(--agentlet-input-dialog-button-font-size);
-                transition: var(--agentlet-input-dialog-button-transition);
-                min-width: var(--agentlet-input-dialog-button-min-width);
-            }
-            
-            .agentlet-input-btn:hover {
-                background: #e9ecef;
-            }
-            
-            .agentlet-input-btn-primary {
-                background: var(--agentlet-dialog-button-primary-background);
-                color: white;
-                border: none;
-            }
-            
-            .agentlet-input-btn-primary:hover {
-                background: var(--agentlet-dialog-button-primary-hover);
-            }
-            
-            .agentlet-input-btn-secondary {
-                background: var(--agentlet-dialog-button-secondary-background);
-                color: white;
-                border: none;
-            }
-            
-            .agentlet-input-btn-secondary:hover {
-                background: var(--agentlet-dialog-button-secondary-hover);
-            }
-            
-            /* ProgressBar Styles */
-            .agentlet-progress-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: var(--agentlet-progress-dialog-overlay-background);
-                z-index: 1000002;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .agentlet-progress-dialog {
-                background: var(--agentlet-progress-dialog-background);
-                border-radius: var(--agentlet-progress-dialog-border-radius);
-                box-shadow: var(--agentlet-progress-dialog-box-shadow);
-                padding: 0;
-                min-width: 400px;
-                max-width: 90vw;
-                font-family: var(--agentlet-font-family);
-                z-index: 1000003;
-                animation: dialogFadeIn 0.2s ease-out;
-                overflow: hidden;
-            }
-            
-            .agentlet-progress-dialog-header {
-                background: var(--agentlet-progress-dialog-header-background);
-                color: var(--agentlet-progress-dialog-header-text-color);
-                padding: 16px 20px;
-                border-radius: var(--agentlet-progress-dialog-border-radius) var(--agentlet-progress-dialog-border-radius) 0 0;
-                font-weight: 600;
-                font-size: 16px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            
-            .agentlet-progress-dialog-content {
-                padding: var(--agentlet-progress-dialog-content-padding);
-            }
-            
-            .agentlet-progress-message {
-                color: var(--agentlet-progress-message-color);
-                font-size: var(--agentlet-progress-message-font-size);
-                text-align: var(--agentlet-progress-message-text-align);
-                min-height: var(--agentlet-progress-message-min-height);
-                margin-bottom: var(--agentlet-progress-message-margin-bottom);
-            }
-            
-            .agentlet-progress-bar-container {
-                width: 100%;
-                height: var(--agentlet-progress-bar-container-height);
-                border-radius: var(--agentlet-progress-bar-container-border-radius);
-                overflow: hidden;
-                margin-bottom: var(--agentlet-progress-bar-container-margin-bottom);
-                position: relative;
-            }
-            
-            .agentlet-progress-bar {
-                width: 0%;
-                height: 100%;
-                border-radius: var(--agentlet-progress-bar-border-radius);
-                transition: var(--agentlet-progress-bar-transition);
-                position: relative;
-            }
-            
-            .agentlet-progress-info {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: var(--agentlet-progress-info-font-size);
-                color: var(--agentlet-progress-info-color);
-                margin-bottom: var(--agentlet-progress-info-margin-bottom);
-            }
-            
-            .agentlet-progress-percentage {
-                font-weight: 600;
-            }
-            
-            .agentlet-progress-eta {
-                font-style: italic;
-            }
-            
-            .agentlet-progress-step {
-                text-align: center;
-                font-weight: 500;
-            }
-            
-            .agentlet-progress-actions {
-                margin-top: var(--agentlet-progress-actions-margin-top);
-                display: flex;
-                gap: var(--agentlet-progress-actions-gap);
-                justify-content: flex-end;
-            }
-            
-            @keyframes dialogFadeIn {
-                from {
-                    opacity: 0;
-                    transform: scale(0.9) translateY(-10px);
-                }
-                to {
-                    opacity: 1;
-                    transform: scale(1) translateY(0);
-                }
-            }
-            
-            @keyframes agentlet-progress-animate {
-                0% { background-position: 0% 50%; }
-                100% { background-position: 200% 50%; }
-            }
-            
-            @keyframes agentlet-dialog-fadein {
-                from { opacity: 0; transform: scale(0.9); }
-                to { opacity: 1; transform: scale(1); }
-            }
-            
-            /* Image Overlay Styles */
-            .agentlet-image-overlay {
-                position: fixed;
-                bottom: var(--agentlet-image-overlay-bottom);
-                right: var(--agentlet-image-overlay-right);
-                width: var(--agentlet-image-overlay-width);
-                height: var(--agentlet-image-overlay-height);
-                z-index: var(--agentlet-image-overlay-z-index);
-                cursor: pointer;
-                transition: var(--agentlet-image-overlay-transition);
-                overflow: hidden;
-            }
-            
-            .agentlet-image-overlay:hover {
-                transform: scale(var(--agentlet-image-overlay-hover-scale));
-            }
-            
-            .agentlet-image-overlay img {
-                width: 100%;
-                height: 100%;
-                object-fit: contain;
-                display: block;
-            }
-            
-            /* Background scroll blocking when dialogs are open */
-            body.agentlet-dialog-open {
-                overflow: hidden !important;
-                position: fixed !important;
-                width: 100% !important;
-                height: 100% !important;
-            }
-            
-            /* Ensure dialog overlays and content remain scrollable */
-            .agentlet-dialog-overlay,
-            .agentlet-info-dialog {
-                overflow-y: auto !important;
-            }
-            
-            .agentlet-dialog-content {
-                overflow-y: auto !important;
-                max-height: calc(100vh - 120px) !important;
-            }
-        `;
-        
-        $(document.head).append(style);
-    }
-
-    /**
      * Regenerate styles with updated theme
      */
     regenerateStyles() {
-        this.injectStyles();
+        this.styleInjector.regenerateStyles();
         this.eventBus.emit('ui:stylesRegenerated');
-        console.log('🎨 Styles regenerated with updated theme');
+    }
+
+    /**
+     * Show the UI (delegate to UIManager)
+     */
+    show() {
+        if (this.uiManager) {
+            this.uiManager.show();
+        }
+    }
+
+    /**
+     * Hide the UI (delegate to UIManager)
+     */
+    hide() {
+        if (this.uiManager) {
+            this.uiManager.hide();
+        }
+    }
+
+    /**
+     * Minimize the UI (delegate to UIManager)
+     */
+    minimize() {
+        if (this.uiManager) {
+            this.uiManager.minimize();
+        }
+    }
+
+    /**
+     * Maximize the UI (delegate to UIManager)
+     */
+    maximize() {
+        if (this.uiManager) {
+            this.uiManager.maximize();
+        }
+    }
+
+    /**
+     * Setup base UI (delegate to UIManager) - kept for compatibility
+     */
+    setupBaseUI() {
+        if (this.uiManager) {
+            return this.uiManager.setupBaseUI();
+        }
+    }
+
+    /**
+     * Finalize global access with actual UI references after UI creation
+     */
+    finalizeGlobalAccess() {
+        // Ensure window.agentlet.ui exists and merge with actual DOM references
+        if (window.agentlet && window.agentlet.ui) {
+            // Merge the actual DOM references created by UIManager
+            Object.assign(window.agentlet.ui, this.ui);
+        }
     }
 
     /**
@@ -2862,188 +909,25 @@ class AgentletCore {
     getPerformanceMetrics() {
         return {
             core: this.performanceMetrics,
-            moduleLoader: this.moduleLoader.getLoadingMetrics(),
-            modules: Array.from(this.moduleLoader.modules.values()).map(module => ({
+            moduleRegistry: this.moduleRegistry.getStatistics(),
+            modules: Array.from(this.moduleRegistry.modules.values()).map(module => ({
                 name: module.name,
                 metrics: module.performanceMetrics || {}
             }))
         };
     }
 
-    /**
-     * UI control methods
-     */
-    show() {
-        if (this.ui.container) {
-            this.ui.container.style.display = 'flex';
-        }
-    }
 
-    hide() {
-        if (this.ui.container) {
-            this.ui.container.style.display = 'none';
-        }
-    }
 
-    minimize() {
-        if (!this.isMinimized) {
-            this.toggleCollapse();
-        }
-    }
-
-    maximize() {
-        if (this.isMinimized) {
-            this.toggleCollapse();
-        }
-    }
-
-    /**
-     * Resize panel to a preset size or custom width
-     * @param {string|number} size - 'small', 'medium', 'large', or width in pixels
-     */
-    resizePanel(size) {
-        if (!this.config.resizablePanel) {
-            console.warn('Panel resizing is disabled');
-            return;
-        }
-
-        let targetWidth;
-        
-        if (typeof size === 'string') {
-            switch (size.toLowerCase()) {
-                case 'small':
-                    targetWidth = this.config.minimumPanelWidth;
-                    break;
-                case 'medium':
-                    targetWidth = Math.max(480, this.config.minimumPanelWidth);
-                    break;
-                case 'large':
-                    targetWidth = Math.max(640, this.config.minimumPanelWidth);
-                    break;
-                default:
-                    console.warn(`Unknown panel size: ${size}. Use 'small', 'medium', 'large', or a numeric width.`);
-                    return;
-            }
-        } else if (typeof size === 'number') {
-            targetWidth = Math.max(size, this.config.minimumPanelWidth);
-        } else {
-            console.warn('Invalid size parameter. Use "small", "medium", "large", or a numeric width.');
-            return;
-        }
-
-        this.setPanelWidth(targetWidth);
-    }
-
-    /**
-     * Set panel width to a specific value
-     * @param {number} width - Width in pixels
-     */
-    setPanelWidth(width) {
-        if (!this.config.resizablePanel) {
-            console.warn('Panel resizing is disabled');
-            return;
-        }
-
-        if (typeof width !== 'number' || width < this.config.minimumPanelWidth) {
-            console.warn(`Invalid width. Must be a number >= ${this.config.minimumPanelWidth}`);
-            return;
-        }
-
-        const container = this.ui.container;
-        if (!container) {
-            console.warn('Panel container not found');
-            return;
-        }
-
-        container.style.width = `${width}px`;
-        
-        // Update CSS custom property for consistent theming
-        document.documentElement.style.setProperty('--agentlet-panel-width', `${width}px`);
-        
-        // Update toggle button position if it exists
-        const toggleButton = document.getElementById('agentlet-toggle');
-        if (toggleButton && !this.isMinimized) {
-            toggleButton.style.right = `${width}px`;
-        }
-        
-        // Emit single resize complete event
-        this.eventBus.emit('panel:resizeComplete', { width });
-        
-        // Save panel width for the current module if env vars are available
-        this.savePanelWidthForModule(width);
-        
-        console.log(`Panel resized to ${width}px`);
-    }
-
-    /**
-     * Get current panel width
-     * @returns {number} Current panel width in pixels
-     */
-    getPanelWidth() {
-        const container = this.ui.container;
-        if (!container) {
-            return parseInt(this.config.theme.panelWidth) || this.config.minimumPanelWidth;
-        }
-        return container.offsetWidth;
-    }
-
-    /**
-     * Save panel width for the current module in environment variables
-     * @param {number} width - Width in pixels to save
-     */
-    savePanelWidthForModule(width) {
-        if (!this.envManager || !this.moduleLoader.activeModule) {
-            return;
-        }
-
-        const moduleName = this.moduleLoader.activeModule.name;
-        if (!moduleName) {
-            return;
-        }
-
-        const envKey = `panel_width_${moduleName}`;
-        this.envManager.set(envKey, width.toString());
-        console.log(`Saved panel width ${width}px for module '${moduleName}'`);
-    }
-
-    /**
-     * Restore panel width for a specific module from environment variables
-     * @param {Object} activeModule - The module to restore width for
-     */
-    restorePanelWidthForModule(activeModule) {
-        if (!this.envManager || !activeModule || !activeModule.name) {
-            return;
-        }
-
-        // Skip restoration only if currently minimized (not just if it started minimized)
-        if (this.isMinimized) {
-            return;
-        }
-
-        const moduleName = activeModule.name;
-        const envKey = `panel_width_${moduleName}`;
-        const savedWidth = this.envManager.get(envKey);
-
-        if (savedWidth) {
-            const width = parseInt(savedWidth);
-            if (!isNaN(width) && width >= this.config.minimumPanelWidth) {
-                // Use setTimeout to ensure UI is ready
-                setTimeout(() => {
-                    this.setPanelWidth(width);
-                    console.log(`Restored panel width ${width}px for module '${moduleName}'`);
-                }, 50);
-            }
-        }
-    }
 
     /**
      * Cleanup method
      */
     async cleanup() {
         try {
-            // Cleanup active module
-            if (this.moduleLoader.activeModule) {
-                await this.moduleLoader.activeModule.cleanup();
+            // Cleanup module registry
+            if (this.moduleRegistry) {
+                await this.moduleRegistry.cleanup();
             }
             
             // Cleanup managers
@@ -3066,23 +950,19 @@ class AgentletCore {
             }
             
             // Remove UI
-            const $ = window.agentlet.$;
             const container = this.ui.container;
             
-            if (container) $(container).remove();
-            $('#agentlet-toggle').remove();
-            $('#agentlet-core-styles').remove();
+            if (container) container.remove();
+            const toggleButton = document.getElementById('agentlet-toggle');
+            if (toggleButton) toggleButton.remove();
+            const coreStyles = document.getElementById('agentlet-core-styles');
+            if (coreStyles) coreStyles.remove();
             
             // Remove image overlay if present
             this.hideImageOverlay();
             
-            // Reset initialization flag and clear module state for clean reload
+            // Reset initialization flag
             this.initialized = false;
-            if (this.moduleLoader) {
-                // Cleanup active module and clear registry to force re-registration
-                this.moduleLoader.activeModule = null;
-                this.moduleLoader.modules.clear();
-            }
             
             // Clear module loading flags to allow re-registration
             delete window.AgentletDesignerLoaded;
@@ -3348,7 +1228,7 @@ class AgentletCore {
                 if (asteriskCount > value.length * 0.7) { // If more than 70% are asterisks, treat as hidden
                     return '*'.repeat(60); // Force exactly 60 asterisks
                 } else if (value.length > 60) {
-                    return value.substring(0, 60) + '…'; // Regular truncate with ellipsis
+                    return `${value.substring(0, 60)  }…`; // Regular truncate with ellipsis
                 }
             }
             return value;
@@ -3414,50 +1294,27 @@ class AgentletCore {
         }
     }
 
-    /**
-     * Load environment variables from storage
-     */
-    loadEnvVarsFromStorage() {
-        if (!this.envManager) {
-            return; // Environment variables disabled
-        }
-        
-        const storedVars = this.storageManager.get('agentlet-env-vars');
-        if (storedVars) {
-            try {
-                const vars = JSON.parse(storedVars);
-                Object.entries(vars).forEach(([key, value]) => {
-                    this.envManager.set(key, value);
-                });
-                this.refreshEnvVarsDialog();
-                console.log('🔧 Environment variables loaded from storage');
-            } catch (error) {
-                console.error('Error loading environment variables from storage:', error);
-            }
-        }
-    }
 }
 
 export default AgentletCore;
 
 // Named exports for better library usage
 export { AgentletCore };
-export { default as BaseModule } from './core/BaseModule.js';
-export { default as BaseSubmodule } from './core/BaseSubmodule.js';
-export { default as ModuleLoader } from './plugin-system/ModuleLoader.js';
+export { default as Module } from './core/Module.js';
+export { default as ModuleRegistry } from './core/ModuleRegistry.js';
 
 // Export utility classes for external use
-export { default as ElementSelector } from './utils/ElementSelector.js';
-export { default as Dialog } from './utils/Dialog.js';
-export { default as MessageBubble } from './utils/MessageBubble.js';
-export { default as ScreenCapture } from './utils/ScreenCapture.js';
-export { default as ScriptInjector } from './utils/ScriptInjector.js';
-export { default as EnvManager, BaseEnvironmentVariablesManager, LocalStorageEnvironmentVariablesManager } from './utils/EnvManager.js';
-export { default as CookieManager } from './utils/CookieManager.js';
-export { default as StorageManager } from './utils/StorageManager.js';
-export { default as AuthManager } from './utils/AuthManager.js';
-export { default as FormExtractor } from './utils/FormExtractor.js';
-export { default as FormFiller } from './utils/FormFiller.js';
-export { default as TableExtractor } from './utils/TableExtractor.js';
-export { default as PDFProcessor } from './utils/PDFProcessor.js';
-export { default as ShortcutManager } from './utils/ShortcutManager.js';
+export { default as ElementSelector } from './utils/ui/ElementSelector.js';
+export { default as Dialog } from './utils/ui/Dialog.js';
+export { default as MessageBubble } from './utils/ui/MessageBubble.js';
+export { default as ScreenCapture } from './utils/ui/ScreenCapture.js';
+export { default as ScriptInjector } from './utils/system/ScriptInjector.js';
+export { default as EnvManager, BaseEnvironmentVariablesManager, LocalStorageEnvironmentVariablesManager } from './utils/config-persistence/EnvManager.js';
+export { default as CookieManager } from './utils/config-persistence/CookieManager.js';
+export { default as StorageManager } from './utils/config-persistence/StorageManager.js';
+export { default as AuthManager } from './utils/system/AuthManager.js';
+export { default as FormExtractor } from './utils/data-processing/FormExtractor.js';
+export { default as FormFiller } from './utils/data-processing/FormFiller.js';
+export { default as TableExtractor } from './utils/data-processing/TableExtractor.js';
+export { default as PDFProcessor } from './utils/ai/PDFProcessor.js';
+export { default as ShortcutManager } from './utils/ui/ShortcutManager.js';

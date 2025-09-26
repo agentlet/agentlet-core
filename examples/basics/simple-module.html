@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Module Example - Agentlet Core</title>
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <script src="../shared/console-utils.js"></script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../../index.html">Examples</a> &gt;
+        basics &gt;
+        <span>simple-module</span>
+    </nav>
+
+    <div class="layout-container">
+        <main class="main-content">
+            <h1>Simple module example</h1>
+
+            <div class="highlight-box">
+                <h3>What this example shows</h3>
+                <p>How to create and register a simple agentlet module using the simplified Module API.</p>
+            </div>
+
+            <section>
+                <h2>1. Create a simple module</h2>
+                <div class="code-block">
+                    <pre><code class="language-javascript">// Create a simple agentlet module
+class SimpleModule extends window.agentlet.Module {
+    constructor() {
+        super({
+            name: 'simple-demo',
+            patterns: ['*'],  // Match all URLs
+            description: 'A simple demonstration module'
+        });
+    }
+    
+    async init() {
+        console.log('✅ Simple module initialized!');
+    }
+    
+    async activate(context) {
+        console.log('🔄 Simple module activated!', context);
+        // Add custom styling
+        this.injectStyles(`
+            .simple-module-banner {
+                background: linear-gradient(45deg, #007bff, #6610f2);
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+                margin: 10px 0;
+                text-align: center;
+            }
+        `);
+    }
+    
+    async cleanup() {
+        console.log('🧹 Simple module cleaned up!');
+    }
+    
+    getContent() {
+        return `
+            &lt;div class="simple-module-banner"&gt;
+                &lt;h3&gt;🎉 Simple Module Active!&lt;/h3&gt;
+                &lt;p&gt;This module matches all URLs and shows custom content.&lt;/p&gt;
+                &lt;button onclick="window.agentlet.utils.MessageBubble.success('Hello from Simple Module!')"&gt;
+                    Say Hello
+                &lt;/button&gt;
+            &lt;/div&gt;
+        `;
+    }
+}</code></pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>2. Register the module</h2>
+                <div class="code-block">
+                    <pre><code class="language-javascript">// Register the module with Agentlet
+window.agentlet.modules.register(new SimpleModule());</code></pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>3. Try it out</h2>
+                <div class="controls">
+                    <button id="initializeBtn" class="btn btn-primary">
+                        Initialize agentlet & register module
+                    </button>
+                    <button id="showModulesBtn" class="btn btn-secondary" disabled>
+                        Show registered modules
+                    </button>
+                    <button id="testEventsBtn" class="btn btn-secondary" disabled>
+                        Test module events
+                    </button>
+                </div>
+            </section>
+
+            <section>
+                <h2>4. Module lifecycle</h2>
+                <div class="info-box">
+                    <h4>Simplified 3-hook lifecycle:</h4>
+                    <ol>
+                        <li><strong>init()</strong> - Called once when module is first loaded</li>
+                        <li><strong>activate(context)</strong> - Called when URL matches patterns</li>
+                        <li><strong>cleanup(context)</strong> - Called when module is deactivated</li>
+                    </ol>
+                </div>
+            </section>
+
+            <section>
+                <h2>API reference</h2>
+                <div class="api-reference">
+                    <h4>Module creation:</h4>
+                    <code>class MyModule extends window.agentlet.Module</code>
+
+                    <h4>Module registration:</h4>
+                    <code>window.agentlet.modules.register(new MyModule())</code>
+                    
+                    <h4>Module management:</h4>
+                    <ul>
+                        <li><code>window.agentlet.modules.get(name)</code> - Get module by name</li>
+                        <li><code>window.agentlet.modules.getAll()</code> - Get all module names</li>
+                        <li><code>window.agentlet.modules.unregister(name)</code> - Remove module</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <aside class="console-panel">
+            <div class="console-header">
+                <h3>📋 Console & Status</h3>
+            </div>
+            <div id="console-output" class="console-output"></div>
+            <div id="status-display" class="status-display">
+                <div class="status-item">
+                    <span class="status-label">Agentlet Status:</span>
+                    <span id="agentlet-status" class="status-value">Not loaded</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Active Module:</span>
+                    <span id="active-module" class="status-value">None</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Total Modules:</span>
+                    <span id="total-modules" class="status-value">0</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        let agentletCore = null;
+
+        // Custom console functions for this example's layout
+        function log(message, type = 'info') {
+            const consoleElement = document.getElementById('console-output');
+            if (consoleElement) {
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+                consoleElement.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+                consoleElement.scrollTop = consoleElement.scrollHeight;
+            }
+        }
+
+        function updateStatus(message, type = 'info') {
+            // For this example, just show in console - the status elements are specific to this layout
+            log(`Status: ${message}`, type);
+        }
+
+        // Load Agentlet script dynamically
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                // Remove existing script if present
+                const existingScript = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existingScript) {
+                    existingScript.remove();
+                }
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    resolve();
+                };
+
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Make sure you ran "npm run build" first.');
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+
+                document.head.appendChild(script);
+            });
+        }
+
+        // Initialize example
+        document.getElementById('initializeBtn').onclick = async function() {
+            try {
+                log('🚀 Loading Agentlet Core...');
+
+                // Dynamically load Agentlet Core script
+                await loadAgentletScript();
+
+                // Access AgentletCore constructor
+                let AgentletConstructor = null;
+                if (window.AgentletCore) {
+                    AgentletConstructor = window.AgentletCore.default;
+                }
+
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('🚀 Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({
+                    debugMode: true,
+                    startMinimized: false
+                });
+
+                log('⚙️ Starting initialization...');
+                await agentletCore.init();
+                
+                updateStatus('Agentlet Core loaded successfully', 'success');
+                log('✅ Agentlet Core initialized!', 'success');
+                
+                // Create and register the simple module
+                class SimpleModule extends window.agentlet.Module {
+                    constructor() {
+                        super({
+                            name: 'simple-demo',
+                            patterns: ['*'],
+                            description: 'A simple demonstration module'
+                        });
+                    }
+                    
+                    async init() {
+                        log('✅ Simple module initialized!', 'success');
+                    }
+
+                    async activate(context) {
+                        log('🔄 Simple module activated!', 'info');
+                        updateStatus(`Active module: ${this.name}`, 'info');
+                        
+                        this.injectStyles(`
+                            .simple-module-banner {
+                                background: linear-gradient(45deg, #007bff, #6610f2);
+                                color: white;
+                                padding: 10px;
+                                border-radius: 5px;
+                                margin: 10px 0;
+                                text-align: center;
+                            }
+                        `);
+                    }
+                    
+                    async cleanup() {
+                        log('🧹 Simple module cleaned up!', 'info');
+                        updateStatus('Simple module cleaned up', 'info');
+                    }
+                    
+                    getContent() {
+                        return `
+                            <div class="simple-module-banner">
+                                <h3>🎉 Simple Module Active!</h3>
+                                <p>This module matches all URLs and shows custom content.</p>
+                                <button onclick="window.agentlet.utils.MessageBubble.success('Hello from Simple Module!')">
+                                    Say Hello
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+                
+                // Register the module
+                window.agentlet.modules.register(new SimpleModule());
+
+                const moduleCount = window.agentlet.modules.getAll().length;
+                updateStatus(`${moduleCount} module(s) registered successfully`, 'success');
+                log(`📦 Module registered: ${window.agentlet.modules.getAll()[0]}`, 'success');
+
+                // Enable other buttons
+                document.getElementById('showModulesBtn').disabled = false;
+                document.getElementById('testEventsBtn').disabled = false;
+                document.getElementById('initializeBtn').disabled = true;
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+
+        document.getElementById('showModulesBtn').onclick = function() {
+            const modules = window.agentlet.modules.getAll();
+            const activeModule = window.agentlet.moduleRegistry.activeModule;
+
+            log(`📦 Registered modules: ${modules.length}`, 'info');
+            modules.forEach(name => {
+                const module = window.agentlet.modules.get(name);
+                const isActive = activeModule && activeModule.name === name;
+                log(`  • ${name} ${isActive ? '(ACTIVE)' : ''}`, 'info');
+            });
+            updateStatus(`Showing ${modules.length} registered modules`, 'info');
+        };
+
+        document.getElementById('testEventsBtn').onclick = function() {
+            const module = window.agentlet.modules.get('simple-demo');
+            if (module) {
+                // Test module events
+                module.emit('test-event', { message: 'Hello from event system!' });
+                log('📡 Test event emitted', 'success');
+
+                // Show module metadata
+                const metadata = module.getMetadata();
+                log('📋 Module metadata:', 'info');
+                log(JSON.stringify(metadata, null, 2), 'info');
+                updateStatus('Module events tested successfully', 'success');
+            } else {
+                log('❌ Module not found', 'error');
+                updateStatus('Module not found', 'error');
+            }
+        };
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📦 Simple Module example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → basics → hello-world
+                </div>
+
+                <h1>Hello world</h1>
+
+                <p>The simplest possible Agentlet Core example. It demonstrates basic initialization and panel creation.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Loading Agentlet Core from the dist folder</li>
+                        <li>Basic configuration setup</li>
+                        <li>Panel initialization and display</li>
+                        <li>Simple content rendering</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Controls</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet</button>
+                    <button onclick="checkStatus()">Check status</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Simple integration code:</h3>
+                    <p>This is all the code you need to add Agentlet Core to any webpage:</p>
+                    <div class="code-block">
+                        <h4>1. Configuration (Optional)</h4>
+                        <pre><code class="language-javascript">// Configure before loading (optional)
+window.agentletConfig = {
+    debugMode: true,
+    theme: 'default'
+};</code></pre>
+                        
+                        <h4>2. Load and Initialize</h4>
+                        <pre><code class="language-javascript">// Load the Agentlet Core script
+const script = document.createElement('script');
+script.src = 'path/to/agentlet-core.js';
+script.onload = () => {
+    // Create and initialize instance
+    const agentlet = new window.AgentletCore.default(window.agentletConfig);
+    agentlet.init().then(() => {
+        console.log('✅ Agentlet Core ready!');
+        // Now window.agentlet contains all utilities
+    });
+};
+document.head.appendChild(script);</code></pre>
+
+                        <h4>3. Use the APIs</h4>
+                        <pre><code class="language-javascript">// Access forms, tables, dialogs, and more
+window.agentlet.forms.extract(document.querySelector('form'));
+window.agentlet.utils.Dialog.info('Hello from Agentlet!');
+window.agentlet.tables.extract(document.querySelector('table'));</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+                
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize Agentlet" to start the demo.
+                </div>
+                
+                <h3>📈 Statistics</h3>
+                <div class="stats-section" id="stats">
+                    <div>Messages logged: <span id="messageCount">0</span></div>
+                    <div>Errors: <span id="errorCount">0</span></div>
+                    <div>Warnings: <span id="warningCount">0</span></div>
+                    <div>Last action: <span id="lastAction">None</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <script>
+        let agentletInstance = null;
+        
+        // Configure Agentlet before loading
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default'
+        };
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Starting Agentlet Core initialization...');
+
+                // Check if already loaded
+                if (window.agentlet) {
+                    log('⚠️ Agentlet Core already loaded, cleaning up first...', 'warning');
+                    if (typeof window.agentlet.cleanup === 'function') {
+                        await window.agentlet.cleanup();
+                    }
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Dynamically load Agentlet Core
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Try multiple patterns to access AgentletCore constructor
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('🚀 Creating AgentletCore instance...');
+                            agentletInstance = new AgentletConstructor(window.agentletConfig);
+                            
+                            log('⚙️ Starting initialization...');
+                            agentletInstance.init().then(() => {
+                                log('✅ Agentlet Core initialized successfully', 'success');
+                                log(`📊 Available APIs: ${Object.keys(window.agentlet || {}).join(', ')}`);
+                                updateStatus('Agentlet Core loaded successfully! Panel should be visible on the right.', 'success');
+                                setButtonLoading('initBtn', false);
+                            }).catch(error => {
+                                log(`❌ Initialization failed: ${error.message}`, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                            
+                        } catch (error) {
+                            log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore constructor not available', 'error');
+                        log(`🔍 Available in window.AgentletCore: ${Object.keys(window.AgentletCore || {}).join(', ')}`);
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core. Make sure you ran "npm run build" first.', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                updateStatus('Initialization error: ' + error.message, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        function checkStatus() {
+            log('🔍 Checking Agentlet status...');
+            
+            // Check for AgentletCore class
+            if (window.AgentletCore) {
+                log('✅ AgentletCore class is available', 'success');
+            } else {
+                log('❌ AgentletCore class not found', 'error');
+            }
+            
+            // Check for agentlet instance
+            if (window.agentlet) {
+                log('✅ Agentlet instance is loaded', 'success');
+                log(`📦 Version: ${window.agentlet.version || 'unknown'}`);
+                log(`🎛️ Panel visible: ${document.getElementById('agentlet-container') ? 'Yes' : 'No'}`);
+                log(`⚙️ Configuration: ${JSON.stringify(window.agentletConfig)}`);
+                
+                // Check available utilities
+                const utils = window.agentlet.utils || {};
+                log(`🛠️ Available utilities: ${Object.keys(utils).join(', ') || 'none'}`);
+                
+                // Check initialized state
+                log(`🔄 Initialized: ${window.agentlet.initialized || false}`);
+                
+                updateStatus('Agentlet Core is running correctly', 'success');
+            } else if (agentletInstance) {
+                log('⚠️ AgentletCore instance created but window.agentlet not available yet', 'warning');
+                log(`📋 Instance state: ${agentletInstance.initialized ? 'initialized' : 'not initialized'}`);
+                updateStatus('Agentlet instance created but not fully initialized', 'warning');
+            } else {
+                log('❌ No Agentlet instance found', 'error');
+                
+                // Check what's available in window
+                const agentletRelated = Object.keys(window).filter(k => k.toLowerCase().includes('agent'));
+                if (agentletRelated.length > 0) {
+                    log(`🔍 Found agentlet-related objects: ${agentletRelated.join(', ')}`);
+                } else {
+                    log('🔍 No agentlet-related objects found in window');
+                }
+                
+                updateStatus('Agentlet Core not initialized yet', 'warning');
+            }
+        }
+
+        // Initialize when page loads (optional)
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Hello World example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>

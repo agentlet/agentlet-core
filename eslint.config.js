@@ -35,6 +35,9 @@ export default [
                 Node: 'readonly',
                 NodeFilter: 'readonly',
                 CSS: 'readonly',
+                File: 'readonly',
+                FileReader: 'readonly',
+                requestAnimationFrame: 'readonly',
                 
                 // Node.js environment
                 process: 'readonly',
@@ -46,9 +49,6 @@ export default [
                 require: 'readonly',
                 exports: 'readonly',
                 
-                // jQuery
-                '$': 'readonly',
-                'jQuery': 'readonly',
                 
                 // Chrome extension APIs
                 'chrome': 'readonly',

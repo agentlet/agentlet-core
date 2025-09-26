@@ -2,7 +2,7 @@
     'use strict';
     
     // Define the module class
-    class {{pascalCase name}}Agentlet extends window.agentlet.BaseModule {
+    class {{pascalCase name}}Agentlet extends window.agentlet.Module {
         constructor() {
             super({
                 name: '{{kebabCase name}}',
@@ -17,7 +17,6 @@
         
         async initModule() {
             console.log(`Initializing {{name}} agentlet`);
-            window.agentlet.refreshjQuery();
             
             // Custom initialization logic goes here
             // Example: Setup event listeners, configure settings, etc.
@@ -100,15 +99,11 @@
         // You can also override the showSettings() method to show a custom settings dialog
     }
 
-    // Create and register the module instance
-    const moduleInstance = new {{pascalCase name}}Agentlet();
-    
-    // Make the module available globally for ScriptInjector to find
-    window.{{camelCase name}}AgentletModule = moduleInstance;
+    // Make the module class available globally for registry to instantiate
+    window.{{camelCase name}}AgentletModule = {{pascalCase name}}Agentlet;
     
     // Also expose the action function globally
     window.{{camelCase name}}AgentletAction = function(action) {
-        const $ = window.agentlet?.$;
         const MessageBubble = window.agentlet?.utils?.MessageBubble;
         const Dialog = window.agentlet?.utils?.Dialog;
         const ElementSelector = window.agentlet?.utils?.ElementSelector;
@@ -349,10 +344,9 @@
                                         
                                         // Insert preview into dialog
                                         setTimeout(() => {
-                                            const $ = window.agentlet.$;
-                                            const messageEl = $('#agentlet-info-dialog div div')[0];
+                                            const messageEl = document.querySelector('#agentlet-info-dialog div div');
                                             if (messageEl) {
-                                                const previewContainer = $(messageEl).find('div')[0];
+                                                const previewContainer = messageEl.querySelector('div');
                                                 if (previewContainer) {
                                                     previewContainer.appendChild(preview);
                                                 }
@@ -385,8 +379,7 @@
                         }
                         
                         // Add visual indicator to selected element
-                        const $ = window.agentlet.$;
-                        const indicator = $('<div>')[0];
+                        const indicator = document.createElement('div');
                         indicator.style.cssText = `
                             position: absolute;
                             left: ${info.position.x}px;
@@ -401,8 +394,8 @@
                         `;
                         
                         // Add CSS animation
-                        if (!$('#agentlet-selector-animation').length) {
-                            const style = $('<style>')[0];
+                        if (!document.getElementById('agentlet-selector-animation')) {
+                            const style = document.createElement('style');
                             style.id = 'agentlet-selector-animation';
                             style.textContent = `
                                 @keyframes pulse {
@@ -411,18 +404,18 @@
                                     100% { opacity: 1; transform: scale(1); }
                                 }
                             `;
-                            $('head').append(style);
+                            document.head.appendChild(style);
                         }
                         
-                        $('body').append(indicator);
+                        document.body.appendChild(indicator);
                         
                         // Remove indicator after 10 seconds or when dialog closes
-                        const removeIndicator = () => $(indicator).remove();
+                        const removeIndicator = () => indicator.remove();
                         setTimeout(removeIndicator, 10000);
                         
                         // Also remove when any dialog closes
                         const checkForDialog = setInterval(() => {
-                            if (!$('#agentlet-info-dialog').length) {
+                            if (!document.getElementById('agentlet-info-dialog')) {
                                 removeIndicator();
                                 clearInterval(checkForDialog);
                             }
@@ -455,6 +448,6 @@
         }
     };
     
-    // Return the module instance for ScriptInjector
-    return moduleInstance;
+    // Return the module class for ScriptInjector
+    return {{pascalCase name}}Agentlet;
 })();

@@ -2,34 +2,6 @@
  * Tests for AgentletCore main application (index.js)
  */
 
-// Mock jQuery
-jest.mock('jquery', () => {
-  const mockElement = {
-    style: {},
-    classList: { add: jest.fn(), remove: jest.fn(), contains: jest.fn(), toggle: jest.fn() },
-    appendChild: jest.fn(),
-    removeChild: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    setAttribute: jest.fn(),
-    getAttribute: jest.fn(),
-    innerHTML: '',
-    textContent: '',
-    id: '',
-    onclick: null,
-    remove: jest.fn()
-  };
-
-  const mockJQuery = jest.fn(() => {
-    const arr = [mockElement];
-    arr.remove = jest.fn();
-    arr.append = jest.fn();
-    return arr;
-  });
-  mockJQuery.noConflict = jest.fn(() => mockJQuery);
-  mockJQuery.fn = {};
-  return mockJQuery;
-});
 
 import AgentletCore from '../src/index.js';
 
@@ -85,7 +57,7 @@ describe('AgentletCore', () => {
       expect(agentlet.envManager).toBeDefined();
       expect(agentlet.cookieManager).toBeDefined();
       expect(agentlet.storageManager).toBeDefined();
-      expect(agentlet.moduleLoader).toBeDefined();
+      expect(agentlet.moduleRegistry).toBeDefined();
     });
 
     test('should set up global access', () => {
@@ -157,7 +129,12 @@ describe('AgentletCore', () => {
     });
 
     test('should show and hide UI', () => {
-      agentlet.ui.container = { style: {} };
+      // Mock the UI container
+      const mockContainer = { style: {} };
+      agentlet.ui.container = mockContainer;
+      
+      // Mock the UIManager methods to ensure they work with our mock container
+      agentlet.uiManager.ui = agentlet.ui;
       
       agentlet.show();
       expect(agentlet.ui.container.style.display).toBe('flex');
@@ -167,11 +144,14 @@ describe('AgentletCore', () => {
     });
 
     test('should toggle minimize state', () => {
-      agentlet.ui.container = { style: {} };
+      // Mock the UI container  
+      const mockContainer = { style: {} };
+      agentlet.ui.container = mockContainer;
       agentlet.isMinimized = false;
       
-      // Ensure jQuery is available for this test
-      window.agentlet.$ = window.agentlet.$ || jest.fn(() => ({ 0: null, length: 0 }));
+      // Ensure UIManager has the correct reference
+      agentlet.uiManager.ui = agentlet.ui;
+      
       
       agentlet.minimize();
       expect(agentlet.isMinimized).toBe(true);

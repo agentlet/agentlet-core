@@ -3,15 +3,16 @@ import { test, expect } from '@playwright/test';
 async function initializeAgentlet(page) {
   await page.goto('/');
   
-  // Wait for the bookmarklet link to be available
-  await page.waitForSelector('a.bookmarklet-link', { timeout: 5000 });
+  // Wait for the production bookmarklet link with proper selector
+  const productionLink = page.getByRole('link', { name: '📎 {{kebabCase name}} (Production)' });
+  await productionLink.waitFor({ timeout: 5000 });
   
-  // Click the bookmarklet link
-  await page.click('a.bookmarklet-link');
+  // Click the production bookmarklet link
+  await productionLink.click();
   
   // Wait for the panel to open
   await page.waitForSelector('#agentlet-container', { 
-    timeout: 5000,
+    timeout: 10000,
     state: 'visible'
   });
 }

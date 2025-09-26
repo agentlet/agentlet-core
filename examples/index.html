@@ -3,168 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentlet Core examples</title>
+    <title>Agentlet Core Examples</title>
     <link rel="icon" type="image/x-icon" href="../resources/favicons/favicon.ico">
     <link rel="stylesheet" href="shared/examples.css">
 </head>
 <body>
     <div class="container">
-        <h1>🤖 Agentlet core examples</h1>
-        
-        <p>Welcome to the agentlet core examples collection. These examples demonstrate the core functionality and features of the Agentlet framework.</p>
+        <h1>Agentlet core examples</h1>
+
+        <p>Examples demonstrating core functionality and features of the Agentlet framework.</p>
 
         <div class="status info">
-            <strong>Getting started:</strong> Run <code>npm run demo</code> in the project root to automatically build the library and start this dev server, or run <code>npm run build</code> first if you're viewing this manually.
+            <strong>Getting started:</strong> Run <code>npm run demo</code> in the project root to build the library and start this dev server. Examples won't work with file:// protocol and require a web server.
         </div>
 
-        <h2>📚 Categories</h2>
+        <h2>Examples by category</h2>
 
         <div class="examples-grid">
-            <!-- 01-basics -->
             <div class="example-section">
-                <h3>🚀 01-basics</h3>
-                <p>Foundation examples covering core concepts</p>
+                <h3>basics/</h3>
+                <p>Core concepts and fundamental usage patterns</p>
                 <ul>
-                    <li><a href="01-basics/hello-world/index.html">Hello World</a> - Basic initialization</li>
-                    <li><a href="01-basics/panel-basics/index.html">Panel Basics</a> - Panel operations & events</li>
+                    <li><a href="basics/hello-world.html">hello-world.html</a> - Basic initialization and setup</li>
+                    <li><a href="basics/panel-basics.html">panel-basics.html</a> - Panel operations and events</li>
+                    <li><a href="basics/simple-module.html">simple-module.html</a> - Creating custom modules</li>
                 </ul>
             </div>
 
-            <!-- 02-ui-components -->
             <div class="example-section">
-                <h3>💬 02-ui-components</h3>
+                <h3>ui/</h3>
                 <p>User interface components and interactions</p>
                 <ul>
-                    <li><a href="02-ui-components/dialogs/info-dialogs.html">Info Dialogs</a> - Various dialog types</li>
-                    <li><a href="02-ui-components/dialogs/input-dialogs.html">Input Dialogs</a> - Input & command prompt dialogs</li>
-                    <li><a href="02-ui-components/shortcuts/index.html">Keyboard Shortcuts</a> - Hotkeys and keyboard shortcuts</li>
-                    <li><a href="02-ui-components/highlighting/index.html">Page Highlighting</a> - Element highlighting & overlays</li>
-                    <li><em>message-bubbles/</em> - Toast notifications (coming soon)</li>
-                    <li><em>element-selector/</em> - Element selection (coming soon)</li>
+                    <li><a href="ui/dialogs.html">dialogs.html</a> - Dialogs and message bubbles (toast notifications)</li>
+                    <li><a href="ui/shortcuts.html">shortcuts.html</a> - Keyboard shortcuts and hotkeys</li>
+                    <li><a href="ui/highlighting.html">highlighting.html</a> - Element highlighting and overlays</li>
+                    <li><a href="ui/element-selection.html">element-selection.html</a> - Interactive element selection and CSS selector generation</li>
+                    <li><a href="ui/screen-capture.html">screen-capture.html</a> - Screenshot capture with fullscreen preview and download</li>
+                    <li><a href="ui/custom-styling.html">custom-styling.html</a> - Dynamic theme switching with iconic design styles</li>
+                    <li><a href="ui/custom-handle.html">custom-handle.html</a> - Custom image handle instead of default side arrow</li>
                 </ul>
             </div>
 
-            <!-- 03-forms -->
             <div class="example-section">
-                <h3>📝 03-forms</h3>
-                <p>Form extraction, filling, and automation</p>
+                <h3>data-processing/</h3>
+                <p>Form and table data extraction, processing, and automation</p>
                 <ul>
-                    <li><a href="03-forms/extraction/simple-form.html">Simple Form Extraction</a> - Basic form data extraction</li>
-                    <li><a href="03-forms/filling/auto-fill.html">Auto Fill Forms</a> - Automated form filling</li>
+                    <li><a href="data-processing/form-extraction.html">form-extraction.html</a> - Extract form structure and data</li>
+                    <li><a href="data-processing/form-filling.html">form-filling.html</a> - Automated form filling with AI support</li>
+                    <li><em>forms-with-ai.html</em> - Intelligent form filling with semantic field mapping (coming soon)</li>
+                    <li><a href="data-processing/table-extraction.html">table-extraction.html</a> - Extract table data with pagination</li>
+                    <li><a href="data-processing/table-excel-export.html">table-excel-export.html</a> - Export to Excel with SheetJS</li>
                 </ul>
             </div>
 
-            <!-- 04-tables -->
             <div class="example-section">
-                <h3>📊 04-tables</h3>
-                <p>Table data extraction and export</p>
+                <h3>ai/</h3>
+                <p>AI integration and automation capabilities</p>
                 <ul>
-                    <li><a href="04-tables/extraction/simple-table.html">Simple Table Extraction</a> - Basic table data extraction</li>
-                    <li><a href="04-tables/export/excel-export.html">Excel Export</a> - Advanced Excel export features</li>
+                    <li><a href="ai/text-prompts.html">text-prompts.html</a> - OpenAI integration with text, images, and PDFs</li>
+                    <li><em>multimodal.html</em> - Advanced multimodal AI examples (coming soon)</li>
+                    <li><em>pdf-analysis.html</em> - Dedicated PDF processing demo (coming soon)</li>
                 </ul>
             </div>
 
-            <!-- 05-ai -->
             <div class="example-section">
-                <h3>🤖 05-ai</h3>
-                <p>AI integration and automation</p>
+                <h3>config-persistence/</h3>
+                <p>Data persistence and environment management</p>
                 <ul>
-                    <li><a href="05-ai/demo/index.html">AI Integration Demo</a> - OpenAI API integration with text and images</li>
-                    <li><em>form-analysis/</em> - AI-powered form analysis (coming soon)</li>
-                    <li><em>data-insights/</em> - AI data insights (coming soon)</li>
+                    <li><em>environment.html</em> - Environment variables management (coming soon)</li>
+                    <li><em>cookies.html</em> - Cookie handling and persistence (coming soon)</li>
+                    <li><em>local-storage.html</em> - Local storage utilities (coming soon)</li>
                 </ul>
             </div>
 
-            <!-- 06-storage -->
             <div class="example-section">
-                <h3>💾 06-storage</h3>
-                <p>Data storage and environment management</p>
+                <h3>auth/</h3>
+                <p>Authentication and authorization flows</p>
                 <ul>
-                    <li><em>environment/</em> - Environment variables (coming soon)</li>
-                    <li><em>cookies/</em> - Cookie management (coming soon)</li>
-                    <li><em>local-storage/</em> - Local storage (coming soon)</li>
-                </ul>
-            </div>
-
-            <!-- 07-authentication -->
-            <div class="example-section">
-                <h3>🔐 07-authentication</h3>
-                <p>Authentication and authorization</p>
-                <ul>
-                    <li><em>oauth/</em> - OAuth integration (coming soon)</li>
-                    <li><em>token-management/</em> - Token handling (coming soon)</li>
-                    <li><em>custom-auth/</em> - Custom auth methods (coming soon)</li>
-                </ul>
-            </div>
-
-            <!-- 08-modules -->
-            <div class="example-section">
-                <h3>🧩 08-modules</h3>
-                <p>Module development and patterns</p>
-                <ul>
-                    <li><em>basic-module/</em> - Simple modules (coming soon)</li>
-                    <li><em>advanced-module/</em> - Complex modules (coming soon)</li>
-                    <li><em>module-communication/</em> - Inter-module events (coming soon)</li>
-                </ul>
-            </div>
-
-            <!-- 09-utilities -->
-            <div class="example-section">
-                <h3>🛠️ 09-utilities</h3>
-                <p>Utility functions and helpers</p>
-                <ul>
-                    <li><em>screen-capture/</em> - Screenshot utilities (coming soon)</li>
-                    <li><em>script-injection/</em> - Script injection (coming soon)</li>
-                    <li><em>data-helpers/</em> - Data processing (coming soon)</li>
-                </ul>
-            </div>
-
-            <!-- 10-customization -->
-            <div class="example-section">
-                <h3>🎨 10-customization</h3>
-                <p>Theming and styling customization</p>
-                <ul>
-                    <li><em>themes/</em> - Custom themes (coming soon)</li>
-                    <li><em>styling/</em> - Custom CSS (coming soon)</li>
-                    <li><em>branding/</em> - Corporate branding (coming soon)</li>
+                    <li><a href="auth/oauth-popup.html">oauth-popup.html</a> - OAuth popup-based authentication with mock OIDC provider</li>
                 </ul>
             </div>
         </div>
 
-        <h2>🚀 Getting started</h2>
-        
-        <ol>
-            <li>Start with <a href="01-basics/hello-world/index.html"><strong>Hello World</strong></a> to understand basic initialization</li>
-            <li>Try <a href="01-basics/panel-basics/index.html"><strong>Panel Basics</strong></a> to learn panel operations</li>
-            <li>Explore <a href="02-ui-components/dialogs/info-dialogs.html"><strong>Info Dialogs</strong></a> for UI components</li>
-            <li>Try <a href="02-ui-components/dialogs/input-dialogs.html"><strong>Input Dialogs</strong></a> including the new Command Prompt</li>
-            <li>Test <a href="02-ui-components/shortcuts/index.html"><strong>Keyboard Shortcuts</strong></a> with hotkeys-js integration</li>
-            <li>Test <a href="03-forms/extraction/simple-form.html"><strong>Form Extraction</strong></a> for data collection</li>
-            <li>Try <a href="04-tables/extraction/simple-table.html"><strong>Table Extraction</strong></a> for data export</li>
-            <li>Experiment with <a href="05-ai/demo/index.html"><strong>AI Integration</strong></a> for AI-powered automation</li>
-            <li>Build from there based on your specific needs</li>
-        </ol>
 
-        <div class="example-section">
-            <h3>📖 Tips for using examples</h3>
-            <ul>
-                <li><strong>Open developer console:</strong> Many examples log detailed information to the console</li>
-                <li><strong>Check network tab:</strong> Watch for agentlet core loading in the network tab</li>
-                <li><strong>Inspect elements:</strong> Use browser dev tools to examine generated HTML structure</li>
-                <li><strong>Try keyboard shortcuts:</strong> Many dialogs support escape key for closing</li>
-            </ul>
-        </div>
-
-        <div class="example-section">
-            <h3>🔧 Prerequisites</h3>
-            <p>Before running examples, ensure you have:</p>
-            <ul>
-                <li>Built the agentlet core library: <code>npm run build</code> (or use <code>npm run demo</code> to do this automatically)</li>
-                <li>A local web server (examples won't work with <code>file://</code> protocol) - this is done automatically when you run <code>npm run demo</code></li>
-                <li>Modern browser with JavaScript enabled</li>
-                <li>For AI examples: OpenAI API key (set in the demo interface)</li>
-            </ul>
-        </div>
     </div>
 </body>
 </html>

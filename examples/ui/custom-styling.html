@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Styling - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → ui → custom-styling
+                </div>
+
+                <h1>Custom styling</h1>
+
+                <p>This example demonstrates dynamic theme switching capabilities using Agentlet Core's theming system with iconic design styles.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Dynamic theme switching between iconic design systems</li>
+                        <li>Glass transparent theme with blur effects</li>
+                        <li>Material Design bold colors and elevation</li>
+                        <li>VS Code Dark developer-focused dark theme</li>
+                        <li>Real-time agentlet panel appearance changes</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Theme selection</h4>
+                    <button onclick="switchTheme('glass')" id="glassBtn" class="theme-btn">✨ Glass Transparent</button>
+                    <button onclick="switchTheme('material')" id="materialBtn" class="theme-btn">🎨 Material Design</button>
+                    <button onclick="switchTheme('vscode')" id="vscodeBtn" class="theme-btn">💻 VS Code Dark</button>
+                    <button onclick="switchTheme('tux')" id="tuxBtn" class="theme-btn">🐧 Tux Linux</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Theme switching API examples:</h3>
+                    <div class="code-block">
+                        <h4>Dynamic Theme Switching</h4>
+                        <pre><code class="language-javascript">// Switch to glass transparent theme
+window.agentlet.theme.switchTheme('glass');
+
+// Switch to Material Design theme
+window.agentlet.theme.switchTheme('material');
+
+// Switch to VS Code Dark theme
+window.agentlet.theme.switchTheme('vscode-dark');
+
+// Switch to Tux Linux theme
+window.agentlet.theme.switchTheme('tux');</code></pre>
+
+                        <h4>Custom Theme Configuration</h4>
+                        <pre><code class="language-javascript">// Define custom theme
+const customTheme = {
+    primaryColor: '#007AFF',
+    backgroundColor: '#FFFFFF',
+    textColor: '#000000',
+    borderRadius: '8px',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+};
+
+// Apply custom theme
+window.agentlet.theme.applyTheme(customTheme);</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console Output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo.
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <style>
+        /* Theme button styling */
+        .theme-btn {
+            margin: 5px;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .theme-btn:hover {
+            background: #f0f0f0;
+            transform: translateY(-1px);
+        }
+
+        .theme-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+
+        /* Glass Transparent Theme Overrides */
+        body.theme-glass #agentlet-container {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(40px) saturate(180%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+        }
+
+        body.theme-glass .agentlet-action-btn {
+            background: rgba(255, 255, 255, 0.2) !important;
+            backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            border-radius: 15px !important;
+            color: rgba(0, 0, 0, 0.8) !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.theme-glass .agentlet-action-btn:hover {
+            background: rgba(255, 255, 255, 0.3) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        body.theme-glass .agentlet-content {
+            background: rgba(255, 255, 255, 0.05) !important;
+            color: rgba(0, 0, 0, 0.9) !important;
+        }
+
+        body.theme-glass .agentlet-header {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(20px) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+        }
+
+        /* Glass Theme - Dialog Styling */
+        body.theme-glass .agentlet-dialog {
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(40px) saturate(180%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body.theme-glass .agentlet-dialog-header {
+            background: rgba(255, 255, 255, 0.05) !important;
+            backdrop-filter: blur(20px) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+        }
+
+
+        /* Glass Theme - Side Handle Styling */
+        body.theme-glass .agentlet-toggle {
+            background: rgba(255, 255, 255, 0.8) !important;
+            backdrop-filter: blur(20px) !important;
+            border: 2px solid rgba(255, 255, 255, 0.9) !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+            color: rgba(0, 0, 0, 0.8) !important;
+        }
+
+        body.theme-glass .agentlet-toggle:hover {
+            background: rgba(255, 255, 255, 0.95) !important;
+            transform: translateX(-2px) !important;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 1) !important;
+        }
+
+        /* Material Design Theme Overrides */
+        body.theme-material #agentlet-container {
+            background: #FFFFFF !important;
+            border: none !important;
+            border-radius: 4px !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+            elevation: 8;
+        }
+
+        body.theme-material .agentlet-action-btn {
+            background: #1976D2 !important;
+            border-radius: 4px !important;
+            border: none !important;
+            color: white !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        body.theme-material .agentlet-action-btn:hover {
+            background: #1565C0 !important;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body.theme-material .agentlet-content {
+            font-family: 'Roboto', sans-serif !important;
+            color: #212121 !important;
+        }
+
+        /* Material Design Theme - Dialog Styling */
+        body.theme-material .agentlet-dialog {
+            background: #FFFFFF !important;
+            border: none !important;
+            border-radius: 4px !important;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        body.theme-material .agentlet-dialog-header {
+            background: #1976D2 !important;
+            color: white !important;
+            border-bottom: none !important;
+        }
+
+        body.theme-material .agentlet-dialog .agentlet-action-btn {
+            background: #1976D2 !important;
+            color: white !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            border-radius: 4px !important;
+        }
+
+        /* Material Design Theme - Side Handle Styling */
+        body.theme-material .agentlet-toggle {
+            background: #1976D2 !important;
+            border: none !important;
+            border-radius: 4px !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+            color: white !important;
+        }
+
+        body.theme-material .agentlet-toggle:hover {
+            background: #1565C0 !important;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+            transform: translateX(-2px) !important;
+        }
+
+        /* VS Code Dark Theme Overrides */
+        body.theme-vscode #agentlet-container {
+            background: #1E1E1E !important;
+            border: 1px solid #3C3C3C !important;
+            border-radius: 0px !important;
+            box-shadow: none !important;
+            color: #CCCCCC !important;
+        }
+
+        body.theme-vscode .agentlet-actions {
+            background: #252526 !important;
+            border-top: 1px solid #3C3C3C !important;
+            padding: 10px !important;
+        }
+
+        body.theme-vscode .agentlet-action-btn {
+            background: #3C3C3C !important;
+            border: 1px solid #6C6C6C !important;
+            border-radius: 2px !important;
+            color: #CCCCCC !important;
+            font-family: 'Consolas', 'Monaco', monospace !important;
+        }
+
+        body.theme-vscode .agentlet-action-btn:hover {
+            background: #505050 !important;
+            color: #FFFFFF !important;
+            border-color: #808080 !important;
+        }
+
+        body.theme-vscode .agentlet-content {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            color: #CCCCCC !important;
+            background: #252526 !important;
+        }
+
+        body.theme-vscode .agentlet-header {
+            background: #2D2D30 !important;
+            color: #CCCCCC !important;
+            border-bottom: 1px solid #3C3C3C !important;
+        }
+
+        /* VS Code Dark Theme - Dialog Styling */
+        body.theme-vscode .agentlet-dialog {
+            background: #1E1E1E !important;
+            border: 1px solid #3C3C3C !important;
+            border-radius: 0px !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+            color: #CCCCCC !important;
+        }
+
+        body.theme-vscode .agentlet-dialog-header {
+            background: #2D2D30 !important;
+            color: #CCCCCC !important;
+            border-bottom: 1px solid #3C3C3C !important;
+        }
+
+        body.theme-vscode .agentlet-dialog .agentlet-actions {
+            background: #252526 !important;
+            border-top: 1px solid #3C3C3C !important;
+            padding: 10px !important;
+        }
+
+        body.theme-vscode .agentlet-dialog .agentlet-action-btn {
+            background: #3C3C3C !important;
+            border: 1px solid #6C6C6C !important;
+            color: #CCCCCC !important;
+            border-radius: 2px !important;
+            font-family: 'Consolas', 'Monaco', monospace !important;
+        }
+
+        body.theme-vscode .agentlet-dialog .agentlet-action-btn:hover {
+            background: #505050 !important;
+            color: #FFFFFF !important;
+            border-color: #808080 !important;
+        }
+
+        /* VS Code Dark Theme - Side Handle Styling */
+        body.theme-vscode .agentlet-toggle {
+            background: #0E639C !important;
+            border: 1px solid #14A085 !important;
+            border-radius: 0px !important;
+            color: #FFFFFF !important;
+            font-family: 'Consolas', 'Monaco', monospace !important;
+        }
+
+        body.theme-vscode .agentlet-toggle:hover {
+            background: #1177BB !important;
+            transform: translateX(-2px) !important;
+        }
+
+        /* Tux Linux Theme Overrides */
+        body.theme-tux #agentlet-container {
+            background: #FFFFFF !important;
+            border: 2px solid #FF6B35 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 8px 32px rgba(255, 107, 53, 0.2) !important;
+        }
+
+        body.theme-tux .agentlet-header {
+            background: url('tux.svg') no-repeat 15px center / auto 50%, linear-gradient(135deg, #FF6B35 0%, #F7931E 100%) !important;
+            color: white !important;
+            padding: 15px 15px 15px 60px !important; /* Leave room for Tux logo */
+            border-bottom: 2px solid #E85D29 !important;
+        }
+
+        body.theme-tux .agentlet-actions {
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%) !important;
+            border-top: 2px solid #E85D29 !important;
+            padding: 12px !important;
+        }
+
+        body.theme-tux .agentlet-action-btn {
+            background: #FFEDE5 !important;
+            border: 1px solid #FFD1B8 !important;
+            border-radius: 8px !important;
+            color: #8B2500 !important;
+            font-weight: 600 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.theme-tux .agentlet-action-btn:hover {
+            background: #FFDBCC !important;
+            color: #6B1D00 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        body.theme-tux .agentlet-content {
+            background: #FFF8F5 !important;
+            color: #2D2D2D !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+
+        /* Tux Theme - Dialog Styling with Tux Logo */
+        body.theme-tux .agentlet-dialog {
+            background: #FFFFFF !important;
+            border: 2px solid #FF6B35 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 16px 64px rgba(255, 107, 53, 0.25) !important;
+        }
+
+        body.theme-tux .agentlet-dialog-header {
+            background: url('tux.svg') no-repeat 15px center / auto 60%, linear-gradient(135deg, #FF6B35 0%, #F7931E 100%) !important;
+            color: white !important;
+            padding: 15px 15px 15px 50px !important; /* Leave room for Tux logo */
+            border-bottom: 2px solid #E85D29 !important;
+        }
+
+        body.theme-tux .agentlet-dialog-header h3 {
+            margin: 0 0 0 10px !important; /* Additional margin for Tux logo */
+        }
+
+        /* Ensure Tux logo appears in ALL specific dialog header types */
+        body.theme-tux .agentlet-info-header,
+        body.theme-tux .agentlet-progress-header,
+        body.theme-tux .agentlet-fullscreen-header,
+        body.theme-tux .agentlet-input-header,
+        body.theme-tux .agentlet-wait-header,
+        body.theme-tux .agentlet-confirmation-header,
+        body.theme-tux .agentlet-error-header,
+        body.theme-tux .agentlet-success-header,
+        body.theme-tux .agentlet-warning-header {
+            background: url('tux.svg') no-repeat 15px center / auto 60%, linear-gradient(135deg, #FF6B35 0%, #F7931E 100%) !important;
+            color: white !important;
+            padding: 15px 15px 15px 50px !important;
+            border-bottom: 2px solid #E85D29 !important;
+        }
+
+        /* Ensure title text has proper spacing in all specific dialog header types */
+        body.theme-tux .agentlet-info-header h3,
+        body.theme-tux .agentlet-info-header .dialog-title,
+        body.theme-tux .agentlet-progress-header h3,
+        body.theme-tux .agentlet-progress-header .dialog-title,
+        body.theme-tux .agentlet-fullscreen-header h3,
+        body.theme-tux .agentlet-fullscreen-header .dialog-title,
+        body.theme-tux .agentlet-input-header h3,
+        body.theme-tux .agentlet-input-header .dialog-title,
+        body.theme-tux .agentlet-wait-header h3,
+        body.theme-tux .agentlet-wait-header .dialog-title,
+        body.theme-tux .agentlet-confirmation-header h3,
+        body.theme-tux .agentlet-confirmation-header .dialog-title,
+        body.theme-tux .agentlet-error-header h3,
+        body.theme-tux .agentlet-error-header .dialog-title,
+        body.theme-tux .agentlet-success-header h3,
+        body.theme-tux .agentlet-success-header .dialog-title,
+        body.theme-tux .agentlet-warning-header h3,
+        body.theme-tux .agentlet-warning-header .dialog-title {
+            margin: 0 0 0 10px !important;
+            color: white !important;
+        }
+
+        body.theme-tux .agentlet-dialog .agentlet-actions {
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%) !important;
+            border-top: 2px solid #E85D29 !important;
+            padding: 12px !important;
+        }
+
+        body.theme-tux .agentlet-dialog .agentlet-action-btn {
+            background: #FFEDE5 !important;
+            border: 1px solid #FFD1B8 !important;
+            color: #8B2500 !important;
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.theme-tux .agentlet-dialog .agentlet-action-btn:hover {
+            background: #FFDBCC !important;
+            color: #6B1D00 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        /* Tux Theme - Side Handle Styling */
+        body.theme-tux .agentlet-toggle {
+            background: #FF6B35 !important;
+            border: 2px solid #E85D29 !important;
+            border-radius: 8px !important;
+            color: white !important;
+            font-weight: 600 !important;
+            box-shadow: 0 3px 6px rgba(255, 107, 53, 0.3) !important;
+        }
+
+        body.theme-tux .agentlet-toggle:hover {
+            background: #E85D29 !important;
+            transform: translateX(-2px) !important;
+            box-shadow: 0 5px 12px rgba(255, 107, 53, 0.4) !important;
+        }
+
+        /* Panel Button Styling - Default */
+        .panel-demo-btn {
+            margin: 3px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .panel-action-btn {
+            margin: 5px;
+            padding: 10px 16px;
+            border: 2px solid #007bff;
+            border-radius: 6px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .panel-action-btn.secondary {
+            background: #6c757d;
+            border-color: #6c757d;
+        }
+
+        .panel-action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Glass Theme - Panel Buttons */
+        body.theme-glass .panel-demo-btn {
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+            color: rgba(0, 0, 0, 0.8) !important;
+        }
+
+        body.theme-glass .panel-action-btn {
+            background: rgba(255, 255, 255, 0.8) !important;
+            backdrop-filter: blur(15px) !important;
+            border: 2px solid rgba(255, 255, 255, 0.9) !important;
+            color: rgba(0, 0, 0, 0.9) !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.theme-glass .panel-action-btn.secondary {
+            background: rgba(255, 255, 255, 0.6) !important;
+            border-color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        body.theme-glass .panel-action-btn:hover {
+            background: rgba(255, 255, 255, 0.95) !important;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        /* Material Design Theme - Panel Buttons */
+        body.theme-material .panel-demo-btn {
+            background: #E3F2FD !important;
+            border: 1px solid #BBDEFB !important;
+            color: #1976D2 !important;
+            border-radius: 4px !important;
+        }
+
+        body.theme-material .panel-action-btn {
+            background: #1976D2 !important;
+            border: none !important;
+            border-radius: 4px !important;
+            color: white !important;
+            text-transform: uppercase !important;
+            font-weight: 500 !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+        }
+
+        body.theme-material .panel-action-btn.secondary {
+            background: #757575 !important;
+        }
+
+        body.theme-material .panel-action-btn:hover {
+            background: #1565C0 !important;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        body.theme-material .panel-action-btn.secondary:hover {
+            background: #616161 !important;
+        }
+
+        /* VS Code Dark Theme - Panel Buttons */
+        body.theme-vscode .panel-demo-btn {
+            background: #3C3C3C !important;
+            border: 1px solid #6C6C6C !important;
+            color: #CCCCCC !important;
+            border-radius: 2px !important;
+            font-family: 'Consolas', 'Monaco', monospace !important;
+        }
+
+        body.theme-vscode .panel-action-btn {
+            background: #0E639C !important;
+            border: 1px solid #14A085 !important;
+            border-radius: 2px !important;
+            color: #FFFFFF !important;
+            font-family: 'Consolas', 'Monaco', monospace !important;
+            text-transform: none !important;
+        }
+
+        body.theme-vscode .panel-action-btn.secondary {
+            background: #6C6C6C !important;
+            border-color: #808080 !important;
+        }
+
+        body.theme-vscode .panel-action-btn:hover {
+            background: #1177BB !important;
+        }
+
+        body.theme-vscode .panel-action-btn.secondary:hover {
+            background: #808080 !important;
+        }
+
+        /* Tux Linux Theme - Panel Buttons */
+        body.theme-tux .panel-demo-btn {
+            background: #FFF8F5 !important;
+            border: 1px solid #FFB89A !important;
+            color: #E85D29 !important;
+            border-radius: 6px !important;
+        }
+
+        body.theme-tux .panel-action-btn {
+            background: #FF6B35 !important;
+            border: 2px solid #E85D29 !important;
+            border-radius: 8px !important;
+            color: white !important;
+            font-weight: 600 !important;
+            box-shadow: 0 3px 6px rgba(255, 107, 53, 0.3) !important;
+        }
+
+        body.theme-tux .panel-action-btn.secondary {
+            background: #F7931E !important;
+            border-color: #E8851E !important;
+        }
+
+        body.theme-tux .panel-action-btn:hover {
+            background: #E85D29 !important;
+            box-shadow: 0 5px 12px rgba(255, 107, 53, 0.4) !important;
+        }
+
+        body.theme-tux .panel-action-btn.secondary:hover {
+            background: #E8851E !important;
+        }
+    </style>
+
+    <script>
+        let themeSwitchCount = 0;
+        let currentTheme = 'default';
+
+        // Registry-based module loading (no manual loading needed)
+
+
+        // Configure Agentlet with registry
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: false,  // Start maximized to show theming better
+            resizablePanel: true,
+            minimumPanelWidth: 400,  // Ensure minimum width for content visibility
+            registryUrl: './agentlets-registry.json'  // Use registry for module discovery
+        };
+
+        // Update theme stats display
+        function updateThemeStats() {
+            const elements = {
+                currentTheme: document.getElementById('currentTheme'),
+                themeAvailable: document.getElementById('themeAvailable'),
+                themeSwitchCount: document.getElementById('themeSwitchCount')
+            };
+
+            if (elements.currentTheme) {
+                elements.currentTheme.textContent = currentTheme;
+            }
+
+            if (elements.themeAvailable) {
+                const available = !!(window.agentlet);
+                elements.themeAvailable.textContent = available ? 'Yes' : 'No';
+            }
+
+            if (elements.themeSwitchCount) {
+                elements.themeSwitchCount.textContent = themeSwitchCount;
+            }
+        }
+
+        function switchTheme(themeName) {
+            // Remove existing theme classes
+            document.body.classList.remove('theme-glass', 'theme-material', 'theme-vscode', 'theme-tux');
+
+            // Remove active class from all theme buttons
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.remove('active'));
+
+            // Add new theme class
+            if (themeName !== 'default') {
+                document.body.classList.add(`theme-${themeName}`);
+            }
+
+            // Mark active button
+            const activeBtn = document.getElementById(`${themeName}Btn`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+
+            currentTheme = themeName;
+            themeSwitchCount++;
+            updateThemeStats();
+
+            const themeNames = {
+                'glass': '✨ Glass Transparent',
+                'material': '🎨 Material Design',
+                'vscode': '💻 VS Code Dark',
+                'tux': '🐧 Tux Linux'
+            };
+
+            log(`🎨 Switched to ${themeNames[themeName]} theme`, 'success');
+            updateStatus(`Applied ${themeNames[themeName]} theme`, 'success');
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Initializing Agentlet Core...');
+
+                if (window.agentlet) {
+                    log('⚠️ Agentlet already loaded', 'warning');
+                    updateStatus('Ready! Try the theme buttons above.', 'success');
+                    setButtonLoading('initBtn', false);
+                    updateThemeStats();
+                    return;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+
+                    if (window.AgentletCore) {
+                        const AgentletConstructor = window.AgentletCore.default;
+
+                        if (AgentletConstructor) {
+                            try {
+                                log('🚀 Creating AgentletCore instance...');
+                                const agentletInstance = new AgentletConstructor(window.agentletConfig);
+
+                                agentletInstance.init().then(() => {
+                                    log('✅ Agentlet Core loaded with theming support', 'success');
+                                    updateStatus('Ready! Try switching themes with the buttons above.', 'success');
+                                    updateThemeStats();
+                                    setButtonLoading('initBtn', false);
+                                }).catch(error => {
+                                    log(`❌ Initialization failed: ${error.message}`, 'error');
+                                    updateStatus('Initialization failed: ' + error.message, 'error');
+                                    setButtonLoading('initBtn', false);
+                                });
+
+                            } catch (error) {
+                                log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                                setButtonLoading('initBtn', false);
+                            }
+                        }
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Custom styling example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+            updateThemeStats();
+        });
+
+        // Interactive demo functions for panel buttons
+
+
+
+        // Localhost module dialog functions
+        function showLocalhostInfoDialog() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            window.agentlet.utils.Dialog.show('info', {
+                title: 'Info dialog',
+                message: 'Hello world!',
+                icon: ''
+            });
+        }
+
+        function showLocalhostFullscreenDialog() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            window.agentlet.utils.Dialog.show('fullscreen', {
+                title: 'Fullscreen dialog',
+                message: 'Hello world!',
+                icon: '',
+                buttons: [
+                    { text: 'Close', value: 'close', primary: true }
+                ]
+            });
+        }
+
+
+
+
+        // Update theme stats periodically
+        setInterval(updateThemeStats, 2000);
+    </script>
+</body>
+</html>

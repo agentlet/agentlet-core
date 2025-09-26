@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Fill Forms - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → data-processing → form-filling
+                </div>
+
+                <h1>Auto fill forms</h1>
+
+                <p>This example demonstrates form filling using Agentlet Core's FormFiller utility.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows</h3>
+                    <ul>
+                        <li>Programmatic form filling with structured data</li>
+                        <li>AI form completion</li>
+                        <li>Multiple form filling</li>
+                        <li>Field validation and error handling</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet core</button>
+                    <button onclick="checkStatus()">Check status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Basic form filling</h4>
+                    <button onclick="fillUserProfile()" id="fillUserBtn">Fill user profile</button>
+                    <button onclick="fillSurvey()" id="fillSurveyBtn">Fill survey</button>
+                    <button onclick="clearAllForms()" id="clearBtn">Clear all forms</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Target forms</h3>
+                    
+                    <form id="user-profile-form" class="test-form">
+                        <h4>User profile form</h4>
+                        <label for="firstName">First name *</label>
+                        <input type="text" id="firstName" name="firstName" required>
+
+                        <label for="lastName">Last name *</label>
+                        <input type="text" id="lastName" name="lastName" required>
+
+                        <label for="emailAddress">Email *</label>
+                        <input type="email" id="emailAddress" name="emailAddress" required>
+
+                        <label for="phoneNumber">Phone</label>
+                        <input type="tel" id="phoneNumber" name="phoneNumber">
+
+                        <label for="dateOfBirth">Date of birth</label>
+                        <input type="date" id="dateOfBirth" name="dateOfBirth">
+
+                        <label for="profession">Profession</label>
+                        <select id="profession" name="profession">
+                            <option value="">Select profession</option>
+                            <option value="developer">Software developer</option>
+                            <option value="designer">Designer</option>
+                            <option value="manager">Manager</option>
+                            <option value="analyst">Data analyst</option>
+                            <option value="other">Other</option>
+                        </select>
+
+                        <label for="bio">Bio</label>
+                        <textarea id="bio" name="bio" rows="3" placeholder="Tell us about yourself..."></textarea>
+                        
+                        <label>
+                            <input type="checkbox" name="terms" value="accepted"> I accept the terms and conditions
+                        </label>
+                        
+                        <label>
+                            <input type="checkbox" name="newsletter" value="subscribed"> Subscribe to newsletter
+                        </label>
+                        
+                        <button type="submit">Save profile</button>
+                    </form>
+
+                    <form id="survey-form" class="test-form">
+                        <h4>Customer survey</h4>
+                        <label for="customerName">Name</label>
+                        <input type="text" id="customerName" name="customerName">
+
+                        <label for="customerEmail">Email</label>
+                        <input type="email" id="customerEmail" name="customerEmail">
+
+                        <fieldset>
+                            <legend>How did you hear about us?</legend>
+                            <label><input type="radio" name="source" value="search"> Search engine</label>
+                            <label><input type="radio" name="source" value="social"> Social media</label>
+                            <label><input type="radio" name="source" value="friend"> Friend/referral</label>
+                            <label><input type="radio" name="source" value="ad"> Advertisement</label>
+                        </fieldset>
+
+                        <label for="rating">Overall rating</label>
+                        <select id="rating" name="rating">
+                            <option value="">Select rating</option>
+                            <option value="5">5 - Excellent</option>
+                            <option value="4">4 - Good</option>
+                            <option value="3">3 - Average</option>
+                            <option value="2">2 - Poor</option>
+                            <option value="1">1 - Very poor</option>
+                        </select>
+
+                        <label for="feedback">Feedback</label>
+                        <textarea id="feedback" name="feedback" rows="4" placeholder="Your feedback..."></textarea>
+
+                        <button type="submit">Submit survey</button>
+                    </form>
+                </div>
+
+                <div class="example-section">
+                    <h3>Form filling API reference</h3>
+                    <div class="code-block">
+                        <h4>Basic form filling</h4>
+                        <pre><code class="language-javascript">// Fill form with data object
+const result = window.agentlet.forms.fill(formElement, {
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john@example.com'
+});
+
+// Fill with options
+const result = window.agentlet.forms.fill(formElement, data, {
+    validateFields: true,
+    skipInvalidFields: true,
+    reportErrors: true
+});</code></pre>
+                        
+                        <h4>AI-powered filling</h4>
+                        <pre><code class="language-javascript">// AI form filling with intelligent mapping
+const aiData = {
+    personalInfo: { fullName: 'John Doe', email: 'john@example.com' },
+    preferences: { agreeToTerms: true }
+};
+
+const result = window.agentlet.forms.fillFromAI(formElement, aiData);
+
+// Multiple forms
+const forms = [
+    { selector: '#form1', data: data1 },
+    { selector: '#form2', data: data2 }
+];
+const results = await window.agentlet.forms.fillMultiple(container, forms);</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>Console output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+
+                <h3>Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet core" to start the demo.
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <style>
+        .test-form {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .test-form h4 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 2px solid #28a745;
+            padding-bottom: 8px;
+        }
+        
+        .test-form label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: 500;
+        }
+        
+        .test-form input, .test-form select, .test-form textarea {
+            width: 100%;
+            max-width: 400px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .test-form fieldset {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .test-form fieldset label {
+            display: inline-block;
+            margin: 5px 15px 5px 0;
+            font-weight: normal;
+        }
+        
+        .test-form fieldset input[type="radio"] {
+            width: auto;
+            margin-right: 8px;
+            margin-bottom: 0;
+        }
+        
+        .test-form input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+            margin-bottom: 0;
+        }
+        
+        .test-form button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .test-form button:hover {
+            background: #1e7e34;
+        }
+
+        /* Highlight filled fields */
+        .filled-field {
+            background-color: #d4edda !important;
+            border-color: #28a745 !important;
+        }
+        
+        .error-field {
+            background-color: #f8d7da !important;
+            border-color: #dc3545 !important;
+        }
+    </style>
+
+    <script>
+        // Configure Agentlet
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: true  // Start with panel minimized
+        };
+
+        // Sample data for form filling
+        const sampleUserData = {
+            '#firstName': 'Alice',
+            '#lastName': 'Johnson',
+            '#emailAddress': 'alice.johnson@example.com',
+            '#phoneNumber': '+1 (555) 987-6543',
+            '#dateOfBirth': '1985-03-22',
+            '#profession': 'developer',
+            '#bio': 'Software developer with experience in web technologies and user experience design.',
+            '[name="terms"]': true,
+            '[name="newsletter"]': true
+        };
+
+        const sampleSurveyData = {
+            '#customerName': 'Alice Johnson',
+            '#customerEmail': 'alice.johnson@example.com',
+            '[name="source"][value="friend"]': true,
+            '#rating': '5',
+            '#feedback': 'Good service and support. Would recommend to others.'
+        };
+
+
+
+        function checkStatus() {
+            log('Checking Agentlet and forms status...');
+            
+            if (window.agentlet && window.agentlet.forms) {
+                log('Forms API is available', 'success');
+                log(`Available methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
+                updateStatus('Forms API ready for use!', 'success');
+            } else if (window.agentlet) {
+                log('Agentlet loaded but forms API not found', 'warning');
+                updateStatus('Agentlet loaded but forms API not available', 'warning');
+            } else {
+                log('Agentlet not initialized yet', 'warning');
+                updateStatus('Please initialize Agentlet Core first', 'warning');
+            }
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('Initializing Agentlet Core...');
+
+                if (window.agentlet) {
+                    log('Agentlet already loaded', 'warning');
+                    updateStatus('Ready to test form filling.', 'success');
+                    setButtonLoading('initBtn', false);
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('Agentlet Core script loaded successfully', 'success');
+                    
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('Creating AgentletCore instance...');
+                            const agentletInstance = new AgentletConstructor(window.agentletConfig);
+                                
+                            log('Starting initialization...');
+                            agentletInstance.init().then(() => {
+                                if (window.agentlet && window.agentlet.forms) {
+                                    log('Agentlet Core loaded with Form utilities', 'success');
+                                    log(`Available form methods: ${Object.keys(window.agentlet.forms).join(', ')}`);
+                                    updateStatus('Ready to test form filling.', 'success');
+                                } else {
+                                    log('Form utilities not available', 'error');
+                                    updateStatus('Form utilities not available', 'error');
+                                }
+                                setButtonLoading('initBtn', false);
+                            }).catch(error => {
+                                log(`Initialization failed: ${error.message}`, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                                
+                        } catch (error) {
+                            log(`Error creating AgentletCore instance: ${error.message}`, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('AgentletCore constructor not available', 'error');
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core. Make sure you ran "npm run build" first.', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateStatus('Initialization error: ' + error.message, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        function checkForms() {
+            if (!window.agentlet || !window.agentlet.forms) {
+                updateStatus('Form utilities not available. Initialize Agentlet first.', 'warning');
+                return false;
+            }
+            return true;
+        }
+
+        function fillUserProfile() {
+            if (!checkForms()) return;
+
+            try {
+                setButtonLoading('fillUserBtn', true);
+                const userForm = document.getElementById('user-profile-form');
+                const result = window.agentlet.forms.fill(userForm, sampleUserData);
+                
+                log('User profile filling result:');
+                log(`   Fields filled: ${result.successful}`);
+                log(`   Fields failed: ${result.failed}`);
+                log(`   Fields skipped: ${result.skipped}`);
+                log(`   Success rate: ${Math.round((result.successful / result.total) * 100)}%`);
+
+                if (result.errors && result.errors.length > 0) {
+                    log(`   Errors: ${result.errors.join(', ')}`, 'warning');
+                }
+
+                highlightFilledFields(userForm);
+                log('User profile fill completed', 'success');
+                updateStatus(`User profile filled: ${result.successful} fields`, 'success');
+                setTimeout(() => setButtonLoading('fillUserBtn', false), 300);
+            } catch (error) {
+                log(`Error filling user profile: ${error.message}`, 'error');
+                updateStatus('Error filling form', 'error');
+                setButtonLoading('fillUserBtn', false);
+            }
+        }
+
+        function fillSurvey() {
+            if (!checkForms()) return;
+
+            try {
+                setButtonLoading('fillSurveyBtn', true);
+                const surveyForm = document.getElementById('survey-form');
+                const result = window.agentlet.forms.fill(surveyForm, sampleSurveyData);
+                
+                log('Survey filling result:');
+                log(`   Fields filled: ${result.successful}`);
+                log(`   Fields failed: ${result.failed}`);
+                log(`   Fields skipped: ${result.skipped}`);
+                log(`   Success rate: ${Math.round((result.successful / result.total) * 100)}%`);
+
+                highlightFilledFields(surveyForm);
+                log('Survey fill completed', 'success');
+                updateStatus(`Survey filled: ${result.successful} fields`, 'success');
+                setTimeout(() => setButtonLoading('fillSurveyBtn', false), 300);
+            } catch (error) {
+                log(`Error filling survey: ${error.message}`, 'error');
+                updateStatus('Error filling form', 'error');
+                setButtonLoading('fillSurveyBtn', false);
+            }
+        }
+
+
+
+
+        function clearAllForms() {
+            setButtonLoading('clearBtn', true);
+            document.querySelectorAll('form').forEach(form => {
+                form.reset();
+                // Remove highlighting
+                form.querySelectorAll('input, select, textarea').forEach(field => {
+                    field.classList.remove('filled-field', 'error-field');
+                });
+            });
+            
+            log('All forms cleared', 'info');
+            updateStatus('All forms cleared', 'info');
+            setTimeout(() => setButtonLoading('clearBtn', false), 300);
+        }
+
+
+
+        function highlightFilledFields(form) {
+            form.querySelectorAll('input, select, textarea').forEach(field => {
+                field.classList.remove('filled-field', 'error-field');
+                
+                if (field.type === 'checkbox' || field.type === 'radio') {
+                    if (field.checked) {
+                        field.classList.add('filled-field');
+                    }
+                } else {
+                    if (field.value && field.value.trim() !== '') {
+                        field.classList.add('filled-field');
+                    }
+                }
+            });
+        }
+
+        // Prevent actual form submission
+        document.addEventListener('submit', (e) => {
+            e.preventDefault();
+            log('Form submission prevented (demo mode)', 'info');
+        });
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Form filling demo ready', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>

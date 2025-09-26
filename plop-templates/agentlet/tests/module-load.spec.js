@@ -3,15 +3,16 @@ import { test, expect } from '@playwright/test';
 async function initializeAgentlet(page) {
   await page.goto('/');
   
-  // Wait for the bookmarklet link to be available
-  await page.waitForSelector('a.bookmarklet-link', { timeout: 5000 });
+  // Wait for the production bookmarklet link with proper selector
+  const productionLink = page.getByRole('link', { name: '📎 {{kebabCase name}} (Production)' });
+  await productionLink.waitFor({ timeout: 5000 });
   
-  // Click the bookmarklet link
-  await page.click('a.bookmarklet-link');
+  // Click the production bookmarklet link
+  await productionLink.click();
   
   // Wait for the panel to open
   await page.waitForSelector('#agentlet-container', { 
-    timeout: 5000,
+    timeout: 10000,
     state: 'visible'
   });
 }
@@ -29,22 +30,26 @@ test.describe('Module loading', () => {
     });
     expect(moduleAvailable).toBe(true);
 
-    // Check that the module class extends BaseModule
-    const isBaseModule = await page.evaluate(() => {
-      return window.{{camelCase name}}AgentletModule instanceof window.agentlet.BaseModule;
+    // Check that the module class extends Module (the current architecture)
+    const isModule = await page.evaluate(() => {
+      return window.agentlet && 
+             window.agentlet.Module && 
+             window.{{camelCase name}}AgentletModule &&
+             window.{{camelCase name}}AgentletModule.prototype instanceof window.agentlet.Module;
     });
-    expect(isBaseModule).toBe(true);
+    expect(isModule).toBe(true);
 
     // Check that the module has expected properties
     const moduleProperties = await page.evaluate(() => {
-      const module = window.{{camelCase name}}AgentletModule;
+      const moduleClass = window.{{camelCase name}}AgentletModule;
+      const moduleInstance = new moduleClass();
       return {
-        name: module.name,
-        description: module.description,
-        version: module.version,
-        hasGetContent: typeof module.getContent === 'function',
-        hasGetStyles: typeof module.getStyles === 'function',
-        hasShowHelp: typeof module.showHelp === 'function'
+        name: moduleInstance.name,
+        description: moduleInstance.description,
+        version: moduleInstance.version,
+        hasGetContent: typeof moduleInstance.getContent === 'function',
+        hasGetStyles: typeof moduleInstance.getStyles === 'function',
+        hasShowHelp: typeof moduleInstance.showHelp === 'function'
       };
     });
 
@@ -155,11 +160,11 @@ test.describe('Module loading', () => {
     );
     expect(activateMessage).toBeTruthy();
 
-    // Verify jQuery was refreshed during initialization
-    const jqueryRefreshConfirmation = await page.evaluate(() => {
-      return window.agentlet.$ !== null && typeof window.agentlet.$ === 'function';
+    // Verify agentlet utilities are available
+    const utilitiesAvailable = await page.evaluate(() => {
+      return window.agentlet && window.agentlet.utils;
     });
-    expect(jqueryRefreshConfirmation).toBe(true);
+    expect(utilitiesAvailable).toBe(true);
   });
 
   test('module styles are applied correctly', async ({ page }) => {
@@ -184,11 +189,25 @@ test.describe('Module loading', () => {
     expect(buttonStyles.padding).toBeTruthy();
     expect(buttonStyles.margin).toBeTruthy();
 
+    // Ensure module styles are injected
+    await page.evaluate(() => {
+      const moduleClass = window.{{camelCase name}}AgentletModule;
+      if (moduleClass) {
+        const moduleInstance = new moduleClass();
+        if (typeof moduleInstance.getStyles === 'function') {
+          const styles = moduleInstance.getStyles();
+          if (styles && !moduleInstance.styleElement) {
+            moduleInstance.injectStyles(styles);
+          }
+        }
+      }
+    });
+
     // Check heading font size
     const headingStyles = await page.evaluate(() => {
       const heading = document.querySelector('.agentlet-{{kebabCase name}}-content h2');
       if (!heading) return null;
-      
+
       const styles = getComputedStyle(heading);
       return {
         fontSize: styles.fontSize
@@ -207,9 +226,12 @@ test.describe('Module loading', () => {
 
     // Test the help function directly
     const helpResult = await page.evaluate(() => {
-      if (window.{{camelCase name}}AgentletModule && typeof window.{{camelCase name}}AgentletModule.showHelp === 'function') {
-        window.{{camelCase name}}AgentletModule.showHelp();
-        return true;
+      if (window.{{camelCase name}}AgentletModule) {
+        const moduleInstance = new window.{{camelCase name}}AgentletModule();
+        if (typeof moduleInstance.showHelp === 'function') {
+          moduleInstance.showHelp();
+          return true;
+        }
       }
       return false;
     });

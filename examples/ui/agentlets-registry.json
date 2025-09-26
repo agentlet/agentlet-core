@@ -1,0 +1,13 @@
+{
+  "libraries": {},
+  "agentlets": [
+    {
+      "name": "localhost-demo",
+      "version": "1.0.0",
+      "url": "./localhost-demo-module.js",
+      "module": "LocalhostDemoModule",
+      "patterns": ["localhost:3000"],
+      "description": "Demo module for localhost:3000 with dialog buttons"
+    }
+  ]
+}
