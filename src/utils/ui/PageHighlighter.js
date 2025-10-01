@@ -34,7 +34,7 @@ class PageHighlighter {
                 width: 100%;
                 height: 100%;
                 background: rgba(0, 0, 0, 0.5);
-                z-index: ${Z_INDEX.BACKDROP};
+                z-index: ${Z_INDEX.DIALOG_OVERLAY};
                 pointer-events: auto;
                 transition: opacity 0.3s ease;
             }
@@ -54,7 +54,7 @@ class PageHighlighter {
                 left: 0;
                 right: 0;
                 width: 100%;
-                z-index: ${Z_INDEX.HOVER_HIGHLIGHT};
+                z-index: ${Z_INDEX.DIALOG_OVERLAY};
                 pointer-events: auto;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
