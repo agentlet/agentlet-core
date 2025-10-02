@@ -170,7 +170,22 @@ class AuthManager {
             try {
                 // Use custom message handler if provided
                 if (this.config.messageHandler) {
-                    this.config.messageHandler(event.data, this);
+                    const result = this.config.messageHandler(event.data, this);
+
+                    // If custom handler returns a result, process it
+                    if (result) {
+                        if (result.success) {
+                            this.handleSuccess(result.accessToken || result.token, result);
+                        } else if (result.cancelled) {
+                            this.handleCancel();
+                        } else {
+                            this.handleError(new Error(result.error || 'Authentication failed'));
+                        }
+                    }
+                    // If result is null/undefined, fall back to default handling
+                    else {
+                        this.handleAuthMessage(event.data);
+                    }
                 } else {
                     // Default message handling
                     this.handleAuthMessage(event.data);

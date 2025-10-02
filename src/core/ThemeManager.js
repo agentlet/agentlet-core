@@ -32,6 +32,7 @@ export class ThemeManager {
             actionButtonBorder: '#dee2e6',
             actionButtonHover: '#e9ecef',
             actionButtonText: '#333333',
+            actionsJustifyContent: 'space-between', // Default layout
             
             // Layout
             panelWidth: '320px',

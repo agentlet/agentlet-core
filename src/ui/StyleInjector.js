@@ -30,6 +30,7 @@ export class StyleInjector {
                 --agentlet-action-button-border: ${theme.actionButtonBorder};
                 --agentlet-action-button-hover: ${theme.actionButtonHover};
                 --agentlet-action-button-text: ${theme.actionButtonText};
+                --agentlet-actions-justify-content: ${theme.actionsJustifyContent};
                 --agentlet-panel-width: ${theme.panelWidth};
                 --agentlet-border-radius: ${theme.borderRadius};
                 --agentlet-box-shadow: ${theme.boxShadow};
@@ -216,7 +217,7 @@ export class StyleInjector {
                 background: var(--agentlet-background-color);
                 flex-shrink: 0;
                 display: flex;
-                justify-content: space-between;
+                justify-content: var(--agentlet-actions-justify-content);
                 align-items: center;
             }
 
