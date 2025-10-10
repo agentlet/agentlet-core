@@ -267,6 +267,12 @@ CSP headers restrict which domains can serve content within a page. Typically, t
 
 Your backend APIs must implement appropriate CORS headers to allow requests from the domain where the agentlet runs—typically your internal corporate web application.
 
+#### Registry Loading
+
+Agentlet registries use **script injection** instead of `fetch()` to avoid CORS issues when loading agentlet configurations. Registry files are JavaScript files (`.js`) that dispatch events with registry data, rather than JSON files that require CORS-compliant servers. This ensures reliable loading across corporate environments and CDNs.
+
+For details, see: [Registry Script Injection Documentation](docs/registry-script-injection.md)
+
 
 
 
