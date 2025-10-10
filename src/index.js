@@ -175,46 +175,6 @@ class AgentletCore {
         return new LocalStorageEnvironmentVariablesManager();
     }
 
-    /**
-     * Load and parse the agentlets registry (single download for both libraries and modules)
-     */
-    async loadRegistry() {
-        try {
-            console.log(`📚 Loading agentlets registry from: ${this.config.registryUrl}`);
-
-            const response = await fetch(this.config.registryUrl);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const registryData = await response.json();
-
-            // Extract base URL from registry URL for relative library paths
-            let baseUrl;
-            try {
-                // Handle absolute URLs
-                const registryUrl = new URL(this.config.registryUrl);
-                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
-            } catch (_error) {
-                // Handle relative URLs - use current page location as base
-                const currentLocation = window.location.href;
-                const registryUrl = new URL(this.config.registryUrl, currentLocation);
-                baseUrl = registryUrl.origin + registryUrl.pathname.replace(/[^/]+$/, '');
-            }
-
-            // Add base URL to registry data
-            registryData.baseUrl = baseUrl;
-
-            console.log('📚 Registry loaded successfully');
-            console.log('📚 Available libraries:', Object.keys(registryData.libraries || {}));
-            return registryData;
-
-        } catch (error) {
-            console.error('📚 Failed to load registry:', error);
-            console.warn('📚 External libraries and modules may not load correctly');
-            return null;
-        }
-    }
 
     /**
      * Main initialization method
@@ -229,27 +189,16 @@ class AgentletCore {
         
         try {
             console.log('🚀 Initializing Agentlet Core 📎...');
-            
-            // Load registry if registryUrl is provided
-            let registryData = null;
-            if (this.config.registryUrl) {
-                registryData = await this.loadRegistry();
-            }
 
-            // Initialize library system with registry data (if any)
-            if (registryData && registryData.libraries) {
-                this.librarySetup.initializeRegistryLoader(registryData);
-            }
-            
             // Set up all libraries
             this.librarySetup.initializeAll(
                 { XLSX, html2canvas, pdfjsLib, hotkeys },
                 this.shortcutManager
             );
-            
+
             // Set up event listeners
             this.setupEventListeners();
-            
+
             const uiStartTime = performance.now();
 
             // Inject styles first before creating UI elements
@@ -262,13 +211,9 @@ class AgentletCore {
 
             this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
 
-            // Initialize module registry with shared registry data FIRST
+            // Initialize module registry (will load from registryUrl via script injection if configured)
             const moduleStartTime = performance.now();
-            if (registryData) {
-                await this.moduleRegistry.initializeWithRegistry(registryData);
-            } else {
-                await this.moduleRegistry.initialize();
-            }
+            await this.moduleRegistry.initialize();
             this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
 
             // Set up module change callback AFTER modules are loaded and UI is ready

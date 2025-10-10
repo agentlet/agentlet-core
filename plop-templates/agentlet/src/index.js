@@ -36,7 +36,7 @@ import AgentletCore from 'agentlet-core';
     agentletConfig.loadingMode = 'registry';
 {{else}}
     // Bundled mode: load registry for module script loading but skip auto-registration
-    agentletConfig.registryUrl = './agentlets-registry.json';
+    agentletConfig.registryUrl = './agentlets-registry.js';
     agentletConfig.loadingMode = 'bundled';
     agentletConfig.skipRegistryModuleRegistration = true; // Prevent dual registration
 {{/if}}

@@ -268,8 +268,8 @@ export default class ModuleRegistry {
     }
 
     /**
-     * Load agentlets from registry URL
-     * @param {string} registryUrl - URL to registry JSON file (optional, uses config default)
+     * Load agentlets from registry JavaScript file via script injection
+     * @param {string} registryUrl - URL to registry JavaScript file (optional, uses config default)
      */
     async loadFromRegistry(registryUrl = null) {
         const url = registryUrl || this.registryUrl;
@@ -286,25 +286,36 @@ export default class ModuleRegistry {
 
         try {
             console.log(`📦 Loading agentlets registry from: ${url}`);
-            
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const registryData = await response.json();
-            
-            // Handle both old format (array) and new format (object with agentlets)
-            const agentlets = Array.isArray(registryData) 
-                ? registryData 
+
+            const registryData = await this.loadRegistryScript(url);
+
+            // Handle registry data structure
+            const agentlets = Array.isArray(registryData)
+                ? registryData
                 : registryData.agentlets || [];
-            
+
             if (!Array.isArray(agentlets)) {
                 throw new Error('Registry must contain an agentlets array');
             }
-            
+
             console.log(`📦 Found ${agentlets.length} agentlet(s) in registry`);
-            
+
+            // Extract base URL from registry URL for relative library paths
+            let baseUrl;
+            try {
+                const registryUrlObj = new URL(url);
+                baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
+            } catch (_error) {
+                const currentLocation = window.location.href;
+                const registryUrlObj = new URL(url, currentLocation);
+                baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
+            }
+
+            // Add base URL to registry data if it has libraries
+            if (registryData.libraries) {
+                registryData.baseUrl = baseUrl;
+            }
+
             // Load each agentlet module
             for (const agentletConfig of agentlets) {
                 try {
@@ -314,18 +325,76 @@ export default class ModuleRegistry {
                     this.metrics.registryLoadFailures++;
                 }
             }
-            
+
             this.loadedRegistries.add(url);
             this.metrics.registriesLoaded++;
-            
+
             console.log(`✅ Registry loaded successfully: ${agentlets.length} agentlet(s)`);
             this.emit('registry:loaded', { url, agentletCount: agentlets.length });
-            
+
         } catch (error) {
             this.metrics.registryLoadFailures++;
             console.error(`❌ Failed to load registry from ${url}:`, error);
             this.emit('registry:loadFailed', { url, error: error.message });
         }
+    }
+
+    /**
+     * Load registry via script injection with event-based communication
+     * @param {string} url - Registry JavaScript file URL
+     * @returns {Promise<Object>} Registry data
+     */
+    loadRegistryScript(url) {
+        return new Promise((resolve, reject) => {
+            const timeoutMs = 10000; // 10 second timeout
+            let timeoutId;
+            let eventListener;
+
+            const cleanup = () => {
+                if (timeoutId) clearTimeout(timeoutId);
+                if (eventListener) {
+                    window.removeEventListener('agentletRegistryLoaded', eventListener);
+                }
+            };
+
+            // Set up event listener for registry data
+            eventListener = (event) => {
+                cleanup();
+                console.log('📦 Registry data received via event');
+                resolve(event.detail);
+            };
+
+            window.addEventListener('agentletRegistryLoaded', eventListener, { once: true });
+
+            // Set up timeout
+            timeoutId = setTimeout(() => {
+                cleanup();
+                reject(new Error(`Registry loading timeout after ${timeoutMs}ms: ${url}`));
+            }, timeoutMs);
+
+            // Create and inject script
+            const script = document.createElement('script');
+            script.src = url;
+            script.type = 'text/javascript';
+            script.crossOrigin = 'anonymous';
+
+            script.onload = () => {
+                console.log(`📦 Registry script loaded: ${url}`);
+                // Event handler will resolve the promise when data arrives
+            };
+
+            script.onerror = (error) => {
+                cleanup();
+                console.error(`📦 Registry script load failed: ${url}`, error);
+                // Clean up failed script
+                if (script.parentNode) {
+                    script.parentNode.removeChild(script);
+                }
+                reject(new Error(`Failed to load registry script: ${url}`));
+            };
+
+            document.head.appendChild(script);
+        });
     }
     
     /**
@@ -431,47 +500,7 @@ export default class ModuleRegistry {
         this.checkUrlChange();
     }
 
-    /**
-     * Initialize the registry with pre-loaded registry data (to avoid duplicate downloads)
-     */
-    async initializeWithRegistry(registryData) {
-        console.log('🚀 Module Registry initialized');
 
-        // Use pre-loaded registry data instead of downloading again
-        if (registryData && registryData.agentlets) {
-            await this.loadAgentletsFromData(registryData.agentlets, registryData.baseUrl);
-        }
-
-        this.emit('registry:initialized', { totalModules: this.modules.size });
-
-        // Check current URL
-        this.checkUrlChange();
-    }
-
-    /**
-     * Load agentlets from pre-parsed registry data (avoids duplicate downloads)
-     */
-    async loadAgentletsFromData(agentletsArray, _baseUrl) {
-        if (!Array.isArray(agentletsArray)) {
-            console.warn('📦 Invalid agentlets data - must be an array');
-            return;
-        }
-
-        console.log(`📦 Found ${agentletsArray.length} agentlet(s) in registry`);
-
-        // Load each agentlet module
-        for (const agentletConfig of agentletsArray) {
-            try {
-                await this.loadAgentletModule(agentletConfig);
-            } catch (error) {
-                console.error(`📦 Failed to load agentlet ${agentletConfig.name}:`, error);
-                this.metrics.registryLoadFailures++;
-            }
-        }
-
-        console.log(`✅ Registry loaded successfully: ${agentletsArray.length} agentlet(s)`);
-        this.metrics.registriesLoaded++;
-    }
 
     /**
      * Get all registered modules
