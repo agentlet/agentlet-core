@@ -5,6 +5,8 @@
  */
 
 import PDFProcessor from './PDFProcessor.js';
+import SpeechToTextManager from './SpeechToTextManager.js';
+import TextToSpeechManager from './TextToSpeechManager.js';
 
 /**
  * Base class for AI providers
@@ -318,6 +320,10 @@ export class AIManager {
         this.currentProvider = null;
         this.pdfProcessor = new PDFProcessor();
         
+        // Initialize speech managers
+        this.speechToText = new SpeechToTextManager();
+        this.textToSpeech = new TextToSpeechManager();
+        
         // Initialize providers based on available API keys
         this.initializeProviders();
     }
@@ -466,6 +472,7 @@ export class AIManager {
                 available: this.pdfProcessor.isPDFJSAvailable(),
                 capabilities: this.pdfProcessor.getCapabilities()
             },
+            speechSupport: this.getSpeechStatus(),
             providerStatus: Object.fromEntries(
                 Array.from(this.providers.entries()).map(([name, provider]) => [
                     name, 
@@ -485,6 +492,157 @@ export class AIManager {
         this.providers.clear();
         this.currentProvider = null;
         this.initializeProviders();
+    }
+
+    // Speech-to-Text methods
+    
+    /**
+     * Start listening for speech input
+     * @param {Object} options - Listening options
+     * @returns {Promise<void>}
+     */
+    async startListening(options = {}) {
+        return await this.speechToText.startListening(options);
+    }
+    
+    /**
+     * Stop listening for speech input
+     */
+    stopListening() {
+        this.speechToText.stopListening();
+    }
+    
+    /**
+     * Check if currently listening for speech
+     * @returns {boolean}
+     */
+    isListening() {
+        return this.speechToText.isListening;
+    }
+    
+    /**
+     * Transcribe audio data using OpenAI Whisper
+     * @param {ArrayBuffer|Blob} audioData - Audio data to transcribe
+     * @param {Object} options - Transcription options
+     * @returns {Promise<Object>} Transcription result
+     */
+    async transcribeAudio(audioData, options = {}) {
+        return await this.speechToText.transcribeAudio(audioData, options);
+    }
+    
+    /**
+     * Get supported languages for speech recognition
+     * @returns {Array<string>} Array of language codes
+     */
+    getSpeechLanguages() {
+        return this.speechToText.getSupportedLanguages();
+    }
+    
+    /**
+     * Add speech-to-text event listener
+     * @param {string} event - Event name ('start', 'end', 'result', 'error')
+     * @param {Function} handler - Event handler
+     */
+    onSpeechEvent(event, handler) {
+        this.speechToText.on(event, handler);
+    }
+    
+    /**
+     * Remove speech-to-text event listener
+     * @param {string} event - Event name
+     * @param {Function} handler - Event handler
+     */
+    offSpeechEvent(event, handler) {
+        this.speechToText.off(event, handler);
+    }
+
+    // Text-to-Speech methods
+    
+    /**
+     * Speak text using the best available provider
+     * @param {string} text - Text to speak
+     * @param {Object} options - Speaking options
+     * @returns {Promise<void>}
+     */
+    async speak(text, options = {}) {
+        return await this.textToSpeech.speak(text, options);
+    }
+    
+    /**
+     * Stop current speech output
+     */
+    stopSpeaking() {
+        this.textToSpeech.stop();
+    }
+    
+    /**
+     * Pause current speech output (browser only)
+     */
+    pauseSpeaking() {
+        this.textToSpeech.pause();
+    }
+    
+    /**
+     * Resume paused speech output (browser only)
+     */
+    resumeSpeaking() {
+        this.textToSpeech.resume();
+    }
+    
+    /**
+     * Check if currently speaking
+     * @returns {boolean}
+     */
+    isSpeaking() {
+        return this.textToSpeech.isSpeaking;
+    }
+    
+    /**
+     * Get available voices for text-to-speech
+     * @param {string} provider - Provider to get voices for ('browser', 'elevenlabs', 'openai')
+     * @returns {Array} Array of available voices
+     */
+    getAvailableVoices(provider = 'browser') {
+        return this.textToSpeech.getAvailableVoices(provider);
+    }
+    
+    /**
+     * Find the best voice for a language and provider
+     * @param {string} language - Language code
+     * @param {string} provider - Provider name
+     * @returns {Object|null} Best voice or null
+     */
+    findBestVoice(language, provider = 'browser') {
+        return this.textToSpeech.findBestVoice(language, provider);
+    }
+    
+    /**
+     * Add text-to-speech event listener
+     * @param {string} event - Event name ('start', 'end', 'error', 'pause', 'resume', 'boundary')
+     * @param {Function} handler - Event handler
+     */
+    onSpeechSynthesisEvent(event, handler) {
+        this.textToSpeech.on(event, handler);
+    }
+    
+    /**
+     * Remove text-to-speech event listener
+     * @param {string} event - Event name
+     * @param {Function} handler - Event handler
+     */
+    offSpeechSynthesisEvent(event, handler) {
+        this.textToSpeech.off(event, handler);
+    }
+    
+    /**
+     * Get speech capabilities status
+     * @returns {Object} Speech status information
+     */
+    getSpeechStatus() {
+        return {
+            speechToText: this.speechToText.getStatus(),
+            textToSpeech: this.textToSpeech.getStatus()
+        };
     }
 }
 

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech-to-Text Demo - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../../">Examples</a> → <a href="../">05-ai</a> → speech-to-text
+                </div>
+
+                <h1>🎤 Speech-to-Text Demo - Agentlet Core</h1>
+                
+                <p>This example demonstrates speech-to-text functionality using browser's native SpeechRecognition API with OpenAI Whisper fallback.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Browser-first speech recognition (free, offline, privacy-friendly)</li>
+                        <li>OpenAI Whisper API fallback (better accuracy, requires API key)</li>
+                        <li>Real-time transcription with interim results</li>
+                        <li>Language selection and voice command recognition</li>
+                        <li>Event handling for speech recognition states</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>🚀 Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
+                    <button onclick="checkSpeechStatus()" id="statusBtn">Check Speech Status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>🎤 Speech Recognition</h4>
+                    <div class="control-group">
+                        <label for="languageSelect">Language:</label>
+                        <select id="languageSelect">
+                            <option value="en-US">English (US)</option>
+                            <option value="en-GB">English (UK)</option>
+                            <option value="es-ES">Spanish (Spain)</option>
+                            <option value="fr-FR">French (France)</option>
+                            <option value="de-DE">German (Germany)</option>
+                            <option value="it-IT">Italian (Italy)</option>
+                            <option value="pt-BR">Portuguese (Brazil)</option>
+                            <option value="ja-JP">Japanese (Japan)</option>
+                            <option value="ko-KR">Korean (Korea)</option>
+                            <option value="zh-CN">Chinese (Simplified)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="providerSelect">Provider:</label>
+                        <select id="providerSelect">
+                            <option value="auto">Auto (Browser First)</option>
+                            <option value="browser">Browser Only</option>
+                            <option value="openai">OpenAI Whisper Only</option>
+                        </select>
+                    </div>
+                    <button onclick="startListening()" id="listenBtn">🎤 Start Listening</button>
+                    <button onclick="stopListening()" id="stopBtn" disabled>⏹️ Stop Listening</button>
+                    <button onclick="clearTranscript()" id="clearBtn">🗑️ Clear</button>
+                </div>
+
+                <div class="controls">
+                    <h4>📝 Transcription Results</h4>
+                    <textarea id="transcriptBox" rows="8" cols="50" placeholder="Your speech will appear here..." readonly></textarea>
+                    <div class="transcript-info">
+                        <small>
+                            <strong>Interim text:</strong> <span id="interimText" style="color: #666; font-style: italic;">None</span><br>
+                            <strong>Confidence:</strong> <span id="confidenceText">N/A</span><br>
+                            <strong>Provider used:</strong> <span id="currentProvider">N/A</span>
+                        </small>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Console and Code Examples -->
+            <div class="right-column">
+                <div class="panel-section">
+                    <div class="console-header">
+                        <h4>📊 Status & Console</h4>
+                        <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                    </div>
+                    <div class="console-section" id="console"></div>
+                    
+                    <!-- Status section -->
+                    <div class="status-section" id="status">
+                        Ready for initialization
+                    </div>
+                </div>
+
+                <div class="code-example">
+                    <h4>Basic Usage</h4>
+                    <pre><code class="language-javascript">// Start listening with default settings
+await window.agentlet.speech.startListening();
+
+// Listen for results
+window.agentlet.speech.onSpeechEvent('result', (data) => {
+    const transcript = data.results[0].transcript;
+    const isFinal = data.results[0].isFinal;
+    console.log('Transcript:', transcript, 'Final:', isFinal);
+});
+
+// Stop listening  
+window.agentlet.speech.stopListening();</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>Advanced Configuration</h4>
+                    <pre><code class="language-javascript">// Start with custom options
+await window.agentlet.speech.startListening({
+    language: 'es-ES',
+    continuous: true,
+    interimResults: true,
+    apiProvider: 'browser' // or 'openai' or 'auto'
+});
+
+// Check status
+const status = window.agentlet.speech.getStatus();
+console.log('Speech capabilities:', status);</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>Event Handling</h4>
+                    <pre><code class="language-javascript">// Listen for various events
+window.agentlet.speech.onSpeechEvent('start', () => {
+    console.log('Started listening');
+});
+
+window.agentlet.speech.onSpeechEvent('end', () => {
+    console.log('Stopped listening');
+});
+
+window.agentlet.speech.onSpeechEvent('error', (data) => {
+    console.error('Speech error:', data.error);
+});</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include shared utilities -->
+    <script src="../../shared/console-utils.js"></script>
+
+    <script>
+        let agentlet;
+        let isListening = false;
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Starting Agentlet Core initialization...', 'info');
+
+                // Check if already loaded
+                if (window.agentlet) {
+                    log('⚠️ Agentlet Core already loaded', 'warning');
+                    updateStatus('Agentlet Core already initialized!', 'success');
+                    setButtonLoading('initBtn', false);
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Dynamically load Agentlet Core
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Try to access AgentletCore constructor
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('🚀 Creating AgentletCore instance...');
+                            agentlet = new AgentletConstructor({
+                                debugMode: true,
+                                enablePlugins: false,
+                                startMinimized: true
+                            });
+                            
+                            log('⚙️ Starting initialization...');
+                            agentlet.init().then(() => {
+                                log('✅ Agentlet Core initialized successfully', 'success');
+                                log('📊 Available APIs: ' + Object.keys(window.agentlet || {}).join(', '), 'info');
+                                
+                                // Check speech availability immediately
+                                if (window.agentlet && window.agentlet.speech) {
+                                    log('🎤 Speech manager initialized and available', 'success');
+                                    setupSpeechEventListeners();
+                                    checkSpeechStatus();
+                                }
+                                
+                                updateStatus('Agentlet Core loaded! Ready for speech recognition.', 'success');
+                                document.getElementById('initBtn').textContent = '✅ Initialized';
+                                setButtonLoading('initBtn', false);
+                                
+                            }).catch(error => {
+                                log('❌ Initialization failed: ' + error.message, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                            
+                        } catch (error) {
+                            log('❌ Error creating AgentletCore instance: ' + error.message, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore constructor not available', 'error');
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core script', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                log('❌ Failed to initialize Agentlet Core: ' + error.message, 'error');
+                updateStatus('Initialization failed: ' + error.message, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        function setupSpeechEventListeners() {
+            // Speech start event
+            window.agentlet.speech.onSpeechEvent('start', () => {
+                log('🎤 Started listening...', 'info');
+                isListening = true;
+                updateUI();
+                updateStatus('Listening for speech...', 'info');
+            });
+
+            // Speech end event  
+            window.agentlet.speech.onSpeechEvent('end', () => {
+                log('⏹️ Stopped listening', 'info');
+                isListening = false;
+                updateUI();
+                updateStatus('Ready to listen', 'info');
+            });
+
+            // Speech result event
+            window.agentlet.speech.onSpeechEvent('result', (data) => {
+                const results = data.results;
+                const provider = data.provider;
+                
+                // Update provider info
+                document.getElementById('currentProvider').textContent = provider;
+                
+                // Process results
+                let interim = '';
+                let final = '';
+                let confidence = 0;
+                
+                for (const result of results) {
+                    if (result.isFinal) {
+                        final += result.transcript + ' ';
+                        confidence = Math.max(confidence, result.confidence || 0);
+                    } else {
+                        interim += result.transcript + ' ';
+                    }
+                }
+                
+                // Update transcripts
+                if (final.trim()) {
+                    finalTranscript += final;
+                    document.getElementById('transcriptBox').value = finalTranscript;
+                    log('📝 Final: "' + final.trim() + '" (confidence: ' + Math.round(confidence * 100) + '%)', 'success');
+                }
+                
+                interimTranscript = interim;
+                document.getElementById('interimText').textContent = interim.trim() || 'None';
+                document.getElementById('confidenceText').textContent = confidence ? Math.round(confidence * 100) + '%' : 'N/A';
+                
+                if (interim.trim()) {
+                    log('🔄 Interim: "' + interim.trim() + '"', 'info');
+                }
+            });
+
+            // Speech error event
+            window.agentlet.speech.onSpeechEvent('error', (data) => {
+                log('❌ Speech error: ' + data.error + ' (' + data.provider + ')', 'error');
+                isListening = false;
+                updateUI();
+                updateStatus('Error: ' + data.error, 'error');
+            });
+        }
+
+        async function checkSpeechStatus() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('statusBtn', true);
+                const status = window.agentlet.speech.getStatus();
+                log('📊 Speech capabilities:', 'info');
+                log(JSON.stringify(status, null, 2), 'info');
+                
+                const speechToTextStatus = status.speechToText;
+                log('🎤 Speech-to-Text: Browser=' + speechToTextStatus.browserSupported + ', OpenAI=' + speechToTextStatus.openaiAvailable, 'info');
+                
+                updateStatus('Speech status check completed', 'success');
+                setButtonLoading('statusBtn', false);
+                
+            } catch (error) {
+                log('❌ Failed to check speech status: ' + error.message, 'error');
+                updateStatus('Status check failed: ' + error.message, 'error');
+                setButtonLoading('statusBtn', false);
+            }
+        }
+
+        async function startListening() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('listenBtn', true);
+                const language = document.getElementById('languageSelect').value;
+                const provider = document.getElementById('providerSelect').value;
+                
+                const options = {
+                    language: language,
+                    continuous: true,
+                    interimResults: true,
+                    apiProvider: provider
+                };
+                
+                log('🎤 Starting speech recognition with language: ' + language + ', provider: ' + provider, 'info');
+                await window.agentlet.speech.startListening(options);
+                
+            } catch (error) {
+                log('❌ Failed to start listening: ' + error.message, 'error');
+                updateStatus('Failed to start listening: ' + error.message, 'error');
+                setButtonLoading('listenBtn', false);
+            }
+        }
+
+        function stopListening() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            try {
+                window.agentlet.speech.stopListening();
+                log('⏹️ Stopped listening', 'info');
+            } catch (error) {
+                log('❌ Failed to stop listening: ' + error.message, 'error');
+            }
+        }
+
+        function clearTranscript() {
+            finalTranscript = '';
+            interimTranscript = '';
+            document.getElementById('transcriptBox').value = '';
+            document.getElementById('interimText').textContent = 'None';
+            document.getElementById('confidenceText').textContent = 'N/A';
+            document.getElementById('currentProvider').textContent = 'N/A';
+            log('🗑️ Transcript cleared', 'info');
+        }
+
+
+        function updateUI() {
+            const listenBtn = document.getElementById('listenBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            if (isListening) {
+                setButtonLoading('listenBtn', false);
+                listenBtn.disabled = true;
+                listenBtn.textContent = '🎤 Listening...';
+                listenBtn.style.backgroundColor = '#4CAF50';
+                stopBtn.disabled = false;
+            } else {
+                listenBtn.disabled = false;
+                listenBtn.textContent = '🎤 Start Listening';
+                listenBtn.style.backgroundColor = '';
+                stopBtn.disabled = true;
+                setButtonLoading('listenBtn', false);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Speech-to-Text demo loaded. Click "Initialize Agentlet Core" to begin.', 'info');
+        });
+    </script>
+
+    <style>
+        .control-group {
+            margin: 10px 0;
+        }
+        
+        .control-group label {
+            display: inline-block;
+            width: 80px;
+            font-weight: bold;
+        }
+        
+        .control-group select {
+            width: 200px;
+            padding: 5px;
+        }
+        
+        #transcriptBox {
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        
+        .transcript-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</body>
+</html>

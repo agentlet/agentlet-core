@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Speech Demo - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../../">Examples</a> → <a href="../">05-ai</a> → text-to-speech
+                </div>
+
+                <h1>🔊 Text-to-Speech Demo - Agentlet Core</h1>
+                
+                <p>This example demonstrates text-to-speech functionality using browser's native SpeechSynthesis API with ElevenLabs and OpenAI TTS fallbacks.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Browser-first speech synthesis (free, offline, privacy-friendly)</li>
+                        <li>ElevenLabs API for premium voice quality (requires API key)</li>
+                        <li>OpenAI TTS API fallback (good quality, requires API key)</li>
+                        <li>Voice selection and speech parameter control</li>
+                        <li>Real-time speech control (pause, resume, stop)</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>🚀 Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
+                    <button onclick="checkSpeechStatus()" id="statusBtn">Check Speech Status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>🔊 Text-to-Speech Configuration</h4>
+                    <div class="control-group">
+                        <label for="providerSelect">Provider:</label>
+                        <select id="providerSelect" onchange="updateVoiceOptions()">
+                            <option value="auto">Auto (Browser First)</option>
+                            <option value="browser">Browser Only</option>
+                            <option value="elevenlabs">ElevenLabs (Premium)</option>
+                            <option value="openai">OpenAI TTS</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="voiceSelect">Voice:</label>
+                        <select id="voiceSelect">
+                            <option value="">Auto-select best voice</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="rateSlider">Rate:</label>
+                        <input type="range" id="rateSlider" min="0.1" max="3" step="0.1" value="1.0" oninput="updateRateValue()">
+                        <span id="rateValue">1.0</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="pitchSlider">Pitch:</label>
+                        <input type="range" id="pitchSlider" min="0" max="2" step="0.1" value="1.0" oninput="updatePitchValue()">
+                        <span id="pitchValue">1.0</span>
+                    </div>
+                    <div class="control-group">
+                        <label for="volumeSlider">Volume:</label>
+                        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1.0" oninput="updateVolumeValue()">
+                        <span id="volumeValue">1.0</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h4>📝 Text to Speak</h4>
+                    <textarea id="textToSpeak" rows="6" cols="50" placeholder="Enter text to speak...">Agentlet is a JavaScript bookmarklet framework that offers a modular foundation for building intelligent web automation tools powered by AI. It enables you to enhance and modernize your web applications in a powerful and unconventional way. The framework features a plugin-based architecture, advanced form handling, authentication management, screenshot utilities, and everything you need to quickly implement AI-powered tools via bookmarklets.</textarea>
+                    <div class="preset-texts">
+                        <button onclick="loadPresetText('agentlet')">📎 About Agentlet</button>
+                        <button onclick="loadPresetText('welcome')">👋 Welcome Message</button>
+                        <button onclick="loadPresetText('tech')">💻 Technology</button>
+                        <button onclick="loadPresetText('multilingual')">🌍 Multilingual</button>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h4>🎵 Speech Controls</h4>
+                    <div class="speech-controls">
+                        <button onclick="speakText()" id="speakBtn">🔊 Speak Text</button>
+                        <button onclick="stopSpeech()" id="stopBtn" disabled>⏹️ Stop</button>
+                        <p style="margin: 10px 0; padding: 10px; background: #e3f2fd; border-radius: 4px; font-size: 14px;">
+                            ℹ️ <strong>New feature:</strong> You can also use the animated <strong>🔊</strong> button in the Agentlet panel (top-right) for advanced TTS control with play/pause/stop!
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Console and Code Examples -->
+            <div class="right-column">
+                <div class="panel-section">
+                    <div class="console-header">
+                        <h4>📊 Status & Console</h4>
+                        <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                    </div>
+                    <div class="console-section" id="console"></div>
+                    
+                    <!-- Status section -->
+                    <div class="status-section" id="status">
+                        Ready for initialization
+                    </div>
+                </div>
+
+                <div class="code-example">
+                    <h4>Basic Usage</h4>
+                    <pre><code class="language-javascript">// Speak text with default settings
+await window.agentlet.speech.speak("Hello world!");
+
+// Check if currently speaking
+const isSpeaking = window.agentlet.speech.isSpeaking();
+
+// Stop current speech
+window.agentlet.speech.stopSpeaking();</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>Advanced Configuration</h4>
+                    <pre><code class="language-javascript">// Speak with custom options
+await window.agentlet.speech.speak("Hello world!", {
+    provider: 'elevenlabs', // or 'openai', 'browser', 'auto'
+    rate: 1.2,
+    pitch: 0.8,
+    volume: 0.9,
+    language: 'en-US'
+});
+
+// Use specific voice
+await window.agentlet.speech.speak("Bonjour!", {
+    provider: 'browser',
+    voice: 'Google français'
+});</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>Voice Management</h4>
+                    <pre><code class="language-javascript">// Get available voices
+const browserVoices = window.agentlet.speech.getAvailableVoices('browser');
+const elevenLabsVoices = window.agentlet.speech.getAvailableVoices('elevenlabs');
+const openaiVoices = window.agentlet.speech.getAvailableVoices('openai');
+
+// Find best voice for language
+const bestVoice = window.agentlet.speech.findBestVoice('es-ES', 'browser');
+console.log('Best Spanish voice:', bestVoice);</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include shared utilities -->
+    <script src="../../shared/console-utils.js"></script>
+
+    <script>
+        let agentlet;
+        let isSpeaking = false;
+        let currentProvider = null;
+
+        const presetTexts = {
+            agentlet: "Agentlet is a JavaScript bookmarklet framework that offers a modular foundation for building intelligent web automation tools powered by AI. It enables you to enhance and modernize your web applications in a powerful and unconventional way. The framework features a plugin-based architecture, advanced form handling, authentication management, screenshot utilities, and everything you need to quickly implement AI-powered tools via bookmarklets.",
+            welcome: "Welcome to the Agentlet Core Text-to-Speech demonstration! This example showcases the powerful speech synthesis capabilities built into the framework. You can choose from browser-native voices, premium ElevenLabs voices, or OpenAI's text-to-speech service. Adjust the rate, pitch, and volume to customize your listening experience.",
+            tech: "Artificial Intelligence and machine learning are revolutionizing how we interact with technology. From natural language processing to computer vision, AI systems are becoming more sophisticated and accessible. The combination of speech recognition and text-to-speech technologies creates seamless voice interfaces that feel natural and intuitive.",
+            multilingual: "Bonjour! Hola! Guten Tag! こんにちは! The text-to-speech system supports multiple languages and voices. You can speak in English, Spanish, French, German, Japanese, and many other languages. Each language has its own unique characteristics and pronunciation patterns that make global communication possible."
+        };
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Starting Agentlet Core initialization...', 'info');
+
+                // Check if already loaded
+                if (window.agentlet) {
+                    log('⚠️ Agentlet Core already loaded', 'warning');
+                    updateStatus('Agentlet Core already initialized!', 'success');
+                    setButtonLoading('initBtn', false);
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Dynamically load Agentlet Core
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Try to access AgentletCore constructor
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('🚀 Creating AgentletCore instance...');
+                            agentlet = new AgentletConstructor({
+                                debugMode: true,
+                                enablePlugins: false,
+                                startMinimized: true
+                            });
+                            
+                            log('⚙️ Starting initialization...');
+                            agentlet.init().then(() => {
+                                log('✅ Agentlet Core initialized successfully', 'success');
+                                log('📊 Available APIs: ' + Object.keys(window.agentlet || {}).join(', '), 'info');
+                                
+                                // Check speech availability immediately
+                                if (window.agentlet && window.agentlet.speech) {
+                                    log('🔊 Speech manager initialized and available', 'success');
+                                    setupSpeechEventListeners();
+                                    updateVoiceOptions();
+                                    checkSpeechStatus();
+                                    
+                                    // Debug: Check if TTS button exists in panel
+                                    setTimeout(() => {
+                                        console.log('🔍 CONSOLE DEBUG - Starting TTS button check');
+                                        const ttsButton = document.getElementById('agentlet-tts-btn');
+                                        const sttButton = document.getElementById('agentlet-stt-btn');
+                                        console.log('🔍 CONSOLE DEBUG - TTS button exists:', !!ttsButton);
+                                        console.log('🔍 CONSOLE DEBUG - STT button exists:', !!sttButton);
+                                        
+                                        if (window.agentlet && window.agentlet.speech) {
+                                            console.log('🔍 CONSOLE DEBUG - Speech API available');
+                                            if (window.agentlet.speech.initializeTtsButton) {
+                                                console.log('🔍 CONSOLE DEBUG - initializeTtsButton method available');
+                                            } else {
+                                                console.log('🔍 CONSOLE DEBUG - initializeTtsButton method NOT available');
+                                            }
+                                        } else {
+                                            console.log('🔍 CONSOLE DEBUG - Speech API NOT available');
+                                        }
+                                        
+                                        // Check panel structure
+                                        const agentletContainer = document.getElementById('agentlet-container');
+                                        const agentletActions = document.getElementById('agentlet-actions');
+                                        console.log('🔍 CONSOLE DEBUG - Agentlet container exists:', !!agentletContainer);
+                                        console.log('🔍 CONSOLE DEBUG - Agentlet actions exists:', !!agentletActions);
+                                        
+                                        if (agentletActions) {
+                                            console.log('🔍 CONSOLE DEBUG - Actions HTML:', agentletActions.innerHTML);
+                                        }
+                                    }, 1000);
+                                }
+                                
+                                updateStatus('Agentlet Core loaded! Ready for text-to-speech.', 'success');
+                                document.getElementById('initBtn').textContent = '✅ Initialized';
+                                setButtonLoading('initBtn', false);
+                                
+                            }).catch(error => {
+                                log('❌ Initialization failed: ' + error.message, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                            
+                        } catch (error) {
+                            log('❌ Error creating AgentletCore instance: ' + error.message, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore constructor not available', 'error');
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core script', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                log('❌ Failed to initialize Agentlet Core: ' + error.message, 'error');
+                updateStatus('Initialization failed: ' + error.message, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        function setupSpeechEventListeners() {
+            // Speech start event
+            window.agentlet.speech.onSpeechSynthesisEvent('start', (data) => {
+                log('🔊 Started speaking with provider: ' + data.provider, 'info');
+                updateStatus('Speaking... (Panel TTS button also available)', 'info');
+                
+                // Update button states
+                const speakBtn = document.getElementById('speakBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                if (speakBtn) {
+                    speakBtn.disabled = true;
+                    speakBtn.textContent = '🔊 Speaking...';
+                    speakBtn.style.backgroundColor = '#4CAF50';
+                }
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                }
+            });
+
+            // Speech end event  
+            window.agentlet.speech.onSpeechSynthesisEvent('end', (data) => {
+                log('⏹️ Finished speaking', 'info');
+                updateStatus('Ready to speak', 'info');
+                
+                // Reset button states
+                const speakBtn = document.getElementById('speakBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                if (speakBtn) {
+                    speakBtn.disabled = false;
+                    speakBtn.textContent = '🔊 Speak Text';
+                    speakBtn.style.backgroundColor = '';
+                }
+                if (stopBtn) {
+                    stopBtn.disabled = true;
+                }
+            });
+
+            // Speech error event
+            window.agentlet.speech.onSpeechSynthesisEvent('error', (data) => {
+                log('❌ Speech error: ' + data.error + ' (' + data.provider + ')', 'error');
+                updateStatus('Error: ' + data.error, 'error');
+                
+                // Reset button states on error
+                const speakBtn = document.getElementById('speakBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                if (speakBtn) {
+                    speakBtn.disabled = false;
+                    speakBtn.textContent = '🔊 Speak Text';
+                    speakBtn.style.backgroundColor = '';
+                }
+                if (stopBtn) {
+                    stopBtn.disabled = true;
+                }
+            });
+
+            // Pause/resume events (browser only)
+            window.agentlet.speech.onSpeechSynthesisEvent('pause', () => {
+                log('⏸️ Speech paused', 'info');
+                updateStatus('Paused (Panel TTS button available)', 'info');
+            });
+
+            window.agentlet.speech.onSpeechSynthesisEvent('resume', () => {
+                log('▶️ Speech resumed', 'info');
+                updateStatus('Speaking... (Panel TTS button also available)', 'info');
+            });
+        }
+
+        async function checkSpeechStatus() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('statusBtn', true);
+                const status = window.agentlet.speech.getStatus();
+                log('📊 Speech capabilities:', 'info');
+                log(JSON.stringify(status, null, 2), 'info');
+                
+                const ttsStatus = status.textToSpeech;
+                log('🔊 Text-to-Speech: Browser=' + ttsStatus.browserSupported + ', ElevenLabs=' + ttsStatus.elevenLabsAvailable + ', OpenAI=' + ttsStatus.openaiAvailable, 'info');
+                log('📢 Available voices: ' + ttsStatus.availableVoices + ' browser voices', 'info');
+                
+                updateStatus('Speech status check completed', 'success');
+                setButtonLoading('statusBtn', false);
+                
+            } catch (error) {
+                log('❌ Failed to check speech status: ' + error.message, 'error');
+                updateStatus('Status check failed: ' + error.message, 'error');
+                setButtonLoading('statusBtn', false);
+            }
+        }
+
+        async function updateVoiceOptions() {
+            if (!window.agentlet) return;
+
+            const provider = document.getElementById('providerSelect').value;
+            const voiceSelect = document.getElementById('voiceSelect');
+            
+            // Clear existing options except auto-select
+            voiceSelect.innerHTML = '<option value="">Auto-select best voice</option>';
+            
+            try {
+                let voices = [];
+                
+                if (provider === 'browser' || provider === 'auto') {
+                    voices = window.agentlet.speech.getAvailableVoices('browser');
+                } else if (provider === 'elevenlabs') {
+                    voices = window.agentlet.speech.getAvailableVoices('elevenlabs');
+                } else if (provider === 'openai') {
+                    voices = window.agentlet.speech.getAvailableVoices('openai');
+                }
+                
+                voices.forEach(voice => {
+                    const option = document.createElement('option');
+                    option.value = voice.id;
+                    option.textContent = voice.name + ' (' + voice.language + ')' + (voice.gender ? ' [' + voice.gender + ']' : '');
+                    voiceSelect.appendChild(option);
+                });
+                
+                log('🗣️ Loaded ' + voices.length + ' voices for provider: ' + provider, 'info');
+                
+            } catch (error) {
+                log('❌ Failed to load voices: ' + error.message, 'error');
+            }
+        }
+
+        async function speakText() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            const text = document.getElementById('textToSpeak').value.trim();
+            if (!text) {
+                log('❌ No text to speak', 'warning');
+                return;
+            }
+
+            try {
+                setButtonLoading('speakBtn', true);
+                const provider = document.getElementById('providerSelect').value;
+                const voice = document.getElementById('voiceSelect').value;
+                const rate = parseFloat(document.getElementById('rateSlider').value);
+                const pitch = parseFloat(document.getElementById('pitchSlider').value);
+                const volume = parseFloat(document.getElementById('volumeSlider').value);
+                
+                const options = {
+                    provider: provider,
+                    rate: rate,
+                    pitch: pitch,
+                    volume: volume
+                };
+                
+                if (voice) {
+                    if (provider === 'browser') {
+                        options.voice = voice;
+                    } else if (provider === 'elevenlabs') {
+                        options.elevenLabsVoiceId = voice;
+                    } else if (provider === 'openai') {
+                        options.openaiVoice = voice;
+                    }
+                }
+                
+                log('🔊 Speaking text with provider: ' + provider + ', voice: ' + (voice || 'auto'), 'info');
+                log('📝 Text: "' + text.substring(0, 100) + (text.length > 100 ? '...' : '') + '"', 'info');
+                
+                console.log('🔍 SPEAK DEBUG - About to call window.agentlet.speech.speak');
+                console.log('🔍 SPEAK DEBUG - Text:', text);
+                console.log('🔍 SPEAK DEBUG - Options:', options);
+                
+                // Speak the text normally
+                const speakResult = await window.agentlet.speech.speak(text, options);
+                console.log('🔍 SPEAK DEBUG - Speech result:', speakResult);
+                console.log('🔍 SPEAK DEBUG - Speech completed or started');
+                
+                // Also initialize the panel TTS button for additional control
+                console.log('🔍 SPEAK CONSOLE DEBUG - About to check initializeTtsButton');
+                if (window.agentlet && window.agentlet.speech && window.agentlet.speech.initializeTtsButton) {
+                    try {
+                        console.log('🔍 SPEAK CONSOLE DEBUG - Calling initializeTtsButton');
+                        window.agentlet.speech.initializeTtsButton(text);
+                        console.log('🔍 SPEAK CONSOLE DEBUG - initializeTtsButton called successfully');
+                        
+                        // First check if buttons exist at all
+                        const sttBtn = document.getElementById('agentlet-stt-btn');
+                        const ttsBtn = document.getElementById('agentlet-tts-btn');
+                        console.log('🔍 SPEAK CONSOLE DEBUG - STT button exists in DOM:', !!sttBtn);
+                        console.log('🔍 SPEAK CONSOLE DEBUG - TTS button exists in DOM:', !!ttsBtn);
+                        
+                        if (ttsBtn) {
+                            console.log('🔍 SPEAK CONSOLE DEBUG - TTS button current display:', ttsBtn.style.display);
+                        }
+                        
+                        // Check if button exists in DOM after init
+                        setTimeout(() => {
+                            const ttsButtonAfter = document.getElementById('agentlet-tts-btn');
+                            console.log('🔍 SPEAK CONSOLE DEBUG - TTS button after init:', !!ttsButtonAfter);
+                            if (ttsButtonAfter) {
+                                console.log('🔍 SPEAK CONSOLE DEBUG - TTS button display after init:', ttsButtonAfter.style.display);
+                            }
+                        }, 500);
+                    } catch (error) {
+                        console.log('🔍 SPEAK CONSOLE DEBUG - Error initializing TTS button:', error);
+                    }
+                } else {
+                    console.log('🔍 SPEAK CONSOLE DEBUG - initializeTtsButton not available');
+                    console.log('🔍 SPEAK CONSOLE DEBUG - window.agentlet exists:', !!window.agentlet);
+                    console.log('🔍 SPEAK CONSOLE DEBUG - window.agentlet.speech exists:', !!(window.agentlet && window.agentlet.speech));
+                }
+                
+                setButtonLoading('speakBtn', false);
+                
+            } catch (error) {
+                log('❌ Failed to speak text: ' + error.message, 'error');
+                updateStatus('Error: ' + error.message, 'error');
+                setButtonLoading('speakBtn', false);
+            }
+        }
+
+        function stopSpeech() {
+            if (!window.agentlet) return;
+            
+            try {
+                window.agentlet.speech.stopSpeaking();
+                log('⏹️ Speech stopped', 'info');
+                updateStatus('Speech stopped', 'info');
+            } catch (error) {
+                log('❌ Failed to stop speech: ' + error.message, 'error');
+            }
+        }
+
+
+        function loadPresetText(preset) {
+            const textArea = document.getElementById('textToSpeak');
+            textArea.value = presetTexts[preset];
+            log('📝 Loaded preset text: ' + preset, 'info');
+        }
+
+
+        function updateRateValue() {
+            document.getElementById('rateValue').textContent = document.getElementById('rateSlider').value;
+        }
+
+        function updatePitchValue() {
+            document.getElementById('pitchValue').textContent = document.getElementById('pitchSlider').value;
+        }
+
+        function updateVolumeValue() {
+            document.getElementById('volumeValue').textContent = document.getElementById('volumeSlider').value;
+        }
+
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Text-to-Speech demo loaded. Click "Initialize Agentlet Core" to begin.', 'info');
+            updateRateValue();
+            updatePitchValue();
+            updateVolumeValue();
+        });
+    </script>
+
+    <style>
+        .control-group {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .control-group label {
+            display: inline-block;
+            width: 80px;
+            font-weight: bold;
+        }
+        
+        .control-group select {
+            width: 200px;
+            padding: 5px;
+        }
+        
+        .control-group input[type="range"] {
+            width: 150px;
+            margin-right: 10px;
+        }
+        
+        #textToSpeak {
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            resize: vertical;
+        }
+        
+        .preset-texts {
+            margin: 10px 0;
+        }
+        
+        .preset-texts button {
+            margin: 2px;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        
+        .speech-controls {
+            margin: 10px 0;
+        }
+        
+        .speech-controls button {
+            margin-right: 10px;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</body>
+</html>

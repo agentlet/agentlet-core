@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant Demo - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../../shared/examples.css">
+    <link rel="stylesheet" href="../../shared/two-column-layout.css">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../../">Examples</a> → <a href="../">05-ai</a> → voice-assistant
+                </div>
+
+                <h1>🤖 Voice Assistant Demo - Agentlet Core</h1>
+                
+                <p>This advanced example demonstrates a complete voice assistant using speech-to-text, AI processing, and text-to-speech in a seamless workflow.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Keyboard shortcut integration (Ctrl+; to activate voice assistant)</li>
+                        <li>Command prompt dialog for voice input</li>
+                        <li>Speech-to-text for question capture</li>
+                        <li>AI processing via OpenAI API</li>
+                        <li>Fullscreen dialog for AI response display</li>
+                        <li>Text-to-speech for AI response playback</li>
+                        <li>Complete voice interaction workflow</li>
+                    </ul>
+                </div>
+
+                <div class="example-section">
+                    <h3>🎯 How to use:</h3>
+                    <ol>
+                        <li>Initialize Agentlet Core and configure your OpenAI API key</li>
+                        <li>Press <kbd>Ctrl</kbd> + <kbd>;</kbd> anywhere on the page to activate voice assistant</li>
+                        <li>Speak your question when prompted</li>
+                        <li>Wait for AI processing and response</li>
+                        <li>View the response in fullscreen and optionally listen to it</li>
+                    </ol>
+                </div>
+
+                <div class="controls">
+                    <h4>🚀 Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize Agentlet Core</button>
+                    <button onclick="configureOpenAI()" id="configBtn">🔑 Configure OpenAI</button>
+                    <button onclick="checkStatus()" id="statusBtn">Check Status</button>
+                </div>
+
+                <div class="controls">
+                    <h4>🎤 Voice Assistant</h4>
+                    <div class="shortcut-info">
+                        <strong>Keyboard Shortcut:</strong> <kbd>Ctrl</kbd> + <kbd>;</kbd>
+                        <button onclick="activateVoiceAssistant()" id="manualBtn">🎤 Activate Manually</button>
+                    </div>
+                    <div class="assistant-status" id="assistantStatus">
+                        <span id="statusIcon">💤</span>
+                        <span id="statusMessage">Voice assistant ready. Press Ctrl+; to activate.</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h4>⚙️ Configuration</h4>
+                    <div class="config-group">
+                        <label for="languageSelect">Speech Language:</label>
+                        <select id="languageSelect">
+                            <option value="en-US">English (US)</option>
+                            <option value="en-GB">English (UK)</option>
+                            <option value="es-ES">Spanish (Spain)</option>
+                            <option value="fr-FR">French (France)</option>
+                            <option value="de-DE">German (Germany)</option>
+                            <option value="it-IT">Italian (Italy)</option>
+                            <option value="pt-BR">Portuguese (Brazil)</option>
+                            <option value="ja-JP">Japanese (Japan)</option>
+                        </select>
+                    </div>
+                    <div class="config-group">
+                        <label for="aiModelSelect">AI Model:</label>
+                        <select id="aiModelSelect">
+                            <option value="gpt-4o-mini">GPT-4o Mini (Fast & Affordable)</option>
+                            <option value="gpt-4o">GPT-4o (High Quality)</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                    </div>
+                    <div class="config-group">
+                        <label for="ttsProviderSelect">TTS Provider:</label>
+                        <select id="ttsProviderSelect">
+                            <option value="auto">Auto (Browser First)</option>
+                            <option value="browser">Browser Only</option>
+                            <option value="elevenlabs">ElevenLabs (Premium)</option>
+                            <option value="openai">OpenAI TTS</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h4>📚 Sample Questions</h4>
+                    <div class="sample-questions">
+                        <button onclick="askSampleQuestion('tech')">💻 What is artificial intelligence?</button>
+                        <button onclick="askSampleQuestion('coding')">🔧 How do I learn JavaScript?</button>
+                        <button onclick="askSampleQuestion('agentlet')">📎 What is Agentlet framework?</button>
+                        <button onclick="askSampleQuestion('weather')">🌤️ How's the weather today?</button>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <h4>📊 Recent Conversations</h4>
+                    <div id="conversationHistory" class="conversation-history">
+                        <em>No conversations yet. Use Ctrl+; to start!</em>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Code Examples -->
+            <div class="right-column">
+                <div class="panel-section">
+                    <div class="console-header">
+                        <h4>📊 Status & Console</h4>
+                        <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                    </div>
+                    <div class="console-section" id="console"></div>
+                    
+                    <!-- Status section -->
+                    <div class="status-section" id="status">
+                        Ready for initialization
+                    </div>
+                </div>
+
+                <div class="code-example">
+                    <h4>Shortcut Registration</h4>
+                    <pre><code class="language-javascript">// Register Ctrl+; shortcut
+window.agentlet.utils.shortcuts.register('ctrl+;', async () => {
+    await activateVoiceAssistant();
+});
+
+// Check available shortcuts
+console.log('Registered shortcuts:', window.agentlet.utils.shortcuts.list());</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>Voice Input Dialog</h4>
+                    <pre><code class="language-javascript">// Show command prompt for voice input
+const result = await window.agentlet.utils.Dialog.commandPrompt({
+    title: 'Voice Assistant',
+    message: 'Speak your question...',
+    showMicrophone: true,
+    speechOptions: {
+        language: 'en-US',
+        continuous: true
+    }
+});
+
+console.log('Voice input:', result.text);</code></pre>
+                </div>
+
+                <div class="code-example">
+                    <h4>AI Processing</h4>
+                    <pre><code class="language-javascript">// Send question to AI
+const aiResponse = await window.agentlet.ai.sendPrompt(
+    `Please answer this question clearly and helpfully: ${question}`,
+    [], // no images
+    { 
+        model: 'gpt-4o-mini',
+        maxTokens: 1000 
+    }
+);
+
+console.log('AI Response:', aiResponse);</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include shared utilities -->
+    <script src="../../shared/console-utils.js"></script>
+
+    <script>
+        let agentlet;
+        let voiceAssistantActive = false;
+        let conversationHistory = [];
+
+        const sampleQuestions = {
+            tech: "What is artificial intelligence and how is it changing our world?",
+            coding: "How do I learn JavaScript programming effectively as a beginner?",
+            agentlet: "What is the Agentlet framework and what are its main features?",
+            weather: "Can you explain how weather forecasting works and what factors influence accuracy?"
+        };
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Starting Agentlet Core initialization...', 'info');
+
+                // Check if already loaded
+                if (window.agentlet) {
+                    log('⚠️ Agentlet Core already loaded', 'warning');
+                    updateStatus('Agentlet Core already initialized!', 'success');
+                    setButtonLoading('initBtn', false);
+                    return;
+                }
+
+                // Simulate loading delay for demonstration
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Dynamically load Agentlet Core
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now() + Math.random();
+                
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+                    
+                    // Try to access AgentletCore constructor
+                    let AgentletConstructor = null;
+                    if (window.AgentletCore) {
+                        AgentletConstructor = window.AgentletCore.default;
+                    }
+                    
+                    if (AgentletConstructor) {
+                        try {
+                            log('🚀 Creating AgentletCore instance...');
+                            agentlet = new AgentletConstructor({
+                                debugMode: true,
+                                enablePlugins: false,
+                                startMinimized: true
+                            });
+                            
+                            log('⚙️ Starting initialization...');
+                            agentlet.init().then(() => {
+                                log('✅ Agentlet Core initialized successfully', 'success');
+                                log('📊 Available APIs: ' + Object.keys(window.agentlet || {}).join(', '), 'info');
+                                
+                                // Check capabilities immediately
+                                if (window.agentlet && window.agentlet.speech) {
+                                    log('🎤 Speech manager initialized and available', 'success');
+                                }
+                                if (window.agentlet && window.agentlet.ai) {
+                                    log('🤖 AI manager initialized and available', 'success');
+                                }
+                                
+                                // Register keyboard shortcut
+                                registerShortcut();
+                                
+                                // Also set up manual keyboard handler as backup with high priority
+                                document.addEventListener('keydown', (e) => {
+                                    if ((e.ctrlKey || e.metaKey) && e.key === ';') {
+                                        console.log('🔍 MANUAL SHORTCUT DEBUG - Cmd/Ctrl+; detected by backup handler');
+                                        
+                                        // Check if any AgentletCore dialogs are open
+                                        const agentletDialogs = document.querySelectorAll('[id*="agentlet-dialog"], [class*="agentlet-dialog"]');
+                                        if (agentletDialogs.length > 0) {
+                                            console.log('🔍 MANUAL SHORTCUT DEBUG - AgentletCore dialog detected, not interfering');
+                                            return;
+                                        }
+                                        
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        console.log('🔍 MANUAL SHORTCUT DEBUG - Calling activateVoiceAssistant');
+                                        activateVoiceAssistant();
+                                    }
+                                }, true); // Use capture phase for higher priority
+                                
+                                updateStatus('Agentlet Core loaded! Ready for voice assistant.', 'success');
+                                document.getElementById('initBtn').textContent = '✅ Initialized';
+                                setButtonLoading('initBtn', false);
+                                
+                                updateAssistantStatus('ready', 'Voice assistant ready. Press Ctrl+; to activate.');
+                                
+                                // Check status
+                                checkStatus();
+                                
+                            }).catch(error => {
+                                log('❌ Initialization failed: ' + error.message, 'error');
+                                updateStatus('Initialization failed: ' + error.message, 'error');
+                                setButtonLoading('initBtn', false);
+                            });
+                            
+                        } catch (error) {
+                            log('❌ Error creating AgentletCore instance: ' + error.message, 'error');
+                            updateStatus('Error creating instance: ' + error.message, 'error');
+                            setButtonLoading('initBtn', false);
+                        }
+                    } else {
+                        log('❌ AgentletCore constructor not available', 'error');
+                        updateStatus('AgentletCore constructor not found', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core script', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                log('❌ Failed to initialize Agentlet Core: ' + error.message, 'error');
+                updateStatus('Initialization failed: ' + error.message, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        async function registerShortcut() {
+            try {
+                // First, unregister the default AgentletCore cmd+; shortcut
+                console.log('🔍 SHORTCUT DEBUG - Unregistering default AgentletCore shortcuts for cmd+;');
+                window.agentlet.utils.shortcuts.unregister('ctrl+;,cmd+;');
+                
+                // Wait a moment for the unregistration to complete
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Register Ctrl+; shortcut for voice assistant
+                const registered1 = window.agentlet.utils.shortcuts.register('ctrl+;', async (event) => {
+                    console.log('🔍 SHORTCUT DEBUG - Ctrl+; pressed, calling activateVoiceAssistant');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await activateVoiceAssistant();
+                }, {
+                    description: 'Voice Assistant - Speech-to-text input',
+                    allowInInputs: false,
+                    preventDefault: true,
+                    stopPropagation: true
+                });
+                
+                if (registered1) {
+                    log('⌨️ Registered Ctrl+; shortcut for voice assistant', 'success');
+                } else {
+                    log('❌ Failed to register Ctrl+; shortcut', 'error');
+                }
+                
+                // Also register CMD+; for Mac users
+                const registered2 = window.agentlet.utils.shortcuts.register('cmd+;', async (event) => {
+                    console.log('🔍 SHORTCUT DEBUG - Cmd+; pressed, calling activateVoiceAssistant');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await activateVoiceAssistant();
+                }, {
+                    description: 'Voice Assistant - Speech-to-text input (Mac)',
+                    allowInInputs: false,
+                    preventDefault: true,
+                    stopPropagation: true
+                });
+                
+                if (registered2) {
+                    log('⌨️ Registered Cmd+; shortcut for Mac users', 'success');
+                } else {
+                    log('❌ Failed to register Cmd+; shortcut', 'error');
+                }
+                
+                // Show all registered shortcuts for debugging
+                const allShortcuts = window.agentlet.utils.shortcuts.getShortcuts();
+                console.log('🔍 SHORTCUT DEBUG - All registered shortcuts:', allShortcuts);
+                
+            } catch (error) {
+                log('❌ Failed to register shortcut: ' + error.message, 'error');
+                console.error('🔍 SHORTCUT DEBUG - Registration error:', error);
+            }
+        }
+
+        async function configureOpenAI() {
+            if (!window.agentlet) {
+                updateStatus('Initialize Agentlet first', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('configBtn', true);
+                
+                // Create custom dialog content for AI configuration
+                const dialogContent = `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="margin-top: 0; color: #333;">🤖 OpenAI Configuration</h3>
+                        <p>Configure your OpenAI API settings for AI features.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label for="dialogApiKey" style="display: block; margin-bottom: 5px; font-weight: bold;">API Key:</label>
+                        <input type="password" id="dialogApiKey" placeholder="sk-..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <small style="color: #666; font-size: 0.9em;">Your OpenAI API key (starts with "sk-")</small>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="dialogModel" style="display: block; margin-bottom: 5px; font-weight: bold;">Model:</label>
+                        <select id="dialogModel" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="gpt-4">gpt-4</option>
+                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                        </select>
+                        <small style="color: #666; font-size: 0.9em;">Choose the OpenAI model to use</small>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                        <button id="saveConfigBtn" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">💾 Save Configuration</button>
+                        <button id="cancelConfigBtn" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    </div>
+                `;
+
+                // Create modal dialog
+                const dialog = document.createElement('div');
+                dialog.id = 'aiConfigModal';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 10000;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                `;
+
+                const dialogBox = document.createElement('div');
+                dialogBox.style.cssText = `
+                    background: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    max-width: 500px;
+                    width: 90%;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                `;
+                
+                dialogBox.innerHTML = dialogContent;
+                dialog.appendChild(dialogBox);
+                document.body.appendChild(dialog);
+
+                // Set current values
+                const currentApiKey = window.agentlet.env.OPENAI_API_KEY || '';
+                const currentModel = window.agentlet.env.OPENAI_MODEL || 'gpt-4o-mini';
+                
+                if (currentApiKey) {
+                    document.getElementById('dialogApiKey').placeholder = `Current: ${currentApiKey.substring(0, 8)}...`;
+                }
+                document.getElementById('dialogModel').value = currentModel;
+
+                // Handle save button
+                document.getElementById('saveConfigBtn').onclick = async () => {
+                    const apiKey = document.getElementById('dialogApiKey').value.trim();
+                    const model = document.getElementById('dialogModel').value;
+                    
+                    try {
+                        let updated = false;
+                        
+                        // Update API key if provided
+                        if (apiKey) {
+                            window.agentlet.env.OPENAI_API_KEY = apiKey;
+                            log(`🔑 OpenAI API key configured (${apiKey.substring(0, 8)}...)`, 'success');
+                            updated = true;
+                        }
+                        
+                        // Update model
+                        window.agentlet.env.OPENAI_MODEL = model;
+                        log(`🎛️ OpenAI model set to: ${model}`, 'success');
+                        updated = true;
+                        
+                        if (updated) {
+                            window.agentlet.ai.refresh();
+                            updateStatus('AI configuration saved successfully', 'success');
+                        }
+                        
+                    } catch (error) {
+                        log(`❌ Error saving configuration: ${error.message}`, 'error');
+                        updateStatus('Error saving configuration: ' + error.message, 'error');
+                    }
+                    
+                    // Close dialog
+                    document.body.removeChild(dialog);
+                };
+
+                // Handle cancel button
+                document.getElementById('cancelConfigBtn').onclick = () => {
+                    document.body.removeChild(dialog);
+                };
+
+                // Close on background click
+                dialog.onclick = (e) => {
+                    if (e.target === dialog) {
+                        document.body.removeChild(dialog);
+                    }
+                };
+
+                // Close on Escape key
+                document.addEventListener('keydown', function escapeHandler(e) {
+                    if (e.key === 'Escape' && document.getElementById('aiConfigModal')) {
+                        document.body.removeChild(dialog);
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                });
+
+                setButtonLoading('configBtn', false);
+                
+            } catch (error) {
+                log(`❌ Error opening config dialog: ${error.message}`, 'error');
+                updateStatus('Error opening configuration dialog: ' + error.message, 'error');
+                setButtonLoading('configBtn', false);
+            }
+        }
+
+        async function checkStatus() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            try {
+                setButtonLoading('statusBtn', true);
+                const aiStatus = window.agentlet.ai.getStatus();
+                const speechStatus = window.agentlet.speech.getStatus();
+                
+                log('📊 System Status:', 'info');
+                log('  AI Available: ' + aiStatus.available, 'info');
+                log('  AI Provider: ' + (aiStatus.currentProvider || 'None'), 'info');
+                log('  Speech-to-Text: Browser=' + speechStatus.speechToText.browserSupported + ', OpenAI=' + speechStatus.speechToText.openaiAvailable, 'info');
+                log('  Text-to-Speech: Browser=' + speechStatus.textToSpeech.browserSupported + ', OpenAI=' + speechStatus.textToSpeech.openaiAvailable + ', ElevenLabs=' + speechStatus.textToSpeech.elevenLabsAvailable, 'info');
+                
+                const ready = aiStatus.available && (speechStatus.speechToText.browserSupported || speechStatus.speechToText.openaiAvailable);
+                updateAssistantStatus(ready ? 'ready' : 'not-ready', 
+                           ready ? 'All systems ready!' : 'AI or Speech capabilities missing');
+                
+                updateStatus('Status check completed', 'success');
+                setButtonLoading('statusBtn', false);
+                
+            } catch (error) {
+                log('❌ Failed to check status: ' + error.message, 'error');
+                updateStatus('Status check failed: ' + error.message, 'error');
+                setButtonLoading('statusBtn', false);
+            }
+        }
+
+        async function activateVoiceAssistant() {
+            if (!window.agentlet) {
+                log('❌ Agentlet not initialized', 'error');
+                return;
+            }
+
+            if (voiceAssistantActive) {
+                log('⏳ Voice assistant already active', 'warning');
+                return;
+            }
+
+            voiceAssistantActive = true;
+            updateAssistantStatus('listening', 'Listening for your question...');
+
+            try {
+                log('🎤 Activating voice assistant...', 'info');
+                
+                // Step 1: Get voice input via command prompt
+                const voiceInput = await getVoiceInput();
+                if (!voiceInput) {
+                    log('❌ No voice input received', 'warning');
+                    return;
+                }
+
+                updateAssistantStatus('processing', 'Processing with AI...');
+                
+                // Step 2: Process with AI
+                const aiResponse = await processWithAI(voiceInput);
+                if (!aiResponse) {
+                    log('❌ No AI response received', 'error');
+                    return;
+                }
+
+                // Step 3: Show response in fullscreen
+                await showAIResponse(voiceInput, aiResponse);
+                
+                // Step 4: Add to conversation history
+                addToHistory(voiceInput, aiResponse);
+                
+                updateAssistantStatus('ready', 'Voice assistant ready. Press Ctrl+; to activate.');
+                
+            } catch (error) {
+                log('❌ Voice assistant error: ' + error.message, 'error');
+                updateAssistantStatus('error', 'Error: ' + error.message);
+                
+                await window.agentlet.utils.Dialog.error({
+                    title: 'Voice Assistant Error',
+                    message: 'An error occurred: ' + error.message
+                });
+            } finally {
+                voiceAssistantActive = false;
+            }
+        }
+
+        async function getVoiceInput() {
+            const language = document.getElementById('languageSelect').value;
+            
+            try {
+                // Create custom voice input dialog
+                return new Promise((resolve, reject) => {
+                    let isListening = false;
+                    let transcript = '';
+                    let finalTranscript = '';
+                    
+                    // Create custom dialog
+                    const dialog = document.createElement('div');
+                    dialog.id = 'voiceInputModal';
+                    dialog.style.cssText = `
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0,0,0,0.6);
+                        z-index: 10000;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        animation: fadeIn 0.3s ease;
+                    `;
+
+                    const dialogBox = document.createElement('div');
+                    dialogBox.style.cssText = `
+                        background: white;
+                        padding: 30px;
+                        border-radius: 12px;
+                        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                        max-width: 600px;
+                        width: 90%;
+                        text-align: center;
+                        position: relative;
+                    `;
+                    
+                    dialogBox.innerHTML = `
+                        <h2 style="margin: 0 0 20px 0; color: #333;">🎤 Voice Assistant</h2>
+                        <p style="margin: 0 0 20px 0; color: #666;">Parlez clairement votre question ou tapez-la ci-dessous...</p>
+                        
+                        <textarea id="voiceTranscript" 
+                                  placeholder="Votre question apparaîtra ici... ou tapez directement" 
+                                  style="width: 100%; height: 120px; padding: 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; resize: vertical; margin-bottom: 20px; box-sizing: border-box;"></textarea>
+                        
+                        <div style="margin: 20px 0;">
+                            <button id="startListenBtn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px;">🎤 Commencer à dicter</button>
+                            <button id="stopListenBtn" style="background: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-right: 10px; display: none;">⏹️ Arrêter</button>
+                            <button id="clearBtn" style="background: #6c757d; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">🗑️ Effacer</button>
+                        </div>
+                        
+                        <div id="listeningStatus" style="margin: 15px 0; padding: 10px; border-radius: 6px; display: none;">
+                            <span style="color: #28a745; font-weight: bold;">🎤 À l'écoute... Parlez maintenant!</span>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 20px;">
+                            <button id="cancelVoiceBtn" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; flex: 1;">Annuler</button>
+                            <button id="submitVoiceBtn" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; flex: 1; font-weight: bold;">Envoyer la question</button>
+                        </div>
+                    `;
+                    
+                    dialog.appendChild(dialogBox);
+                    document.body.appendChild(dialog);
+                    
+                    const transcriptArea = document.getElementById('voiceTranscript');
+                    const startBtn = document.getElementById('startListenBtn');
+                    const stopBtn = document.getElementById('stopListenBtn');
+                    const clearBtn = document.getElementById('clearBtn');
+                    const cancelBtn = document.getElementById('cancelVoiceBtn');
+                    const submitBtn = document.getElementById('submitVoiceBtn');
+                    const listeningStatus = document.getElementById('listeningStatus');
+                    
+                    // Focus on textarea
+                    transcriptArea.focus();
+                    
+                    // Start listening button
+                    startBtn.onclick = async () => {
+                        if (isListening) return;
+                        
+                        try {
+                            log('🎤 Starting voice input...', 'info');
+                            isListening = true;
+                            startBtn.style.display = 'none';
+                            stopBtn.style.display = 'inline-block';
+                            listeningStatus.style.display = 'block';
+                            
+                            // Start listening
+                            await window.agentlet.speech.startListening({
+                                language: language,
+                                continuous: true,
+                                interimResults: true,
+                                apiProvider: 'auto'
+                            });
+                            
+                        } catch (error) {
+                            log('❌ Failed to start listening: ' + error.message, 'error');
+                            resetListeningUI();
+                        }
+                    };
+                    
+                    // Stop listening button
+                    stopBtn.onclick = () => {
+                        if (!isListening) return;
+                        
+                        try {
+                            window.agentlet.speech.stopListening();
+                            log('⏹️ Voice input stopped', 'info');
+                        } catch (error) {
+                            log('❌ Failed to stop listening: ' + error.message, 'error');
+                        }
+                        resetListeningUI();
+                    };
+                    
+                    // Clear button
+                    clearBtn.onclick = () => {
+                        transcriptArea.value = '';
+                        transcript = '';
+                        finalTranscript = '';
+                        transcriptArea.focus();
+                    };
+                    
+                    // Cancel button
+                    cancelBtn.onclick = () => {
+                        if (isListening) {
+                            try {
+                                window.agentlet.speech.stopListening();
+                            } catch (e) {}
+                        }
+                        cleanup();
+                        resolve(null);
+                    };
+                    
+                    // Submit button
+                    submitBtn.onclick = () => {
+                        const text = transcriptArea.value.trim();
+                        if (!text) {
+                            alert('Veuillez saisir ou dicter votre question.');
+                            return;
+                        }
+                        if (isListening) {
+                            try {
+                                window.agentlet.speech.stopListening();
+                            } catch (e) {}
+                        }
+                        cleanup();
+                        resolve(text);
+                    };
+                    
+                    // Handle Enter key (Ctrl+Enter to submit)
+                    transcriptArea.onkeydown = (e) => {
+                        if (e.key === 'Enter' && e.ctrlKey) {
+                            e.preventDefault();
+                            submitBtn.click();
+                        }
+                    };
+                    
+                    function resetListeningUI() {
+                        isListening = false;
+                        startBtn.style.display = 'inline-block';
+                        stopBtn.style.display = 'none';
+                        listeningStatus.style.display = 'none';
+                    }
+                    
+                    function cleanup() {
+                        // Remove speech event listeners
+                        try {
+                            window.agentlet.speech.offSpeechEvent('result', handleSpeechResult);
+                            window.agentlet.speech.offSpeechEvent('end', handleSpeechEnd);
+                            window.agentlet.speech.offSpeechEvent('error', handleSpeechError);
+                        } catch (e) {}
+                        
+                        // Remove dialog
+                        if (document.body.contains(dialog)) {
+                            document.body.removeChild(dialog);
+                        }
+                    }
+                    
+                    // Speech event handlers
+                    function handleSpeechResult(data) {
+                        const results = data.results;
+                        let interim = '';
+                        let final = '';
+                        
+                        for (const result of results) {
+                            if (result.isFinal) {
+                                final += result.transcript + ' ';
+                            } else {
+                                interim += result.transcript + ' ';
+                            }
+                        }
+                        
+                        if (final.trim()) {
+                            finalTranscript += final;
+                            transcriptArea.value = finalTranscript + interim;
+                            log('🗣️ Final: "' + final.trim() + '"', 'success');
+                        } else if (interim.trim()) {
+                            transcriptArea.value = finalTranscript + interim;
+                        }
+                        
+                        // Auto-scroll to end
+                        transcriptArea.scrollTop = transcriptArea.scrollHeight;
+                    }
+                    
+                    function handleSpeechEnd() {
+                        log('🎤 Speech recognition ended', 'info');
+                        resetListeningUI();
+                    }
+                    
+                    function handleSpeechError(data) {
+                        log('❌ Speech error: ' + data.error, 'error');
+                        resetListeningUI();
+                    }
+                    
+                    // Set up speech event listeners
+                    window.agentlet.speech.onSpeechEvent('result', handleSpeechResult);
+                    window.agentlet.speech.onSpeechEvent('end', handleSpeechEnd);
+                    window.agentlet.speech.onSpeechEvent('error', handleSpeechError);
+                    
+                    // Close on background click
+                    dialog.onclick = (e) => {
+                        if (e.target === dialog) {
+                            cancelBtn.click();
+                        }
+                    };
+                    
+                    // Close on Escape key
+                    const escapeHandler = (e) => {
+                        if (e.key === 'Escape' && document.getElementById('voiceInputModal')) {
+                            cancelBtn.click();
+                            document.removeEventListener('keydown', escapeHandler);
+                        }
+                    };
+                    document.addEventListener('keydown', escapeHandler);
+                });
+                
+            } catch (error) {
+                log('❌ Failed to get voice input: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        async function processWithAI(question) {
+            const model = document.getElementById('aiModelSelect').value;
+            
+            try {
+                log('🤖 Processing question with AI (' + model + ')...', 'info');
+                
+                const prompt = 'Please answer this question clearly, helpfully, and concisely. Provide practical information that would be useful to the person asking:\n\nQuestion: ' + question + '\n\nPlease structure your response in a way that\'s easy to understand and actionable when possible.';
+
+                const response = await window.agentlet.ai.sendPrompt(prompt, [], {
+                    model: model,
+                    maxTokens: 1000,
+                    temperature: 0.7
+                });
+
+                log('✅ AI response received', 'success');
+                return response;
+                
+            } catch (error) {
+                log('❌ AI processing failed: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        async function showAIResponse(question, response) {
+            const ttsProvider = document.getElementById('ttsProviderSelect').value;
+            
+            try {
+                // Create custom fullscreen dialog content
+                const dialogContent = `
+                    <div class="voice-response">
+                        <div class="response-header">
+                            <h2 style="margin: 0 0 20px 0; color: #333;">🤖 AI Assistant Response</h2>
+                            <button id="closeResponseBtn" style="position: absolute; top: 20px; right: 20px; background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 16px;">✕</button>
+                        </div>
+                        
+                        <div class="question-section">
+                            <h4 style="color: #007bff; margin-bottom: 10px;">🗣️ Your Question:</h4>
+                            <p class="question-text" style="font-style: italic; color: #666; background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px;">"${question}"</p>
+                        </div>
+                        
+                        <div class="response-section">
+                            <h4 style="color: #28a745; margin-bottom: 15px;">🤖 AI Response:</h4>
+                            <div class="response-text" style="line-height: 1.6; color: #333; background: white; padding: 20px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 30px; max-height: 400px; overflow-y: auto;">${response.replace(/\n/g, '<br>')}</div>
+                        </div>
+                        
+                        <div class="response-actions" style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; padding-top: 20px; border-top: 1px solid #eee;">
+                            <button id="listenBtn" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">🔊 Listen to Response</button>
+                            <button id="copyBtn" style="background: #17a2b8; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">📋 Copy Response</button>
+                            <button id="askAnotherBtn" style="background: #ffc107; color: #212529; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px;">🔄 Ask Another Question</button>
+                        </div>
+                    </div>
+                `;
+
+                // Create fullscreen modal dialog
+                const dialog = document.createElement('div');
+                dialog.id = 'aiResponseModal';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.8);
+                    z-index: 10000;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    animation: fadeIn 0.3s ease;
+                `;
+
+                const dialogBox = document.createElement('div');
+                dialogBox.style.cssText = `
+                    background: #f8f9fa;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                    max-width: 800px;
+                    width: 90%;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    position: relative;
+                    animation: slideIn 0.3s ease;
+                `;
+                
+                dialogBox.innerHTML = dialogContent;
+                dialog.appendChild(dialogBox);
+                document.body.appendChild(dialog);
+
+                // Add CSS animations
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes fadeIn {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes slideIn {
+                        from { transform: translateY(-50px); opacity: 0; }
+                        to { transform: translateY(0); opacity: 1; }
+                    }
+                `;
+                document.head.appendChild(style);
+
+                // Handle close button
+                document.getElementById('closeResponseBtn').onclick = () => {
+                    document.body.removeChild(dialog);
+                    document.head.removeChild(style);
+                };
+
+                // Handle listen button - initialize TTS button in panel
+                document.getElementById('listenBtn').onclick = async () => {
+                    try {
+                        log('🔊 Initializing TTS for AI response...', 'info');
+                        const btn = document.getElementById('listenBtn');
+                        btn.disabled = true;
+                        btn.textContent = '🔊 Initializing...';
+                        
+                        // Initialize the TTS button in the agentlet panel
+                        window.agentlet.speech.initializeTtsButton(response);
+                        
+                        // Store TTS options
+                        window.ttsResponseOptions = {
+                            provider: ttsProvider,
+                            rate: 1.0
+                        };
+                        
+                        // Override the speak method to use our options
+                        if (!window.originalSpeakMethod) {
+                            window.originalSpeakMethod = window.agentlet.speech.speak;
+                        }
+                        window.agentlet.speech.speak = (text, options) => {
+                            const mergedOptions = { ...window.ttsResponseOptions, ...(options || {}) };
+                            return window.originalSpeakMethod(text, mergedOptions);
+                        };
+                        
+                        log('✅ TTS ready! Use the animated 🔊 button in the Agentlet panel.', 'success');
+                        btn.disabled = false;
+                        btn.textContent = '🔊 TTS Ready (Use Panel Button)';
+                        btn.style.background = '#28a745';
+                        btn.style.color = 'white';
+                    } catch (error) {
+                        log('❌ TTS initialization failed: ' + error.message, 'error');
+                        const btn = document.getElementById('listenBtn');
+                        btn.disabled = false;
+                        btn.textContent = '🔊 Listen to Response';
+                    }
+                };
+
+                // Handle copy button
+                document.getElementById('copyBtn').onclick = async () => {
+                    try {
+                        await navigator.clipboard.writeText(response);
+                        log('📋 Response copied to clipboard', 'success');
+                        const btn = document.getElementById('copyBtn');
+                        const originalText = btn.textContent;
+                        btn.textContent = '✅ Copied!';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                        }, 2000);
+                    } catch (error) {
+                        log('❌ Failed to copy: ' + error.message, 'error');
+                    }
+                };
+
+                // Handle ask another question button
+                document.getElementById('askAnotherBtn').onclick = () => {
+                    document.body.removeChild(dialog);
+                    document.head.removeChild(style);
+                    setTimeout(() => activateVoiceAssistant(), 500);
+                };
+
+                // Close on background click
+                dialog.onclick = (e) => {
+                    if (e.target === dialog) {
+                        document.body.removeChild(dialog);
+                        document.head.removeChild(style);
+                    }
+                };
+
+                // Close on Escape key
+                const escapeHandler = (e) => {
+                    if (e.key === 'Escape' && document.getElementById('aiResponseModal')) {
+                        document.body.removeChild(dialog);
+                        document.head.removeChild(style);
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+                
+            } catch (error) {
+                log('❌ Failed to show response: ' + error.message, 'error');
+                throw error;
+            }
+        }
+
+        async function askSampleQuestion(type) {
+            const question = sampleQuestions[type];
+            if (!question) return;
+
+            try {
+                log('🎯 Asking sample question: ' + type, 'info');
+                updateAssistantStatus('processing', 'Processing sample question...');
+                
+                const response = await processWithAI(question);
+                await showAIResponse(question, response);
+                addToHistory(question, response);
+                
+                updateAssistantStatus('ready', 'Voice assistant ready. Press Ctrl+; to activate.');
+                
+            } catch (error) {
+                log('❌ Failed to process sample question: ' + error.message, 'error');
+                updateAssistantStatus('error', 'Error: ' + error.message);
+            }
+        }
+
+        function addToHistory(question, response) {
+            const conversation = {
+                timestamp: new Date(),
+                question: question,
+                response: response
+            };
+            
+            conversationHistory.unshift(conversation);
+            
+            // Keep only last 5 conversations
+            if (conversationHistory.length > 5) {
+                conversationHistory = conversationHistory.slice(0, 5);
+            }
+            
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            const historyDiv = document.getElementById('conversationHistory');
+            
+            if (conversationHistory.length === 0) {
+                historyDiv.innerHTML = '<em>No conversations yet. Use Ctrl+; to start!</em>';
+                return;
+            }
+            
+            let html = '';
+            conversationHistory.forEach((conv, index) => {
+                html += '<div class="conversation-item"><div class="conversation-header"><strong>Q:</strong> ' + conv.question.substring(0, 80) + (conv.question.length > 80 ? '...' : '') + '<span class="timestamp">' + conv.timestamp.toLocaleTimeString() + '</span></div><div class="conversation-response"><strong>A:</strong> ' + conv.response.substring(0, 150) + (conv.response.length > 150 ? '...' : '') + '</div><div class="conversation-actions"><button onclick="replayConversation(' + index + ')">🔊 Replay</button><button onclick="copyConversation(' + index + ')">📋 Copy</button></div></div>';
+            });
+            
+            historyDiv.innerHTML = html;
+        }
+
+        async function replayConversation(index) {
+            const conv = conversationHistory[index];
+            if (!conv) return;
+            
+            try {
+                await showAIResponse(conv.question, conv.response);
+            } catch (error) {
+                log('❌ Failed to replay conversation: ' + error.message, 'error');
+            }
+        }
+
+        async function copyConversation(index) {
+            const conv = conversationHistory[index];
+            if (!conv) return;
+            
+            const text = 'Q: ' + conv.question + '\n\nA: ' + conv.response;
+            
+            try {
+                await navigator.clipboard.writeText(text);
+                log('📋 Conversation copied to clipboard', 'success');
+            } catch (error) {
+                log('❌ Failed to copy conversation: ' + error.message, 'error');
+            }
+        }
+        
+        function updateAssistantStatus(type, message) {
+            const statusIcon = document.getElementById('statusIcon');
+            const statusMessage = document.getElementById('statusMessage');
+            const assistantStatus = document.getElementById('assistantStatus');
+            
+            statusMessage.textContent = message;
+            
+            // Remove existing status classes
+            assistantStatus.className = 'assistant-status';
+            
+            switch (type) {
+                case 'ready':
+                    statusIcon.textContent = '🟢';
+                    assistantStatus.classList.add('status-ready');
+                    break;
+                case 'listening':
+                    statusIcon.textContent = '🎤';
+                    assistantStatus.classList.add('status-listening');
+                    break;
+                case 'processing':
+                    statusIcon.textContent = '🤖';
+                    assistantStatus.classList.add('status-processing');
+                    break;
+                case 'error':
+                    statusIcon.textContent = '❌';
+                    assistantStatus.classList.add('status-error');
+                    break;
+                case 'not-ready':
+                    statusIcon.textContent = '⚠️';
+                    assistantStatus.classList.add('status-warning');
+                    break;
+                default:
+                    statusIcon.textContent = '💤';
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('📄 Voice Assistant demo loaded. Click "Initialize Agentlet Core" to begin.', 'info');
+            log('💡 After initialization, press Ctrl+; anywhere to activate the voice assistant!', 'info');
+        });
+    </script>
+
+    <style>
+        .shortcut-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        
+        .shortcut-info kbd {
+            background: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .assistant-status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .status-ready {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #4caf50;
+        }
+        
+        .status-listening {
+            background: #fff3e0;
+            color: #f57c00;
+            border: 2px solid #ff9800;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-processing {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 2px solid #2196f3;
+        }
+        
+        .status-error {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 2px solid #f44336;
+        }
+        
+        .status-warning {
+            background: #fff8e1;
+            color: #f57f17;
+            border: 2px solid #ffeb3b;
+        }
+        
+        .config-group {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .config-group label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        
+        .config-group select {
+            width: 200px;
+            padding: 5px;
+        }
+        
+        .sample-questions button {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .conversation-history {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background: #fafafa;
+        }
+        
+        .conversation-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .conversation-response {
+            margin: 5px 0;
+            color: #555;
+        }
+        
+        .conversation-actions {
+            margin-top: 8px;
+        }
+        
+        .conversation-actions button {
+            font-size: 12px;
+            padding: 4px 8px;
+            margin-right: 5px;
+        }
+        
+        .voice-response {
+            padding: 20px;
+        }
+        
+        .question-section, .response-section {
+            margin: 20px 0;
+        }
+        
+        .question-text {
+            font-style: italic;
+            color: #666;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .response-text {
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    </style>

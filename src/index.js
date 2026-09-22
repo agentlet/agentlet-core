@@ -164,6 +164,10 @@ class AgentletCore {
             actionButtonHover: '#e9ecef',
             actionButtonText: '#333333',
             
+            // Speech buttons
+            speechButtonActiveBackground: '#28a745', // Green instead of red
+            speechButtonReadyBackground: '#17a2b8', // Info blue for ready state
+            
             // Layout
             panelWidth: '320px',
             borderRadius: '0px',
@@ -821,6 +825,45 @@ class AgentletCore {
             // Direct access to manager
             manager: this.aiManager
         };
+
+        // Expose speech capabilities
+        window.agentlet.speech = {
+            // Speech-to-text functions
+            startListening: (options) => {
+                this.ensureSpeechEventListeners();
+                return this.aiManager.startListening(options);
+            },
+            stopListening: () => this.aiManager.stopListening(),
+            isListening: () => this.aiManager.isListening(),
+            transcribeAudio: (audioData, options) => this.aiManager.transcribeAudio(audioData, options),
+            getSpeechLanguages: () => this.aiManager.getSpeechLanguages(),
+            onSpeechEvent: (event, handler) => this.aiManager.onSpeechEvent(event, handler),
+            offSpeechEvent: (event, handler) => this.aiManager.offSpeechEvent(event, handler),
+            
+            // Text-to-speech functions
+            speak: (text, options) => {
+                this.ensureSpeechEventListeners();
+                return this.aiManager.speak(text, options);
+            },
+            stopSpeaking: () => this.aiManager.stopSpeaking(),
+            pauseSpeaking: () => this.aiManager.pauseSpeaking(),
+            resumeSpeaking: () => this.aiManager.resumeSpeaking(),
+            isSpeaking: () => this.aiManager.isSpeaking(),
+            getAvailableVoices: (provider) => this.aiManager.getAvailableVoices(provider),
+            findBestVoice: (language, provider) => this.aiManager.findBestVoice(language, provider),
+            onSpeechSynthesisEvent: (event, handler) => this.aiManager.onSpeechSynthesisEvent(event, handler),
+            offSpeechSynthesisEvent: (event, handler) => this.aiManager.offSpeechSynthesisEvent(event, handler),
+            
+            // Status and capabilities
+            getStatus: () => this.aiManager.getSpeechStatus(),
+            
+            // TTS UI Control methods
+            initializeTtsButton: (text) => this.initializeTtsForText(text),
+            
+            // Direct access to managers
+            speechToText: this.aiManager.speechToText,
+            textToSpeech: this.aiManager.textToSpeech
+        };
         
         // Expose PDF worker configuration
         window.agentlet.configurePDFWorker = (workerUrl) => {
@@ -836,6 +879,10 @@ class AgentletCore {
         
         // Expose initialization status
         window.agentlet.initialized = this.initialized;
+        
+        // Setup speech event listeners now that everything is initialized
+        console.log('🔍 DEBUG - Setting up speech event listeners from setupGlobalAccess');
+        this.setupSpeechEventListeners();
         
         // Expose useful APIs for modules
         window.agentlet.modules = {
@@ -1277,6 +1324,10 @@ class AgentletCore {
         // Core action buttons
         const refreshBtn = this.createActionButton('🔄', 'Refresh', () => this.refreshContent());
         
+        // Speech control buttons (always create, show/hide as needed)
+        const sttBtn = this.createSttButton();
+        const ttsBtn = this.createTtsButton();
+        
         // Optional action buttons based on configuration
         let settingsBtn = null;
         if (this.config.showSettingsButton) {
@@ -1301,7 +1352,14 @@ class AgentletCore {
         const closeBtn = this.createDiscreteCloseButton();
         
         // Add buttons to actions area
+        console.log('🔍 DEBUG - Adding buttons to actions area');
         actions.appendChild(refreshBtn);
+        console.log('🔍 DEBUG - Adding STT button to panel');
+        actions.appendChild(sttBtn);
+        console.log('🔍 DEBUG - Adding TTS button to panel');
+        actions.appendChild(ttsBtn);
+        console.log('🔍 DEBUG - All buttons added to actions area');
+        
         if (settingsBtn) {
             actions.appendChild(settingsBtn);
         }
@@ -1332,6 +1390,420 @@ class AgentletCore {
         return button;
     }
 
+    /**
+     * Create STT (Speech-to-Text) button
+     */
+    createSttButton() {
+        console.log('🔍 DEBUG - Creating STT button');
+        const button = document.createElement('button');
+        button.id = 'agentlet-stt-btn';
+        button.className = 'agentlet-action-btn agentlet-stt-btn';
+        button.title = 'Speech-to-Text Status';
+        button.innerHTML = '🎤';
+        button.style.display = 'none'; // Hidden by default
+        button.onclick = () => this.handleSttClick();
+        
+        console.log('🔍 DEBUG - STT button created:', button);
+        return button;
+    }
+
+    /**
+     * Create TTS (Text-to-Speech) button
+     */
+    createTtsButton() {
+        console.log('🔍 DEBUG - Creating TTS button');
+        const button = document.createElement('button');
+        button.id = 'agentlet-tts-btn';
+        button.className = 'agentlet-action-btn agentlet-tts-btn';
+        button.title = 'Text-to-Speech Control';
+        button.innerHTML = '🔊';
+        button.style.display = 'none'; // Hidden by default
+        button.onclick = () => this.handleTtsClick();
+        
+        console.log('🔍 DEBUG - TTS button created:', button);
+        return button;
+    }
+
+
+    /**
+     * Setup speech event listeners for UI updates
+     */
+    setupSpeechEventListeners() {
+        console.log('🔍 SPEECH LISTENERS DEBUG - Setting up speech event listeners');
+        
+        if (!this.aiManager) {
+            console.log('🔍 SPEECH LISTENERS DEBUG - No aiManager, delaying setup');
+            return;
+        }
+        
+        // Mark that we've attempted to set up listeners to avoid duplicates
+        this.speechListenersSetup = this.speechListenersSetup || {};
+        
+        // Set up listeners that will work when managers become available
+        const setupSTTListeners = () => {
+            if (this.aiManager.speechToText && !this.speechListenersSetup.stt) {
+                console.log('🔍 SPEECH LISTENERS DEBUG - Setting up STT listeners');
+                this.speechListenersSetup.stt = true;
+                
+                this.aiManager.speechToText.on('start', () => {
+                    console.log('🎤 STT START EVENT - Making STT button visible and active');
+                    this.updateSttButtonVisibility(true);
+                    this.updateSttButtonState(true);
+                });
+
+                this.aiManager.speechToText.on('end', () => {
+                    console.log('🎤 STT END EVENT - Hiding STT button');
+                    this.updateSttButtonState(false);
+                    // Hide button after STT ends
+                    setTimeout(() => {
+                        this.updateSttButtonVisibility(false);
+                    }, 1000);
+                });
+
+                this.aiManager.speechToText.on('error', () => {
+                    console.log('🎤 STT ERROR EVENT - Hiding STT button');
+                    this.updateSttButtonState(false);
+                    // Hide button after error
+                    setTimeout(() => {
+                        this.updateSttButtonVisibility(false);
+                    }, 2000);
+                });
+            }
+        };
+        
+        const setupTTSListeners = () => {
+            if (this.aiManager.textToSpeech && !this.speechListenersSetup.tts) {
+                console.log('🔍 SPEECH LISTENERS DEBUG - Setting up TTS listeners');
+                console.log('🔍 SPEECH LISTENERS DEBUG - TTS Manager object:', this.aiManager.textToSpeech);
+                console.log('🔍 SPEECH LISTENERS DEBUG - TTS Manager has "on" method:', typeof this.aiManager.textToSpeech.on);
+                this.speechListenersSetup.tts = true;
+                
+                // Show TTS button when manager is available
+                this.updateTtsButtonVisibility(true);
+
+                this.aiManager.textToSpeech.on('start', (data) => {
+                    console.log('🔊 TTS START EVENT - Making TTS button visible and animated');
+                    this.updateTtsButtonVisibility(true);
+                    this.updateTtsButtonState('speaking');
+                    this.currentTtsText = data?.text || '';
+                    
+                    // Start periodic check to ensure synchronization with browser
+                    this.startTtsStatusCheck();
+                });
+
+                this.aiManager.textToSpeech.on('end', () => {
+                    console.log('🔊 TTS END EVENT - Hiding and resetting TTS button');
+                    this.stopTtsStatusCheck();
+                    this.updateTtsButtonState('idle');
+                    // Hide button after speech ends
+                    setTimeout(() => {
+                        this.updateTtsButtonVisibility(false);
+                    }, 1000);
+                });
+
+                this.aiManager.textToSpeech.on('error', () => {
+                    console.log('🔊 TTS ERROR EVENT - Hiding and resetting TTS button');
+                    this.stopTtsStatusCheck();
+                    this.updateTtsButtonState('idle');
+                    // Hide button after error
+                    setTimeout(() => {
+                        this.updateTtsButtonVisibility(false);
+                    }, 2000);
+                });
+
+                this.aiManager.textToSpeech.on('pause', () => {
+                    console.log('🔊 TTS PAUSE EVENT - Setting paused state');
+                    this.updateTtsButtonState('paused');
+                });
+
+                this.aiManager.textToSpeech.on('resume', () => {
+                    console.log('🔊 TTS RESUME EVENT - Setting speaking state');
+                    this.updateTtsButtonState('speaking');
+                });
+            }
+        };
+        
+        // Try to set up listeners now
+        setupSTTListeners();
+        setupTTSListeners();
+        
+        // Also try again later in case managers aren't ready
+        setTimeout(() => {
+            setupSTTListeners();
+            setupTTSListeners();
+        }, 500);
+        
+        setTimeout(() => {
+            setupSTTListeners();
+            setupTTSListeners();
+        }, 1000);
+    }
+
+    /**
+     * Ensure speech event listeners are set up when speech functionality is first used
+     */
+    ensureSpeechEventListeners() {
+        const needsSTTSetup = !this.speechListenersSetup?.stt && this.aiManager?.speechToText;
+        const needsTTSSetup = !this.speechListenersSetup?.tts && this.aiManager?.textToSpeech;
+        
+        if (!this.speechListenersSetup || needsSTTSetup || needsTTSSetup) {
+            console.log('🔍 ENSURE SPEECH LISTENERS - Setting up missing listeners (STT:', needsSTTSetup, 'TTS:', needsTTSSetup, ')');
+            this.setupSpeechEventListeners();
+        }
+    }
+
+    /**
+     * Start periodic check of browser TTS status to ensure synchronization
+     */
+    startTtsStatusCheck() {
+        // Stop any existing check first
+        this.stopTtsStatusCheck();
+        
+        console.log('🔊 Starting TTS status check');
+        this.ttsStatusCheckInterval = setInterval(() => {
+            this.checkBrowserTtsStatus();
+        }, 500); // Check every 500ms
+    }
+
+    /**
+     * Stop periodic TTS status check
+     */
+    stopTtsStatusCheck() {
+        if (this.ttsStatusCheckInterval) {
+            console.log('🔊 Stopping TTS status check');
+            clearInterval(this.ttsStatusCheckInterval);
+            this.ttsStatusCheckInterval = null;
+        }
+    }
+
+    /**
+     * Check browser SpeechSynthesis status and sync with our UI
+     */
+    checkBrowserTtsStatus() {
+        if (!window.speechSynthesis) return;
+        
+        const browserSpeaking = window.speechSynthesis.speaking;
+        const browserPending = window.speechSynthesis.pending;
+        const managerSpeaking = this.aiManager?.textToSpeech?.isSpeaking;
+        
+        // Debug info (only log when there's a discrepancy)
+        if (browserSpeaking !== managerSpeaking) {
+            console.log('🔍 TTS Status Check - Browser:', browserSpeaking, 'Manager:', managerSpeaking, 'Pending:', browserPending);
+        }
+        
+        // If browser stopped speaking but our manager thinks it's still speaking
+        if (!browserSpeaking && !browserPending && managerSpeaking) {
+            console.log('🔊 TTS Status Check - Browser stopped, syncing manager state');
+            if (this.aiManager.textToSpeech) {
+                this.aiManager.textToSpeech.isSpeaking = false;
+                this.aiManager.textToSpeech.currentUtterance = null;
+                // Trigger the end event manually
+                this.aiManager.textToSpeech._trigger('end', { provider: 'browser' });
+            }
+        }
+        
+        // If browser is speaking but our manager thinks it's not
+        if ((browserSpeaking || browserPending) && !managerSpeaking) {
+            console.log('🔊 TTS Status Check - Browser speaking, syncing manager state');
+            if (this.aiManager.textToSpeech && !this.aiManager.textToSpeech.isSpeaking) {
+                this.aiManager.textToSpeech.isSpeaking = true;
+                // Don't trigger start event to avoid loops, just sync the state
+            }
+        }
+    }
+
+
+    /**
+     * Initialize TTS button for text
+     */
+    initializeTtsForText(text) {
+        this.currentTtsText = text;
+        this.updateTtsButtonVisibility(true);
+        this.updateTtsButtonState('ready');
+        console.log('🔊 TTS initialized with text for panel button control');
+    }
+
+
+    /**
+     * Handle STT button click
+     */
+    handleSttClick() {
+        console.log('🎤 STT button clicked');
+        if (this.aiManager && this.aiManager.speechToText) {
+            try {
+                console.log('🎤 STT isListening:', this.aiManager.speechToText.isListening);
+                if (this.aiManager.speechToText.isListening) {  // Property, not method
+                    this.aiManager.speechToText.stopListening();
+                    console.log('🎤 STT stopped by user via panel button');
+                    // Immediately update button state and hide after a delay
+                    this.updateSttButtonState(false);
+                    setTimeout(() => {
+                        this.updateSttButtonVisibility(false);
+                    }, 500);
+                } else {
+                    console.log('🎤 STT button clicked - not currently listening, could start listening here');
+                    this.updateSttButtonVisibility(false);
+                }
+            } catch (error) {
+                console.error('Failed to control STT:', error);
+                this.updateSttButtonState(false);
+                setTimeout(() => {
+                    this.updateSttButtonVisibility(false);
+                }, 1000);
+            }
+        } else {
+            console.log('🎤 STT manager not available');
+        }
+    }
+
+    /**
+     * Handle TTS button click
+     */
+    handleTtsClick() {
+        console.log('🔊 TTS button clicked');
+        if (this.aiManager && this.aiManager.textToSpeech) {
+            try {
+                console.log('🔊 TTS isSpeaking:', this.aiManager.textToSpeech.isSpeaking);
+                if (this.aiManager.textToSpeech.isSpeaking) {  // Property, not method
+                    this.aiManager.textToSpeech.stop();
+                    console.log('🔊 TTS stopped by user via panel button');
+                    // Immediately update button state and hide after a delay
+                    this.updateTtsButtonState('idle');
+                    setTimeout(() => {
+                        this.updateTtsButtonVisibility(false);
+                    }, 500);
+                } else if (this.currentTtsText) {
+                    // Start TTS with stored text
+                    this.aiManager.textToSpeech.speak(this.currentTtsText);
+                    console.log('🔊 TTS started by user via panel button with text:', this.currentTtsText);
+                } else {
+                    console.log('🔊 No stored text to speak');
+                    // Hide button if no text to speak
+                    this.updateTtsButtonVisibility(false);
+                }
+            } catch (error) {
+                console.error('Failed to control TTS:', error);
+                this.updateTtsButtonState('idle');
+                setTimeout(() => {
+                    this.updateTtsButtonVisibility(false);
+                }, 1000);
+            }
+        } else {
+            console.log('🔊 TTS manager not available');
+        }
+    }
+
+    /**
+     * Show/hide STT button based on availability
+     */
+    updateSttButtonVisibility(show) {
+        const button = document.getElementById('agentlet-stt-btn');
+        if (button) {
+            button.style.display = show ? 'inline-block' : 'none';
+            console.log('🎤 STT button visibility:', show);
+        }
+    }
+
+    /**
+     * Show/hide TTS button based on availability
+     */
+    updateTtsButtonVisibility(show) {
+        const button = document.getElementById('agentlet-tts-btn');
+        console.log('🔍 DEBUG updateTtsButtonVisibility - button exists:', !!button, 'show:', show);
+        if (button) {
+            button.style.display = show ? 'inline-block' : 'none';
+            console.log('🔊 TTS button visibility set to:', show, 'actual display:', button.style.display);
+        } else {
+            console.log('❌ TTS button not found in DOM!');
+        }
+    }
+
+    /**
+     * Update STT button state (listening animation)
+     */
+    updateSttButtonState(isListening) {
+        const button = document.getElementById('agentlet-stt-btn');
+        if (!button) return;
+
+        if (isListening) {
+            button.style.background = this.config.theme.speechButtonActiveBackground; // Use theme color
+            button.style.color = 'white';
+            button.title = 'Stop Listening (STT Active)';
+            button.classList.add('agentlet-stt-active');
+        } else {
+            button.style.background = '';
+            button.style.color = '';
+            button.title = 'Speech-to-Text Status';
+            button.classList.remove('agentlet-stt-active');
+        }
+    }
+
+    /**
+     * Update TTS button state (speaking animation)
+     */
+    updateTtsButtonState(state) {
+        const button = document.getElementById('agentlet-tts-btn');
+        console.log('🔍 DEBUG updateTtsButtonState - button exists:', !!button, 'state:', state);
+        if (!button) {
+            console.log('❌ TTS button not found for state update!');
+            return;
+        }
+
+        // Clear any existing animation
+        if (this.ttsAnimationInterval) {
+            clearInterval(this.ttsAnimationInterval);
+            this.ttsAnimationInterval = null;
+        }
+
+        switch (state) {
+            case 'speaking':
+                button.style.background = this.config.theme.speechButtonActiveBackground; // Use theme color
+                button.style.color = 'white';
+                button.title = 'Cliquer pour arrêter (TTS Actif)';
+                button.classList.add('agentlet-tts-active');
+                
+                // Start animation - alternate between emojis
+                let isFirst = true;
+                this.ttsAnimationInterval = setInterval(() => {
+                    if (button) {
+                        button.innerHTML = isFirst ? '🔈' : '🔊';
+                        isFirst = !isFirst;
+                    }
+                }, 800);
+                break;
+
+            case 'ready':
+                button.style.background = this.config.theme.speechButtonReadyBackground; // Use theme color
+                button.style.color = 'white';
+                button.innerHTML = '🔊';
+                button.title = 'Cliquer pour démarrer Text-to-Speech';
+                button.classList.remove('agentlet-tts-active');
+                break;
+
+            case 'paused':
+                button.style.background = '#ffc107'; // Warning yellow for paused
+                button.style.color = 'white';
+                button.innerHTML = '⏸️';
+                button.title = 'TTS en pause - Cliquer pour reprendre';
+                button.classList.remove('agentlet-tts-active');
+                break;
+
+            default: // idle
+                button.style.background = '';
+                button.style.color = '';
+                button.innerHTML = '🔊';
+                button.title = 'Contrôle Text-to-Speech';
+                button.classList.remove('agentlet-tts-active');
+                break;
+        }
+    }
+
+    /**
+     * Stop text-to-speech (legacy method for compatibility)
+     */
+    stopTextToSpeech() {
+        this.handleTtsClick();
+    }
 
     /**
      * Toggle UI collapse/expand
@@ -1846,6 +2318,10 @@ class AgentletCore {
                 --agentlet-action-button-border: ${theme.actionButtonBorder};
                 --agentlet-action-button-hover: ${theme.actionButtonHover};
                 --agentlet-action-button-text: ${theme.actionButtonText};
+                
+                /* Speech Button Colors */
+                --agentlet-speech-button-active-background: ${theme.speechButtonActiveBackground};
+                --agentlet-speech-button-ready-background: ${theme.speechButtonReadyBackground};
                 --agentlet-panel-width: ${theme.panelWidth};
                 --agentlet-border-radius: ${theme.borderRadius};
                 --agentlet-box-shadow: ${theme.boxShadow};
@@ -2439,6 +2915,26 @@ class AgentletCore {
             @keyframes waitPulse {
                 0%, 100% { opacity: 0.3; }
                 50% { opacity: 0.6; }
+            }
+            
+            @keyframes pulse {
+                0%, 100% { 
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                50% { 
+                    opacity: 0.7;
+                    transform: scale(1.05);
+                }
+            }
+            
+            /* Speech button active states */
+            .agentlet-stt-active {
+                animation: pulse 1.5s infinite;
+            }
+            
+            .agentlet-tts-active {
+                /* Animation is handled via JavaScript for emoji switching */
             }
             
             /* InfoDialog Styles */
@@ -3064,6 +3560,9 @@ class AgentletCore {
             if (this.shortcutManager) {
                 this.shortcutManager.clear();
             }
+            
+            // Stop TTS status check
+            this.stopTtsStatusCheck();
             
             // Remove UI
             const $ = window.agentlet.$;
