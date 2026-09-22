@@ -67,6 +67,37 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 external: ['chrome']
+            },
+
+            // Packaged mode configurations
+            packagedCore: {
+                entryPoints: [this.entryPoint],
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outfile: path.join(this.distDir, 'agentlet-core-packaged.js'),
+                globalName: 'AgentletCore',
+                minify: true,
+                sourcemap: false,
+                define: {
+                    'AGENTLET_PACKAGED_MODE': 'true'
+                }
+            },
+
+            packagedBookmarklet: {
+                entryPoints: [path.join(__dirname, 'packaged-bookmarklet-template.js')],
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outfile: path.join(this.distDir, 'bookmarklet-packaged.js'),
+                minify: true,
+                sourcemap: false,
+                banner: {
+                    js: 'javascript:(function(){'
+                },
+                footer: {
+                    js: '})();'
+                }
             }
         };
     }
@@ -356,6 +387,497 @@ window.agentletConfig = {
             "'": '&#039;'
         };
         return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    /**
+     * Build packaged core (CORS-free deployment)
+     */
+    async buildPackagedCore() {
+        console.log('📦 Building packaged core (CORS-free)...');
+
+        // Copy resources for core builds
+        this.copyResources();
+
+        // Copy PDF.js worker
+        this.copyPDFJSWorker();
+
+        try {
+            const result = await esbuild.build(this.configs.packagedCore);
+
+            const outputFile = this.configs.packagedCore.outfile;
+            const stats = fs.statSync(outputFile);
+            const sizeKB = (stats.size / 1024).toFixed(2);
+
+            console.log(`✅ Packaged core built successfully`);
+            console.log(`   📦 Output: ${outputFile}`);
+            console.log(`   📏 Size: ${sizeKB} KB`);
+            console.log(`   🚫 CORS-free: No registry fetch required`);
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputFile, size: stats.size };
+
+        } catch (error) {
+            console.error('❌ Packaged core build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Build packaged bookmarklet (light injector)
+     */
+    async buildPackagedBookmarklet() {
+        console.log('🔖 Building packaged bookmarklet (light injector)...');
+
+        try {
+            const result = await esbuild.build(this.configs.packagedBookmarklet);
+
+            const outputFile = this.configs.packagedBookmarklet.outfile;
+            let bookmarkletCode = fs.readFileSync(outputFile, 'utf8');
+
+            // Additional bookmarklet optimizations
+            bookmarkletCode = this.optimizeBookmarklet(bookmarkletCode);
+
+            // Write optimized bookmarklet
+            const optimizedFile = path.join(this.distDir, 'bookmarklet-packaged-optimized.js');
+            fs.writeFileSync(optimizedFile, bookmarkletCode);
+
+            const stats = fs.statSync(optimizedFile);
+            const sizeKB = (stats.size / 1024).toFixed(2);
+
+            console.log(`✅ Packaged bookmarklet built successfully`);
+            console.log(`   📦 Output: ${optimizedFile}`);
+            console.log(`   📏 Size: ${sizeKB} KB`);
+            console.log(`   🚫 CORS-free: Sequential script loading`);
+
+            // Generate packaged bookmarklet HTML
+            this.generatePackagedBookmarkletHTML(bookmarkletCode);
+
+            return { success: true, outputFile: optimizedFile, size: stats.size };
+
+        } catch (error) {
+            console.error('❌ Packaged bookmarklet build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Generate HTML file with packaged bookmarklet link
+     */
+    generatePackagedBookmarkletHTML(bookmarkletCode) {
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentlet Core Packaged Bookmarklet (CORS-free)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .bookmarklet {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .bookmarklet.packaged {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+            border-color: #2196f3;
+        }
+        .bookmarklet-link {
+            display: inline-block;
+            background: #2196f3;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .bookmarklet-link:hover {
+            background: #1976d2;
+        }
+        .code {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            word-break: break-all;
+        }
+        .cors-badge {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Agentlet Core Packaged Bookmarklet <span class="cors-badge">CORS-FREE</span></h1>
+
+    <div class="bookmarklet packaged">
+        <h2>Packaged Mode (Recommended)</h2>
+        <p>This version avoids CORS issues by using sequential script loading instead of JSON fetch.</p>
+        <p>Drag this link to your bookmarks bar:</p>
+        <a href="${bookmarkletCode}" class="bookmarklet-link">Agentlet Core (Packaged)</a>
+
+        <h3>How it works</h3>
+        <ol>
+            <li>Light bookmarklet loads core bundle via &lt;script&gt; tag</li>
+            <li>Core bundle automatically loads module bundle via &lt;script&gt; tag</li>
+            <li>Modules self-register when loaded</li>
+            <li><strong>No CORS issues!</strong> Everything uses script injection</li>
+        </ol>
+
+        <h3>Manual Installation</h3>
+        <p>If dragging doesn't work, you can manually create a bookmark with this code:</p>
+        <div class="code">${this.escapeHtml(bookmarkletCode)}</div>
+    </div>
+
+    <div class="bookmarklet">
+        <h2>Configuration</h2>
+        <p>Configure the base URL and module bundle before loading:</p>
+        <div class="code">
+// Set configuration before clicking bookmarklet
+window.agentletConfig = {
+    deploymentMode: 'packaged',
+    baseUrl: 'https://your-cdn.com/agentlet/',
+    coreUrl: 'https://your-cdn.com/agentlet/agentlet-core-packaged.js',
+    moduleUrl: 'https://your-cdn.com/agentlet/agentlet-modules.js',
+    debugMode: true
+};
+        </div>
+
+        <h3>File Structure</h3>
+        <p>Deploy these files to your CDN or server:</p>
+        <div class="code">
+your-cdn.com/agentlet/
+├── agentlet-core-packaged.js    # Core bundle (with packaged mode)
+├── agentlet-modules.js          # All modules bundled together
+└── pdf.worker.min.js            # PDF.js worker (optional)
+        </div>
+    </div>
+
+    <div class="bookmarklet">
+        <h2>Benefits vs Registry Mode</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background: #f8f9fa;">
+                <th style="padding: 10px; border: 1px solid #dee2e6;">Feature</th>
+                <th style="padding: 10px; border: 1px solid #dee2e6;">Registry Mode</th>
+                <th style="padding: 10px; border: 1px solid #dee2e6;">Packaged Mode</th>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #dee2e6;"><strong>CORS Issues</strong></td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">❌ Can occur with JSON fetch</td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">✅ Never - script injection only</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #dee2e6;"><strong>Loading Speed</strong></td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">⚡ Individual module loading</td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">🚀 All modules pre-bundled</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #dee2e6;"><strong>Flexibility</strong></td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">✅ Dynamic module selection</td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">⚠️ All modules included</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #dee2e6;"><strong>Deployment</strong></td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">🔧 Requires proper CORS setup</td>
+                <td style="padding: 10px; border: 1px solid #dee2e6;">✅ Works on any CDN/server</td>
+            </tr>
+        </table>
+    </div>
+
+    <p><small>Generated on ${new Date().toISOString()}</small></p>
+</body>
+</html>`;
+
+        const htmlFile = path.join(this.distDir, 'bookmarklet-packaged.html');
+        fs.writeFileSync(htmlFile, htmlContent.trim());
+
+        console.log(`📄 Packaged bookmarklet HTML generated: ${htmlFile}`);
+    }
+
+    /**
+     * Build module bundle (all modules in one file)
+     */
+    async buildModuleBundle(moduleUrls = []) {
+        console.log('🧩 Building module bundle...');
+
+        // Find all modules in the project
+        const modules = await this.findModules();
+
+        console.log(`📦 Found ${modules.length} modules to bundle`);
+        modules.forEach(module => {
+            console.log(`   📄 ${module.name} (${path.relative(this.srcDir, module.path)})`);
+        });
+
+        // Generate the module bundle content
+        const moduleBundleContent = this.generateModuleBundleContent(modules);
+
+        const outputFile = path.join(this.distDir, 'agentlet-modules.js');
+        fs.writeFileSync(outputFile, moduleBundleContent);
+
+        const stats = fs.statSync(outputFile);
+        const sizeKB = (stats.size / 1024).toFixed(2);
+
+        console.log(`✅ Module bundle built successfully`);
+        console.log(`   📦 Output: ${outputFile}`);
+        console.log(`   📏 Size: ${sizeKB} KB`);
+        console.log(`   🧩 Contains: ${modules.length} modules`);
+
+        return { success: true, outputFile, size: stats.size, moduleCount: modules.length };
+    }
+
+    /**
+     * Find all modules in the project
+     */
+    async findModules() {
+        const modules = [];
+
+        // Search patterns for modules
+        const searchDirs = [
+            path.join(__dirname, '..', 'examples'),
+            path.join(__dirname, '..', 'modules'), // If we have a dedicated modules directory
+            path.join(__dirname, '..', 'src', 'modules') // Alternative location
+        ];
+
+        for (const searchDir of searchDirs) {
+            if (fs.existsSync(searchDir)) {
+                const foundModules = await this.scanDirectoryForModules(searchDir);
+                modules.push(...foundModules);
+            }
+        }
+
+        return modules;
+    }
+
+    /**
+     * Scan directory for module files
+     */
+    async scanDirectoryForModules(directory) {
+        const modules = [];
+
+        const scanDir = (dir) => {
+            const items = fs.readdirSync(dir);
+
+            items.forEach(item => {
+                const fullPath = path.join(dir, item);
+                const stat = fs.statSync(fullPath);
+
+                if (stat.isDirectory()) {
+                    scanDir(fullPath);
+                } else if (item.endsWith('.js') && (item.includes('module') || item.includes('Module'))) {
+                    try {
+                        const content = fs.readFileSync(fullPath, 'utf8');
+
+                        // Check if this looks like an Agentlet module
+                        if (this.isAgentletModule(content)) {
+                            const moduleInfo = this.extractModuleInfo(content, fullPath);
+                            if (moduleInfo) {
+                                modules.push(moduleInfo);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Failed to read ${fullPath}: ${error.message}`);
+                    }
+                }
+            });
+        };
+
+        scanDir(directory);
+        return modules;
+    }
+
+    /**
+     * Check if a file contains an Agentlet module
+     */
+    isAgentletModule(content) {
+        // Look for patterns that indicate this is an Agentlet module
+        return (
+            content.includes('window.agentlet.Module') ||
+            content.includes('extends BaseModule') ||
+            content.includes('extends Module') ||
+            (content.includes('class') && content.includes('Module') && (
+                content.includes('patterns:') ||
+                content.includes('getContent()') ||
+                content.includes('activateModule')
+            ))
+        );
+    }
+
+    /**
+     * Extract module information from source code
+     */
+    extractModuleInfo(content, filePath) {
+        try {
+            // Extract class name
+            const classMatch = content.match(/class\s+(\w*Module)\s+extends/);
+            if (!classMatch) return null;
+
+            const className = classMatch[1];
+
+            // Try to extract module name from constructor or default
+            let moduleName = className.toLowerCase().replace('module', '');
+            const nameMatch = content.match(/name:\s*['"`]([^'"`]+)['"`]/);
+            if (nameMatch) {
+                moduleName = nameMatch[1];
+            }
+
+            // Extract patterns
+            const patternsMatch = content.match(/patterns:\s*\[([^\]]+)\]/) ||
+                                content.match(/patterns:\s*['"`]([^'"`]+)['"`]/);
+            let patterns = ['example.com']; // default
+            if (patternsMatch) {
+                if (patternsMatch[1].includes('[')) {
+                    // Array format
+                    patterns = patternsMatch[1].split(',').map(p => p.trim().replace(/['"`]/g, ''));
+                } else {
+                    // String format
+                    patterns = [patternsMatch[1]];
+                }
+            }
+
+            return {
+                name: moduleName,
+                className: className,
+                path: filePath,
+                content: content,
+                patterns: patterns
+            };
+        } catch (error) {
+            console.warn(`⚠️ Failed to extract module info from ${filePath}: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Generate the complete module bundle content
+     */
+    generateModuleBundleContent(modules) {
+        const bundleContent = `/**
+ * Agentlet Module Bundle
+ * Auto-generated bundle containing all modules for packaged deployment
+ * Generated on ${new Date().toISOString()}
+ */
+
+(function() {
+    'use strict';
+
+    console.log('📦 Loading Agentlet module bundle...');
+
+    // Queue for modules if core isn't ready yet
+    window.agentletModuleQueue = window.agentletModuleQueue || [];
+
+${modules.map(module => this.generateModuleCode(module)).join('\n\n')}
+
+    // Register all modules
+    function registerModules() {
+        if (window.agentlet && window.agentlet.modules) {
+            console.log('📦 Registering ${modules.length} modules from bundle...');
+
+${modules.map(module => `            try {
+                const ${this.sanitizeVariableName(module.name)}Instance = new ${module.className}();
+                window.agentlet.modules.register(${this.sanitizeVariableName(module.name)}Instance);
+                console.log('📦 Registered: ${module.name}');
+            } catch (error) {
+                console.error('❌ Failed to register ${module.name}:', error);
+            }`).join('\n\n')}
+
+            console.log('✅ Module bundle registration complete');
+        } else {
+            console.log('📦 Core not ready, queueing ${modules.length} modules...');
+
+${modules.map(module => `            window.agentletModuleQueue.push(() => new ${module.className}());`).join('\n')}
+        }
+    }
+
+    // Register immediately if core is ready, otherwise queue
+    registerModules();
+
+})();`;
+
+        return bundleContent;
+    }
+
+    /**
+     * Sanitize variable name for JavaScript
+     */
+    sanitizeVariableName(name) {
+        return name.replace(/[^a-zA-Z0-9_$]/g, '_');
+    }
+
+    /**
+     * Generate code for a single module
+     */
+    generateModuleCode(module) {
+        // Clean up the module code for bundling
+        let moduleCode = module.content;
+
+        // Remove any export statements since we're bundling
+        moduleCode = moduleCode.replace(/export\s+default\s+/g, '');
+        moduleCode = moduleCode.replace(/export\s*\{[^}]*\}/g, '');
+
+        // Remove any import statements (assuming dependencies are available)
+        moduleCode = moduleCode.replace(/import\s+[^;]+;/g, '');
+
+        // Remove any global window assignments at the end
+        moduleCode = moduleCode.replace(/if\s*\(\s*typeof\s+window\s*!==\s*['"`]undefined['"`]\s*\)\s*\{\s*window\.\w+\s*=\s*\w+;\s*\}/g, '');
+
+        // Add comment header
+        return `    // Module: ${module.name} (from ${path.basename(module.path)})
+    ${moduleCode.split('\n').map(line => '    ' + line).join('\n').trim()}`;
+    }
+
+    /**
+     * Build all packaged mode targets
+     */
+    async buildPackaged() {
+        console.log('📦 Building packaged deployment mode...\n');
+
+        this.ensureDistDir();
+
+        const results = {
+            packagedCore: await this.buildPackagedCore(),
+            moduleBundle: await this.buildModuleBundle(),
+            packagedBookmarklet: await this.buildPackagedBookmarklet()
+        };
+
+        console.log('\n📋 Packaged Mode Build Summary:');
+        Object.entries(results).forEach(([target, result]) => {
+            const status = result.success ? '✅' : '❌';
+            const size = result.size;
+            const sizeText = size ? ` (${(size / 1024).toFixed(2)} KB)` : '';
+            console.log(`   ${status} ${target}${sizeText}`);
+        });
+
+        const allSuccessful = Object.values(results).every(r => r.success);
+
+        if (allSuccessful) {
+            console.log('\n🎉 Packaged mode build completed successfully!');
+            console.log('🚫 CORS-free deployment ready');
+        } else {
+            console.log('\n⚠️  Some packaged builds failed. Check the logs above.');
+        }
+
+        return results;
     }
 
     /**
@@ -1408,7 +1930,7 @@ Usage:
   node build.js [options]
 
 Options:
-  --target=<target>     Build specific target (core, bookmarklet, extension, all)
+  --target=<target>     Build specific target (core, bookmarklet, extension, packaged, all)
   --minified           Build minified version
   --module=<name>      Generate module template
   --package            Package extension for distribution
@@ -1419,6 +1941,7 @@ Examples:
   node build.js --target=core             # Build core only
   node build.js --target=core --minified  # Build minified core
   node build.js --target=bookmarklet      # Build bookmarklet
+  node build.js --target=packaged         # Build packaged mode (CORS-free)
   node build.js --target=extension        # Build Chrome extension
   node build.js --target=extension --package  # Build and package extension
   node build.js --module=myapp           # Generate module template
@@ -1441,6 +1964,9 @@ Examples:
                     break;
                 case 'bookmarklet':
                     await builder.buildBookmarklet();
+                    break;
+                case 'packaged':
+                    await builder.buildPackaged();
                     break;
                 case 'extension':
                     const result = await builder.buildExtension();

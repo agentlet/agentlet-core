@@ -229,97 +229,317 @@ class AgentletCore {
         
         try {
             console.log('🚀 Initializing Agentlet Core 📎...');
-            
-            // Load registry if registryUrl is provided
-            let registryData = null;
-            if (this.config.registryUrl) {
-                registryData = await this.loadRegistry();
-            }
 
-            // Initialize library system with registry data (if any)
-            if (registryData && registryData.libraries) {
-                this.librarySetup.initializeRegistryLoader(registryData);
-            }
-            
-            // Set up all libraries
-            this.librarySetup.initializeAll(
-                { XLSX, html2canvas, pdfjsLib, hotkeys },
-                this.shortcutManager
-            );
-            
-            // Set up event listeners
-            this.setupEventListeners();
-            
-            const uiStartTime = performance.now();
-
-            // Inject styles first before creating UI elements
-            this.styleInjector.injectStyles();
-
-            this.setupBaseUI(); // Call our delegation method to maintain compatibility
-
-            // Finalize global access with the actual UI references
-            this.finalizeGlobalAccess();
-
-            this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
-
-            // Initialize module registry with shared registry data FIRST
-            const moduleStartTime = performance.now();
-            if (registryData) {
-                await this.moduleRegistry.initializeWithRegistry(registryData);
+            // Check deployment mode
+            if (this.isPackagedMode()) {
+                console.log('📦 Packaged deployment mode detected');
+                await this.initPackagedMode();
             } else {
-                await this.moduleRegistry.initialize();
-            }
-            this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
+                // Registry mode (existing behavior)
+                console.log('📚 Registry deployment mode');
 
-            // Set up module change callback AFTER modules are loaded and UI is ready
-            this.moduleRegistry.setModuleChangeCallback((activeModule) => {
-                this.onModuleChange(activeModule);
-            });
+                // Load registry if registryUrl is provided
+                let registryData = null;
+                if (this.config.registryUrl) {
+                    registryData = await this.loadRegistry();
+                }
 
-            // Trigger initial content update for any active modules after DOM is ready
-            const activeModule = this.moduleRegistry.activeModule;
-            if (activeModule) {
-                console.log('🔄 Initial content update for active module:', activeModule.name);
-                console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
-                // Use requestAnimationFrame to ensure DOM is fully ready
-                window.requestAnimationFrame(() => {
-                    console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
-                    this.onModuleChange(activeModule);
-                });
+                await this.initRegistryMode(registryData);
             }
 
-            // Set up storage change listener
-            this.setupLocalStorageListener();
-            
-            // Load environment variables from storage
-            if (this.envManager) {
-                this.envManager.loadFromStorage();
-            }
-            
-            // Manual refresh to catch modules that were registered early
-            this.updateApplicationDisplay();
-            this.updateModuleContent();
-            
-            // Register default keyboard shortcuts
-            if (this.shortcutManager) {
-                await this.shortcutManager.registerDefaultShortcuts(this.config);
-            }
-            
-            this.performanceMetrics.initTime = performance.now() - startTime;
-            this.initialized = true;
-            
-            this.eventBus.emit('core:initialized', {
-                metrics: this.performanceMetrics,
-                config: this.config
-            });
-            
-            console.log(`✅ Agentlet Core 📎 initialized successfully in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
-            console.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
-            
         } catch (error) {
             console.error('❌ Failed to initialize Agentlet Core:', error);
             this.eventBus.emit('core:initializationFailed', { error: error.message });
             throw error;
+        }
+    }
+
+    /**
+     * Check if we're in packaged deployment mode
+     */
+    isPackagedMode() {
+        // Check compile-time flag first
+        if (typeof AGENTLET_PACKAGED_MODE !== 'undefined') {
+            return true;
+        }
+
+        // Check configuration
+        if (this.config.deploymentMode === 'packaged') {
+            return true;
+        }
+
+        // Check global config
+        if (window.agentletConfig?.deploymentMode === 'packaged') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Initialize packaged mode (CORS-free sequential loading)
+     */
+    async initPackagedMode() {
+        console.log('📦 Initializing packaged mode...');
+
+        // Initialize library system without registry data
+        this.librarySetup.initializeAll(
+            { XLSX, html2canvas, pdfjsLib, hotkeys },
+            this.shortcutManager
+        );
+
+        // Set up event listeners
+        this.setupEventListeners();
+
+        const uiStartTime = performance.now();
+
+        // Inject styles first before creating UI elements
+        this.styleInjector.injectStyles();
+
+        this.setupBaseUI(); // Call our delegation method to maintain compatibility
+
+        // Finalize global access with the actual UI references
+        this.finalizeGlobalAccess();
+
+        this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
+
+        // Initialize module registry without external registry
+        const moduleStartTime = performance.now();
+        await this.moduleRegistry.initialize();
+
+        // Load module bundle automatically
+        await this.loadModuleBundle();
+
+        this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
+
+        // Set up module change callback AFTER modules are loaded and UI is ready
+        this.moduleRegistry.setModuleChangeCallback((activeModule) => {
+            this.onModuleChange(activeModule);
+        });
+
+        // Trigger initial content update for any active modules after DOM is ready
+        const activeModule = this.moduleRegistry.activeModule;
+        if (activeModule) {
+            console.log('🔄 Initial content update for active module:', activeModule.name);
+            console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
+            // Use requestAnimationFrame to ensure DOM is fully ready
+            window.requestAnimationFrame(() => {
+                console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
+                this.onModuleChange(activeModule);
+            });
+        }
+
+        // Set up storage change listener
+        this.setupLocalStorageListener();
+
+        // Load environment variables from storage
+        if (this.envManager) {
+            this.envManager.loadFromStorage();
+        }
+
+        // Manual refresh to catch modules that were registered early
+        this.updateApplicationDisplay();
+        this.updateModuleContent();
+
+        // Register default keyboard shortcuts
+        if (this.shortcutManager) {
+            await this.shortcutManager.registerDefaultShortcuts(this.config);
+        }
+
+        const startTime = performance.now();
+        this.performanceMetrics.initTime = performance.now() - startTime;
+        this.initialized = true;
+
+        this.eventBus.emit('core:initialized', {
+            mode: 'packaged',
+            metrics: this.performanceMetrics,
+            config: this.config
+        });
+
+        console.log(`✅ Agentlet Core 📎 initialized in packaged mode in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
+        console.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
+    }
+
+    /**
+     * Initialize registry mode (existing behavior)
+     */
+    async initRegistryMode(registryData) {
+        console.log('📚 Initializing registry mode...');
+
+        // Initialize library system with registry data (if any)
+        if (registryData && registryData.libraries) {
+            this.librarySetup.initializeRegistryLoader(registryData);
+        }
+
+        // Set up all libraries
+        this.librarySetup.initializeAll(
+            { XLSX, html2canvas, pdfjsLib, hotkeys },
+            this.shortcutManager
+        );
+
+        // Set up event listeners
+        this.setupEventListeners();
+
+        const uiStartTime = performance.now();
+
+        // Inject styles first before creating UI elements
+        this.styleInjector.injectStyles();
+
+        this.setupBaseUI(); // Call our delegation method to maintain compatibility
+
+        // Finalize global access with the actual UI references
+        this.finalizeGlobalAccess();
+
+        this.performanceMetrics.uiRenderTime = performance.now() - uiStartTime;
+
+        // Initialize module registry with shared registry data FIRST
+        const moduleStartTime = performance.now();
+        if (registryData) {
+            await this.moduleRegistry.initializeWithRegistry(registryData);
+        } else {
+            await this.moduleRegistry.initialize();
+        }
+        this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
+
+        // Set up module change callback AFTER modules are loaded and UI is ready
+        this.moduleRegistry.setModuleChangeCallback((activeModule) => {
+            this.onModuleChange(activeModule);
+        });
+
+        // Trigger initial content update for any active modules after DOM is ready
+        const activeModule = this.moduleRegistry.activeModule;
+        if (activeModule) {
+            console.log('🔄 Initial content update for active module:', activeModule.name);
+            console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
+            // Use requestAnimationFrame to ensure DOM is fully ready
+            window.requestAnimationFrame(() => {
+                console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
+                this.onModuleChange(activeModule);
+            });
+        }
+
+        // Set up storage change listener
+        this.setupLocalStorageListener();
+
+        // Load environment variables from storage
+        if (this.envManager) {
+            this.envManager.loadFromStorage();
+        }
+
+        // Manual refresh to catch modules that were registered early
+        this.updateApplicationDisplay();
+        this.updateModuleContent();
+
+        // Register default keyboard shortcuts
+        if (this.shortcutManager) {
+            await this.shortcutManager.registerDefaultShortcuts(this.config);
+        }
+
+        const startTime = performance.now();
+        this.performanceMetrics.initTime = performance.now() - startTime;
+        this.initialized = true;
+
+        this.eventBus.emit('core:initialized', {
+            mode: 'registry',
+            metrics: this.performanceMetrics,
+            config: this.config
+        });
+
+        console.log(`✅ Agentlet Core 📎 initialized in registry mode in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
+        console.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
+    }
+
+    /**
+     * Load module bundle via script injection (packaged mode)
+     */
+    async loadModuleBundle() {
+        console.log('📦 Loading module bundle...');
+
+        // Get module bundle URL from configuration
+        const config = window.agentletConfig || {};
+        const moduleUrl = config.moduleUrl || this.getDefaultModuleUrl();
+
+        console.log(`📦 Module bundle URL: ${moduleUrl}`);
+
+        try {
+            await this.injectScript(moduleUrl);
+            console.log('✅ Module bundle loaded successfully');
+
+            // Process any queued modules
+            this.processQueuedModules();
+
+        } catch (error) {
+            console.error('❌ Failed to load module bundle:', error);
+            console.warn('📦 Modules may not be available');
+        }
+    }
+
+    /**
+     * Get default module bundle URL based on core script location
+     */
+    getDefaultModuleUrl() {
+        // Try to find the core script source
+        const coreScript = this.getCurrentScriptSrc();
+        if (coreScript) {
+            return coreScript.replace('agentlet-core-packaged.js', 'agentlet-modules.js');
+        }
+
+        // Fallback to relative path
+        return './agentlet-modules.js';
+    }
+
+    /**
+     * Get current script source URL
+     */
+    getCurrentScriptSrc() {
+        const scripts = document.querySelectorAll('script[src*="agentlet-core"]');
+        return scripts[scripts.length - 1]?.src || '';
+    }
+
+    /**
+     * Inject script via DOM and return promise
+     */
+    async injectScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.crossOrigin = 'anonymous';
+
+            script.onload = () => {
+                console.log(`📦 Script loaded: ${src}`);
+                resolve();
+            };
+
+            script.onerror = () => {
+                reject(new Error(`Failed to load script: ${src}`));
+            };
+
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Process modules that were queued before core was ready
+     */
+    processQueuedModules() {
+        const queue = window.agentletModuleQueue || [];
+        console.log(`📦 Processing ${queue.length} queued modules...`);
+
+        queue.forEach((moduleFactory, index) => {
+            try {
+                const module = moduleFactory();
+                this.moduleRegistry.register(module);
+                console.log(`📦 Registered queued module ${index + 1}/${queue.length}: ${module.name}`);
+            } catch (error) {
+                console.error(`❌ Failed to register queued module ${index + 1}:`, error);
+            }
+        });
+
+        // Clear the queue
+        window.agentletModuleQueue = [];
+
+        if (queue.length > 0) {
+            console.log(`✅ Processed ${queue.length} queued modules`);
         }
     }
 
