@@ -27,9 +27,11 @@ export default defineConfig({
   
   // Retry on CI only
   retries: process.env.CI ? 2 : 0,
-  
-  // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+
+  // Limit parallelism on CI (shared runners), but don't fully serialize:
+  // with 152 tests per project this keeps total wall-clock time within
+  // globalTimeout. See .github/WORKFLOWS.md for the full reasoning.
+  workers: process.env.CI ? 2 : undefined,
   
   // Reporter to use
   reporter: [
@@ -53,13 +55,23 @@ export default defineConfig({
     screenshot: 'only-on-failure',
 
     // Timeout for each action (e.g. click, fill, etc.)
-    actionTimeout: 10000,
-
-    // Global test timeout
-    testTimeout: 30000
+    actionTimeout: 10000
   },
 
-  // Configure projects for major browsers
+  // Timeout for a single test. This lived inside `use` as `testTimeout`,
+  // where Playwright ignores it; it belongs at the top level.
+  timeout: 30000,
+
+  // Configure projects for major browsers.
+  // A 4th "chromium-headed" project (headed Chromium with a 1s slowMo)
+  // used to live here as a local debugging aid. It ran the exact same 152
+  // tests as "chromium" a second time (in CI headless with no slowMo, i.e.
+  // truly identical to "chromium"), which both inflated CI runtime for no
+  // extra coverage and made a full local run of this file dramatically
+  // slower because of the 1s-per-action slowMo. It was removed: the same
+  // headed/slowed-down debugging experience is available for any project
+  // via `npm run test:examples:visible` (`--headed`) and
+  // `npm run test:examples:debug`. See .github/WORKFLOWS.md for details.
   projects: [
     {
       name: 'chromium',
@@ -73,24 +85,16 @@ export default defineConfig({
     },
     {
       name: 'firefox',
-      use: { 
+      use: {
         ...devices['Desktop Firefox'],
         headless: process.env.CI ? true : undefined, // Force headless in CI
       },
     },
     {
       name: 'webkit',
-      use: { 
+      use: {
         ...devices['Desktop Safari'],
         headless: process.env.CI ? true : undefined, // Force headless in CI
-      },
-    },
-    {
-      name: 'chromium-headed',
-      use: { 
-        ...devices['Desktop Chrome'],
-        headless: process.env.CI ? true : false, // Always headless in CI, headed locally
-        slowMo: process.env.CI ? 0 : 1000, // No delay in CI
       },
     }
   ],
@@ -113,8 +117,14 @@ export default defineConfig({
   // Test match patterns
   testMatch: '**/*.spec.js',
   
-  // Timeout for the whole test run
-  globalTimeout: 300000, // 5 minutes
+  // Timeout for the whole test run: 3 projects (chromium, firefox, webkit)
+  // x 153 tests each = 459 tests. Measured at roughly 23 minutes with two
+  // workers, which is what both a 4-core CI runner and a typical developer
+  // machine end up using. This is a safety net against a hung run, not a
+  // target, so the budget is deliberately generous and identical everywhere
+  // (an earlier 15-minute local budget cut the suite off mid-run). See
+  // .github/WORKFLOWS.md for the full reasoning.
+  globalTimeout: 2700000, // 45 minutes
   
   // Expect configuration
   expect: {
