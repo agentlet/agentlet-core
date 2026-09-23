@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+// Scaffolds a throwaway agentlet from plop-templates/agentlet for both the
+// FULL and MINIMAL templates, installs its dependencies, starts its webpack
+// dev server, and runs its generated Playwright specs against it - an
+// end-to-end check that `npm run scaffold:agentlet` actually produces a
+// working project, not just files that look right.
+//
+// plop-templates/agentlet/package.json pins "@playwright/test" to an exact
+// version (currently 1.54.1, matching what this repo's own package-lock.json
+// resolves - see `node -e "console.log(require('./node_modules/@playwright/test/package.json').version)"`)
+// instead of a caret range. Left as "^1.54.1", a scaffolded project with no
+// lockfile of its own resolves to whatever is newest at install time; at the
+// time this was pinned, that was a version that had already dropped macOS 13
+// support, so `npm test` inside the generated project failed to even launch
+// browsers on that OS. Bump the pin deliberately (and re-run this script) if
+// you need a newer Playwright, rather than letting it float.
+
 const { execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -126,7 +142,7 @@ async function testTemplate(templateType, testName, testDir) {
     // Step 2: Scaffold the test agentlet with template-specific parameters
     const scaffoldCommand = templateType === 'minimal'
       ? `plop agentlet --name=${testName} --folder=${path.dirname(testDir)}/ --minimal`
-      : `plop agentlet --name=${testName} --folder=${path.dirname(testDir)}/ --libs=html2canvas,xlsx`;
+      : `plop agentlet --name=${testName} --folder=${path.dirname(testDir)}/ --libs=pdfjs-dist`;
 
     runCommand(scaffoldCommand, `Scaffolding ${templateType} agentlet: ${testName}`);
 
