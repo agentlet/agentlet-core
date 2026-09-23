@@ -71,6 +71,8 @@ export interface DialogWaitOptions {
     icon?: string;
     showSpinner?: boolean;
     allowCancel?: boolean;
+    /** Only read by `showAIProcessing()`: set false to omit the icon entirely (overridden by an empty `icon`). */
+    showIcon?: boolean;
 }
 
 export interface DialogProgressCallbacks {
@@ -1414,6 +1416,19 @@ export interface AgentletTheme {
     imageOverlayZIndex: number;
     imageOverlayTransition: string;
     imageOverlayHoverScale: string;
+    /**
+     * Command-prompt dialog input background. Not one of the keys
+     * `ThemeManager.getTheme()` ever populates (there is no default for
+     * it), so in practice this is always `undefined` and the dialog falls
+     * back to `#ffffff`; documented here because `Dialog` reads it.
+     */
+    inputBackground?: string;
+    /**
+     * Fullscreen-dialog footer background. Same situation as
+     * {@link AgentletTheme.inputBackground}: `ThemeManager` never sets it,
+     * so the dialog always falls back to `rgba(248, 249, 250, 0.8)`.
+     */
+    footerBackground?: string;
 }
 
 export interface ThemeManagerAPI {

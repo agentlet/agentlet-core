@@ -22,6 +22,7 @@ import type {
     TableData,
     AIStatus,
     PageHighlighterAPI,
+    DialogAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -29,6 +30,7 @@ import { EventBus } from '../../src/core/EventBus';
 import { ThemeManager } from '../../src/core/ThemeManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
+import Dialog from '../../src/utils/ui/Dialog';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -142,12 +144,12 @@ window.agentlet.modules.register(myAgentlet);
 
 /**
  * Step 2.3 of the progressive TypeScript migration converted EventBus,
- * ThemeManager, ZIndex and Module to real .ts classes/modules that share
- * their option/shape types with this file (see the `import type { ... }
- * from '../../src/types/public-api'` usages in each of them). These
- * checks assert bidirectional assignability between each real class and
- * its hand-written declaration here, so drift in either direction fails
- * `npm run typecheck`.
+ * ThemeManager, ZIndex and Module to real .ts classes/modules, and step
+ * 2.4a converted Dialog, all of which share their option/shape types with
+ * this file (see the `import type { ... } from '../../src/types/public-api'`
+ * usages in each of them). These checks assert bidirectional assignability
+ * between each real class and its hand-written declaration here, so drift
+ * in either direction fails `npm run typecheck`.
  */
 
 // real -> declared
@@ -157,12 +159,14 @@ const eventBusCheck: EventBusAPI = new EventBus();
 const themeCheck: ThemeManagerAPI = new ThemeManager();
 const zIndexCheck: ZIndexConstants = Z_INDEX;
 const highlighterCheck: PageHighlighterAPI = new PageHighlighter();
+const dialogCheck: DialogAPI = new Dialog({ theme: {} });
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
 void themeCheck;
 void zIndexCheck;
 void highlighterCheck;
+void dialogCheck;
 
 // declared -> real
 //
@@ -195,6 +199,9 @@ void zIndexBackToReal;
 declare const declaredHighlighter: PageHighlighterAPI;
 const highlighterBackToReal: Pick<InstanceType<typeof PageHighlighter>, keyof PageHighlighterAPI> = declaredHighlighter;
 void highlighterBackToReal;
+declare const declaredDialog: DialogAPI;
+const dialogBackToReal: Pick<InstanceType<typeof Dialog>, keyof DialogAPI> = declaredDialog;
+void dialogBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
