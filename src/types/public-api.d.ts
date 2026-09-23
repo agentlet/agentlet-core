@@ -493,32 +493,32 @@ export interface PageHighlighterAPI {
 
 /** Exact literal values from `src/utils/ui/ZIndex.js`. */
 export interface ZIndexConstants {
-    readonly BASE: 100001;
-    readonly INPUT: 100002;
-    readonly BUTTON: 100003;
-    readonly BACKDROP: 100010;
+    readonly BASE: number;
+    readonly INPUT: number;
+    readonly BUTTON: number;
+    readonly BACKDROP: number;
     /** Intentionally the same value as DIALOG_OVERLAY. */
-    readonly MODAL_BACKDROP: 100150;
-    readonly HOVER_HIGHLIGHT: 100050;
-    readonly ELEMENT_HIGHLIGHT: 100060;
-    readonly SELECTION_HIGHLIGHT: 100075;
-    readonly ACTIVE_SELECTION: 100080;
-    readonly TOOLTIP: 100090;
-    readonly MESSAGE_BUBBLE: 100110;
-    readonly NOTIFICATION: 100115;
-    readonly PANEL: 100100;
-    readonly PANEL_CONTENT: 100101;
-    readonly PANEL_HEADER: 100102;
-    readonly DIALOG: 100200;
+    readonly MODAL_BACKDROP: number;
+    readonly HOVER_HIGHLIGHT: number;
+    readonly ELEMENT_HIGHLIGHT: number;
+    readonly SELECTION_HIGHLIGHT: number;
+    readonly ACTIVE_SELECTION: number;
+    readonly TOOLTIP: number;
+    readonly MESSAGE_BUBBLE: number;
+    readonly NOTIFICATION: number;
+    readonly PANEL: number;
+    readonly PANEL_CONTENT: number;
+    readonly PANEL_HEADER: number;
+    readonly DIALOG: number;
     /** Intentionally the same value as MODAL_BACKDROP. */
-    readonly DIALOG_OVERLAY: 100150;
-    readonly INFO_DIALOG: 100210;
-    readonly INPUT_DIALOG: 100220;
-    readonly PROGRESS_DIALOG: 100230;
-    readonly FULLSCREEN_DIALOG: 100240;
-    readonly LOADING_OVERLAY: 100300;
-    readonly ERROR_OVERLAY: 100350;
-    readonly IMAGE_OVERLAY: 100400;
+    readonly DIALOG_OVERLAY: number;
+    readonly INFO_DIALOG: number;
+    readonly INPUT_DIALOG: number;
+    readonly PROGRESS_DIALOG: number;
+    readonly FULLSCREEN_DIALOG: number;
+    readonly LOADING_OVERLAY: number;
+    readonly ERROR_OVERLAY: number;
+    readonly IMAGE_OVERLAY: number;
 }
 
 export interface ZIndexDetectionResult {

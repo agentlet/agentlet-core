@@ -2,8 +2,47 @@
  * Simplified Module class for Agentlet Core
  * Provides clean, focused module development experience
  */
-export default class Module {
-    constructor(config = {}) {
+import type {
+    ModuleConfig,
+    ModuleActivationContext,
+    ModuleMetadata,
+    ModulePatternMatcher,
+    EventBusAPI
+} from '../types/public-api';
+
+/** A single local event-listener callback, matching `AgentletModule.on`/`off`. */
+type ModuleEventListener = (data: unknown) => void;
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- see the `interface Module` block below the class for why this merge is safe.
+class Module {
+    // Core properties
+    name: string;
+    version: string;
+    description: string;
+
+    // Pattern matching - simplified
+    patterns: ModulePatternMatcher[];
+
+    // State management
+    isActive: boolean;
+
+    // Event system - simplified
+    eventListeners: Map<string, ModuleEventListener[]>;
+    eventBus?: EventBusAPI;
+
+    // CSS injection
+    injectedStyles: Set<string>;
+    styleElement: HTMLStyleElement | null;
+
+    // Performance tracking - basic
+    performanceMetrics: { initTime: number; activateTime: number; cleanupTime: number };
+
+    // Prevent duplicate operations
+    _initialized: boolean;
+    _activationCount: number;
+    _eventHandlersSetup: boolean;
+
+    constructor(config: ModuleConfig = {} as ModuleConfig) {
         // Core properties
         this.name = config.name;
         this.version = config.version || '1.0.0';
@@ -46,20 +85,20 @@ export default class Module {
 
     /**
      * Check if this module should be active for the given URL
-     * @param {string} url - URL to check
-     * @returns {boolean} - Whether module matches
+     * @param url - URL to check
+     * @returns Whether module matches
      */
-    checkPattern(url) {
+    checkPattern(url: string): boolean {
         if (!url || !this.patterns) return false;
-        
+
         return this.patterns.some(pattern => {
             if (typeof pattern === 'string') {
                 return url.includes(pattern);
             }
-            
+
             if (pattern && typeof pattern === 'object') {
                 const { type, value } = pattern;
-                
+
                 switch (type) {
                 case 'includes':
                     return url.includes(value);
@@ -71,7 +110,7 @@ export default class Module {
                     return url.includes(value);
                 }
             }
-            
+
             return false;
         });
     }
@@ -80,7 +119,7 @@ export default class Module {
      * Module initialization - called once when module is first loaded
      * Override this method in your module
      */
-    async init() {
+    async init(): Promise<void> {
         // Prevent double initialization
         if (this._initialized) {
             console.warn(`Module ${this.name} already initialized, skipping`);
@@ -97,7 +136,7 @@ export default class Module {
         } catch (error) {
             console.error(`Module ${this.name} initialization failed:`, error);
             this._initialized = false; // Reset on failure
-            this.emit('module:initFailed', { module: this.name, error: error.message });
+            this.emit('module:initFailed', { module: this.name, error: (error as Error).message });
             throw error;
         }
     }
@@ -106,7 +145,7 @@ export default class Module {
      * Module activation - called when URL matches patterns
      * Override this method in your module
      */
-    async activate(context = {}) {
+    async activate(context: ModuleActivationContext = {}): Promise<void> {
         // Track and warn about multiple activations
         this._activationCount++;
 
@@ -131,7 +170,7 @@ export default class Module {
             this.emit('module:activated', { module: this.name, context });
         } catch (error) {
             console.error(`Module ${this.name} activation failed:`, error);
-            this.emit('module:activationFailed', { module: this.name, error: error.message });
+            this.emit('module:activationFailed', { module: this.name, error: (error as Error).message });
             throw error;
         }
     }
@@ -140,9 +179,9 @@ export default class Module {
      * Module cleanup - called when module is deactivated or destroyed
      * Override this method in your module
      */
-    async cleanup(context = {}) {
+    async cleanup(context: ModuleActivationContext = {}): Promise<void> {
         const startTime = performance.now();
-        
+
         try {
             this.isActive = false;
             await this.cleanupModule(context);
@@ -157,20 +196,29 @@ export default class Module {
             this.emit('module:cleaned', { module: this.name, context });
         } catch (error) {
             console.error(`Module ${this.name} cleanup failed:`, error);
-            this.emit('module:cleanupFailed', { module: this.name, error: error.message });
+            this.emit('module:cleanupFailed', { module: this.name, error: (error as Error).message });
         }
     }
 
     // Template methods for module developers to override
-    async initModule() {
+    //
+    // Not declared `async`: `init()`/`activate()`/`cleanup()` above always
+    // `await` these, which works identically whether an override returns a
+    // plain value or a Promise, so the return type matches what
+    // `AgentletModule` in src/types/public-api.d.ts declares subclasses
+    // may implement (sync `void` or `Promise<void>`) rather than forcing
+    // `Promise<void>`. `async function(): Promise<void>` and a plain
+    // function implicitly returning `undefined` are both valid `void`
+    // implementations of this base (no-op) stub either way.
+    initModule(): Promise<void> | void {
         // Override in your module
     }
 
-    async activateModule(_context = {}) {
+    activateModule(_context: ModuleActivationContext = {}): Promise<void> | void {
         // Override in your module
     }
 
-    async cleanupModule(_context = {}) {
+    cleanupModule(_context: ModuleActivationContext = {}): Promise<void> | void {
         // Override in your module
     }
 
@@ -178,7 +226,7 @@ export default class Module {
      * Get module content for display in agentlet panel
      * Override this method in your module
      */
-    getContent() {
+    getContent(): string {
         return `
             <div class="agentlet-module-content">
                 <h3>${this.name}</h3>
@@ -190,7 +238,7 @@ export default class Module {
     /**
      * Get module metadata
      */
-    getMetadata() {
+    getMetadata(): ModuleMetadata {
         return {
             name: this.name,
             version: this.version,
@@ -202,16 +250,16 @@ export default class Module {
     }
 
     // Event system - simplified
-    on(event, callback) {
+    on(event: string, callback: ModuleEventListener): void {
         if (!this.eventListeners.has(event)) {
             this.eventListeners.set(event, []);
         }
-        this.eventListeners.get(event).push(callback);
+        this.eventListeners.get(event)!.push(callback);
     }
 
-    off(event, callback) {
+    off(event: string, callback: ModuleEventListener): void {
         if (this.eventListeners.has(event)) {
-            const listeners = this.eventListeners.get(event);
+            const listeners = this.eventListeners.get(event)!;
             const index = listeners.indexOf(callback);
             if (index > -1) {
                 listeners.splice(index, 1);
@@ -219,10 +267,10 @@ export default class Module {
         }
     }
 
-    emit(event, data) {
+    emit(event: string, data?: unknown): void {
         // Emit to local listeners
         if (this.eventListeners.has(event)) {
-            this.eventListeners.get(event).forEach(callback => {
+            this.eventListeners.get(event)!.forEach(callback => {
                 try {
                     callback(data);
                 } catch (error) {
@@ -237,12 +285,12 @@ export default class Module {
         }
     }
 
-    removeAllEventListeners() {
+    removeAllEventListeners(): void {
         this.eventListeners.clear();
     }
 
     // CSS management - simplified
-    injectStyles(css) {
+    injectStyles(css: string): void {
         if (!css) return;
 
         if (!this.styleElement) {
@@ -256,7 +304,7 @@ export default class Module {
         this.injectedStyles.add(css);
     }
 
-    removeAllStyles() {
+    removeAllStyles(): void {
         if (this.styleElement) {
             if (this.styleElement.remove) {
                 this.styleElement.remove();
@@ -269,15 +317,15 @@ export default class Module {
     }
 
     // Utility methods
-    log(message, ...args) {
+    log(message: unknown, ...args: unknown[]): void {
         console.log(`[${this.name}]`, message, ...args);
     }
 
-    error(message, ...args) {
+    error(message: unknown, ...args: unknown[]): void {
         console.error(`[${this.name}]`, message, ...args);
     }
 
-    warn(message, ...args) {
+    warn(message: unknown, ...args: unknown[]): void {
         console.warn(`[${this.name}]`, message, ...args);
     }
 
@@ -285,9 +333,37 @@ export default class Module {
      * Internal event handler setup (called only once)
      * @private
      */
-    _setupInternalEventHandlers() {
+    _setupInternalEventHandlers(): void {
         // This method is called only once to set up any internal event handlers
         // Subclasses can override this if they need one-time event setup
         // Base implementation does nothing - override in subclasses as needed
     }
 }
+
+/**
+ * Declaration merging (not a class-field re-declaration): adds the
+ * duck-typed hooks the core checks for with `typeof x === 'function'`
+ * (see src/index.js) plus `isInitialized` (set externally by
+ * ModuleRegistry) to Module's *type* only.
+ *
+ * These are intentionally NOT declared as class fields: a declared field
+ * would either be stripped or, depending on the transpiler and its class
+ * field semantics, be initialised to `undefined` as an own property, which
+ * would shadow a subclass prototype method of the same name. An interface
+ * merge is erased at compile time by tsc, esbuild and babel alike, so it
+ * adds the types with zero runtime footprint.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- intentional, see the comment above; only optional members are added, no fields or state.
+interface Module {
+    getPanelTitle?(): string;
+    showSettings?(): void;
+    showHelp?(): void;
+    setSubmoduleChangeCallback?(callback: () => void): void;
+    requiresLocalStorageChangeNotification?: boolean;
+    onLocalStorageChange?(key: string | null, newValue: string | null): void;
+    getStyles?(): string;
+    /** Set by `ModuleRegistry` after the first successful `init()`; not initialized in the constructor. */
+    isInitialized?: boolean;
+}
+
+export default Module;

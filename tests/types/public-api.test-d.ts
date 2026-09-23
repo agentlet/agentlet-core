@@ -13,11 +13,20 @@
 
 import type {
     AgentletAPI,
+    AgentletModule,
     ModuleActivationContext,
+    EventBusAPI,
+    ThemeManagerAPI,
+    ZIndexConstants,
     FormFillResult,
     TableData,
     AIStatus,
 } from '../../src/types/public-api';
+
+import Module from '../../src/core/Module';
+import { EventBus } from '../../src/core/EventBus';
+import { ThemeManager } from '../../src/core/ThemeManager';
+import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -124,6 +133,60 @@ myAgentlet.on('my-agentlet:activated', (data: unknown) => {
     void data;
 });
 window.agentlet.modules.register(myAgentlet);
+
+/* -------------------------------------------------------------- */
+/* Conformance: real classes <-> hand-written declarations          */
+/* -------------------------------------------------------------- */
+
+/**
+ * Step 2.3 of the progressive TypeScript migration converted EventBus,
+ * ThemeManager, ZIndex and Module to real .ts classes/modules that share
+ * their option/shape types with this file (see the `import type { ... }
+ * from '../../src/types/public-api'` usages in each of them). These
+ * checks assert bidirectional assignability between each real class and
+ * its hand-written declaration here, so drift in either direction fails
+ * `npm run typecheck`.
+ */
+
+// real -> declared
+const moduleCtorCheck: typeof AgentletModule = Module;
+const moduleInstanceCheck: AgentletModule = new Module({ name: 'conformance-check', patterns: ['example.com'] });
+const eventBusCheck: EventBusAPI = new EventBus();
+const themeCheck: ThemeManagerAPI = new ThemeManager();
+const zIndexCheck: ZIndexConstants = Z_INDEX;
+void moduleCtorCheck;
+void moduleInstanceCheck;
+void eventBusCheck;
+void themeCheck;
+void zIndexCheck;
+
+// declared -> real
+//
+// The real classes intentionally have a larger public surface than these
+// hand-written declarations expose (framework-internal state such as
+// Module's `eventListeners`/`_initialized`, EventBus's `listeners`, or
+// ThemeManager's `config`, none of which agentlet authors are meant to
+// rely on). A literal `AgentletModule -> Module` assignment would fail on
+// that extra surface even with zero drift, so each check below is scoped
+// with `Pick<Real, keyof Declared>` to the members the declaration
+// actually claims to have - still failing if any of *those* members goes
+// missing or becomes incompatible on the real class, which is what this
+// direction is for.
+declare const declaredModuleInstance: AgentletModule;
+const moduleBackToReal: Pick<InstanceType<typeof Module>, keyof AgentletModule> = declaredModuleInstance;
+void moduleBackToReal;
+
+declare const declaredEventBus: EventBusAPI;
+const eventBusBackToReal: Pick<EventBus, keyof EventBusAPI> = declaredEventBus;
+void eventBusBackToReal;
+
+declare const declaredTheme: ThemeManagerAPI;
+const themeBackToReal: Pick<ThemeManager, keyof ThemeManagerAPI> = declaredTheme;
+void themeBackToReal;
+
+declare const declaredZIndex: ZIndexConstants;
+const zIndexBackToReal: Pick<typeof Z_INDEX, keyof ZIndexConstants> = declaredZIndex;
+void zIndexBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
