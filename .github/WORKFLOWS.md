@@ -168,3 +168,63 @@ single-key shortcut, since `preventDefault` defaults to `true`.
 If the suite grows significantly, re-measure with
 `CI=true npx playwright test --config=tests/examples/playwright.config.js`
 before assuming the existing budget still holds.
+
+## `release.yml` - npm publish pipeline
+
+**Trigger**: Push of a tag matching `v*` (for example `v1.2.3`)
+
+Steps:
+- `npm ci`
+- `npm test` (Jest)
+- `npm run build`
+- `npm publish --provenance --access public`
+
+The published version is whatever is in `package.json` at the tagged
+commit, not the tag name itself. npm does not derive the version from the
+git tag, so the tag pushed and the `version` field in `package.json` must
+agree before tagging, otherwise npm either refuses the publish (if a
+version with that number already exists) or publishes a version that does
+not match the tag. There is no check enforcing this in the workflow itself,
+so verify it by hand (or in a future improvement, add a step that compares
+the tag to `package.json`) before pushing a release tag.
+
+### Required repository secret: `NPM_TOKEN`
+
+The workflow authenticates to the npm registry with an automation token
+that does not exist in this repository yet. A repository maintainer needs
+to create it once:
+
+1. On [npmjs.com](https://www.npmjs.com), sign in with an account that has
+   publish rights on the `agentlet-core` package, open the account menu,
+   go to **Access tokens**, and generate a new token with the
+   **Automation** type (this type is meant for CI and works even when the
+   account has two-factor authentication enabled).
+2. Copy the generated token immediately; npm only shows it once.
+3. In the GitHub repository, go to **Settings > Secrets and variables >
+   Actions**, click **New repository secret**, name it `NPM_TOKEN`, and
+   paste the token as its value.
+
+Without this secret, any push of a `v*` tag will run the workflow through
+the test and build steps and then fail at the publish step.
+
+### Why `id-token: write` matters
+
+`npm publish --provenance` asks npm to attach a cryptographically signed
+attestation of where and how the package was built (the workflow file, the
+commit, the repository). To produce that attestation, the job requests a
+short-lived OIDC token from GitHub's identity provider, which requires the
+`id-token: write` permission on the job. `contents: read` is the ordinary
+permission needed to check out the repository. Neither the checkout step
+nor `npm ci`/`npm test`/`npm run build` need `id-token: write`, but the
+final `npm publish --provenance` step does; without it the publish step
+fails immediately and none of the other steps make up for its absence.
+
+### This workflow has not been exercised
+
+`release.yml` has been added but deliberately not triggered: no `v*` tag
+has been pushed, and `npm publish` has not been run, locally or in CI.
+Actual publishing is intentionally deferred until phase 1 of the rework
+(Shadow DOM + API mount) is complete, and `package.json` is being bumped to
+`2.0.0` in a separate, unrelated pull request. Before the first real
+release, confirm the `NPM_TOKEN` secret described above has been added,
+and that `package.json`'s `version` matches the tag about to be pushed.
