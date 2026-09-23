@@ -61,6 +61,7 @@ class AgentletCore {
             minimumPanelWidth: config.minimumPanelWidth || 320, // Minimum panel width in pixels
             quickCommandDialogShortcut: config.quickCommandDialogShortcut || false, // Enable Ctrl/Cmd+; quick command dialog
             quickCommandCallback: config.quickCommandCallback || null, // Custom callback for quick command dialog
+            shadowDom: config.shadowDom !== false, // Mount the panel UI inside an open shadow root (isolates host page/agentlet CSS)
             ...config
         };
         
@@ -106,7 +107,19 @@ class AgentletCore {
             content: null,
             header: null,
             actions: null,
-            imageOverlay: null
+            imageOverlay: null,
+            root: null, // ShadowRoot (shadowDom: true) or document.body (shadowDom: false), set by UIManager.ensureRoot()
+            host: null, // #agentlet-host element (shadowDom: true only)
+            // Query helpers that work whether the UI lives in a shadow root or directly in the page,
+            // so callers never need to know which mode is active.
+            query: (selector) => {
+                const root = this.ui.root || document;
+                return typeof root.querySelector === 'function' ? root.querySelector(selector) : null;
+            },
+            queryAll: (selector) => {
+                const root = this.ui.root || document;
+                return typeof root.querySelectorAll === 'function' ? root.querySelectorAll(selector) : [];
+            }
         };
         
         // UI state (synchronized with UIManager)
@@ -200,6 +213,10 @@ class AgentletCore {
             this.setupEventListeners();
 
             const uiStartTime = performance.now();
+
+            // Ensure the UI mount root (shadow root, or document.body) exists before
+            // injecting styles or creating UI elements, so styles land in the right place.
+            this.uiManager.ensureRoot();
 
             // Inject styles first before creating UI elements
             this.styleInjector.injectStyles();
@@ -400,8 +417,8 @@ class AgentletCore {
      * Update application display
      */
     updateApplicationDisplay() {
-        const appNameElement = document.getElementById('agentlet-app-display');
-        const _moduleCountElement = document.getElementById('agentlet-module-count');
+        const appNameElement = this.ui.query('#agentlet-app-display');
+        const _moduleCountElement = this.ui.query('#agentlet-module-count');
         
         // Use provided activeModule parameter, fallback to moduleLoader's activeModule
         const activeModule = this.moduleRegistry.activeModule;
@@ -896,16 +913,34 @@ class AgentletCore {
             
             // Remove UI
             const container = this.ui.container;
-            
+
             if (container) container.remove();
-            const toggleButton = document.getElementById('agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle');
             if (toggleButton) toggleButton.remove();
+
+            // Remove the shadow host (also takes any UI styles injected into it with it).
+            // In non-shadow mode this.ui.host is null and there is nothing extra to remove here.
+            if (this.ui.host) {
+                this.ui.host.remove();
+            }
+
             const coreStyles = document.getElementById('agentlet-core-styles');
             if (coreStyles) coreStyles.remove();
-            
+            const themeStyles = document.getElementById('agentlet-core-theme');
+            if (themeStyles) themeStyles.remove();
+
+            // Reset the UI mount root/host so a subsequent init() creates a fresh one
+            this.ui.root = null;
+            this.ui.host = null;
+
             // Remove image overlay if present
-            this.hideImageOverlay();
-            
+            // (pre-existing bug fix: hideImageOverlay() only ever existed on
+            // UIManager, so this call always threw and silently aborted the
+            // rest of cleanup() - noticed while testing shadow DOM cleanup)
+            if (this.uiManager) {
+                this.uiManager.hideImageOverlay();
+            }
+
             // Reset initialization flag
             this.initialized = false;
             

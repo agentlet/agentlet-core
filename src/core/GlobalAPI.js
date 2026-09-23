@@ -143,7 +143,10 @@ export class GlobalAPI {
         // Also expose moduleRegistry directly for advanced use
         window.agentlet.moduleRegistry = this.core.moduleRegistry;
         
-        window.agentlet.ui = {
+        // Merge onto the existing this.core.ui object (rather than replacing it)
+        // so window.agentlet.ui stays the exact same object as core.ui - notably
+        // preserving the root/host/query/queryAll references UI code relies on.
+        Object.assign(window.agentlet.ui, {
             refreshContent: () => this.core.updateModuleContent(),
             show: () => this.core.uiManager.show(),
             hide: () => this.core.uiManager.hide(),
@@ -153,7 +156,7 @@ export class GlobalAPI {
             resizePanel: (size) => this.core.panelManager.resizePanel(size),
             getPanelWidth: () => this.core.panelManager.getPanelWidth(),
             setPanelWidth: (width) => this.core.panelManager.setPanelWidth(width)
-        };
+        });
         
         // jQuery removed - no longer needed
         

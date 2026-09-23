@@ -72,7 +72,7 @@ export class PanelManager {
         document.documentElement.style.setProperty('--agentlet-panel-width', `${width}px`);
         
         // Update toggle button position if it exists
-        const toggleButton = document.getElementById('agentlet-toggle');
+        const toggleButton = this.core.ui.query('#agentlet-toggle');
         if (toggleButton && !this.core.uiManager.isMinimized) {
             toggleButton.style.right = `${width}px`;
         }
