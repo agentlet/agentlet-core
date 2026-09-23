@@ -24,7 +24,15 @@ describe('AgentletCore', () => {
       getAttribute: jest.fn(),
       innerHTML: '',
       textContent: '',
-      id: ''
+      id: '',
+      // Minimal shadow root double so UIManager.ensureRoot() (shadowDom: true by
+      // default) can create #agentlet-host's shadow root in this fully-mocked DOM.
+      attachShadow: jest.fn(() => ({
+        appendChild: jest.fn(),
+        removeChild: jest.fn(),
+        querySelector: jest.fn(() => null),
+        querySelectorAll: jest.fn(() => [])
+      }))
     }));
     document.body.appendChild = jest.fn();
     document.body.removeChild = jest.fn();
