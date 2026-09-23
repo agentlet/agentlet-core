@@ -346,18 +346,12 @@ class Module {
  * (see src/index.js) plus `isInitialized` (set externally by
  * ModuleRegistry) to Module's *type* only.
  *
- * These are intentionally NOT declared as class fields. A field
- * declaration with no initializer is only emit-free under esbuild;
- * babel's class-properties transform (used by babel-jest, and by any
- * downstream consumer who transpiles this file with Babel instead of
- * esbuild) still compiles every declared field - including ones with no
- * initializer - into `this.field = undefined` in the constructor. That
- * would (a) create new own-enumerable properties that don't exist today,
- * and (b) for the method-shaped hooks, shadow a subclass's prototype
- * method of the same name with an own `undefined` property, silently
- * breaking overrides. An interface merge is erased entirely at compile
- * time by every tool in this project's pipeline, so it adds the types
- * with zero runtime footprint and zero behaviour change.
+ * These are intentionally NOT declared as class fields: a declared field
+ * would either be stripped or, depending on the transpiler and its class
+ * field semantics, be initialised to `undefined` as an own property, which
+ * would shadow a subclass prototype method of the same name. An interface
+ * merge is erased at compile time by tsc, esbuild and babel alike, so it
+ * adds the types with zero runtime footprint.
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- intentional, see the comment above; only optional members are added, no fields or state.
 interface Module {
