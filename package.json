@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "Core framework for AI-powered bookmarklet system with extensible plugin architecture",
   "main": "dist/agentlet-core.js",
+  "types": "./dist/agentlet-core.d.ts",
   "files": [
     "dist",
     "README.md",
@@ -10,6 +11,7 @@
   ],
   "exports": {
     ".": {
+      "types": "./dist/agentlet-core.d.ts",
       "import": "./dist/agentlet-core.esm.js",
       "require": "./dist/agentlet-core.js",
       "default": "./dist/agentlet-core.js"

@@ -212,6 +212,8 @@ Named exports such as `Dialog`, `FormExtractor` and `TableExtractor` behave iden
 
 Consumers no longer need their own bundler rule to transpile `agentlet-core`'s sources (for example a `babel-loader` rule targeting `node_modules/agentlet-core`): the package is pre-built, so a bundler only needs to resolve and include it as-is. If you are upgrading from 1.x and had such a rule pointing at `agentlet-core`, it can be removed, since `node_modules` is typically excluded from bundler transform rules already.
 
+The package also ships hand-written TypeScript declarations for `window.agentlet`, the `Module` base class, and the core config, usable from both JavaScript and TypeScript agentlets. See: [TypeScript support](docs/typescript.md)
+
 ## Architecture
 
 _Agentlets_ integrate directly into the context of an existing webpage, following an unconventional software architecture that developers need to understand. While this approach offers integration advantages, it also introduces specific security considerations. To address this, the agentlet framework adheres to common web and API security principles, notably **Content Security Policy (CSP)** and **Cross-Origin Resource Sharing (CORS)** (see below).

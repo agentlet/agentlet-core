@@ -124,6 +124,27 @@ class AgentletCoreBuilder {
     }
 
     /**
+     * Copy the hand-written public API type declarations to dist directory
+     */
+    copyTypeDeclarations() {
+        const declarationSrcPath = path.join(this.srcDir, 'types', 'public-api.d.ts');
+        const declarationDestPath = path.join(this.distDir, 'agentlet-core.d.ts');
+
+        try {
+            if (!fs.existsSync(declarationSrcPath)) {
+                console.warn('⚠️ No src/types/public-api.d.ts found, skipping type declarations copy');
+                return;
+            }
+
+            this.ensureDistDir();
+            fs.copyFileSync(declarationSrcPath, declarationDestPath);
+            console.log(`📄 Type declarations copied to: ${declarationDestPath}`);
+        } catch (error) {
+            console.warn(`⚠️ Failed to copy type declarations: ${error.message}`);
+        }
+    }
+
+    /**
      * Copy PDF.js worker files to dist directory
      */
     copyPDFJSWorker() {
@@ -173,10 +194,13 @@ class AgentletCoreBuilder {
         
         // Copy resources for core builds
         this.copyResources();
-        
+
         // Copy PDF.js worker
         this.copyPDFJSWorker();
-        
+
+        // Copy public API type declarations
+        this.copyTypeDeclarations();
+
         const config = minified ? this.configs.coreMinified : this.configs.core;
         
         try {
@@ -213,6 +237,9 @@ class AgentletCoreBuilder {
 
         // Copy PDF.js worker
         this.copyPDFJSWorker();
+
+        // Copy public API type declarations
+        this.copyTypeDeclarations();
 
         const config = this.configs.coreEsm;
 
@@ -1423,10 +1450,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Copy resources first
         this.copyResources();
-        
+
         // Copy PDF.js worker
         this.copyPDFJSWorker();
-        
+
+        // Copy public API type declarations
+        this.copyTypeDeclarations();
+
         const results = {
             core: await this.buildCore(false),
             coreMinified: await this.buildCore(true),
