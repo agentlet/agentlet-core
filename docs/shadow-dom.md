@@ -157,17 +157,17 @@ assertions on the `shadowDom: false` path.
   when `shadowDom` is enabled, or `document.body` when it is disabled, so
   code written against `ui.root`/`ui.query()`/`ui.queryAll()` works
   unchanged either way.
-- **`Module.injectStyles(css)` still targets `<head>` today**, not the UI
-  root. That means CSS a module injects this way no longer reaches its own
-  content, since that content is rendered inside the shadow root. A
-  follow-up mount API is planned to make `injectStyles()` target the UI
-  root automatically; until then, either append a `<style>` element to
-  `window.agentlet.ui.root` directly, or use inline styles / the
-  framework's built-in classes (`.agentlet-btn`, `.agentlet-btn-secondary`,
-  etc., all styled by the stylesheet already injected into the shadow
-  root) in the module's rendered content. See
+- **`Module.injectStyles(css)` targets the UI root.** When the module is
+  mounted (via the `mount()`/`unmount()` lifecycle described in
+  `src/core/Module.ts`), `injectStyles()` appends its `<style>` element to
+  the root captured from the mount context - the shadow root in the default
+  `shadowDom: true` mode, so the CSS reaches the module's own content
+  rendered inside it. In `shadowDom: false` mode (where the UI root is
+  `document.body`) and before a module has ever been mounted, it falls back
+  to `document.head`, the historical behavior. See
   `examples/ui/localhost-demo-module.js` for an example of relying on the
-  built-in classes instead of module-level CSS.
+  framework's built-in classes (`.agentlet-btn`, `.agentlet-btn-secondary`,
+  etc.) instead of module-level CSS.
 - **`document.activeElement` returns `#agentlet-host`, not the actually
   focused element**, once focus is inside the shadow root - this is
   standard shadow DOM behavior, the same encapsulation principle as event
