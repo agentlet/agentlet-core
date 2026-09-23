@@ -285,6 +285,10 @@ In some cases, the functionality provided by a bookmarklet can be integrated nat
 
 This approach is especially useful in environments where deploying new backend features is cumbersome or slow, but adding or updating frontend assets is simpler (such as in many corporate or internal applications). By distributing agentlet functionality as part of the frontend, teams can provide advanced, modular capabilities without requiring backend deployments, API changes, or server updates — effectively “graduating” a bookmarklet-based feature into a natively integrated frontend component.
 
+### UI isolation (shadow DOM)
+
+By default, the agentlet panel, dialogs and toasts mount inside an isolated shadow root, so the host page's CSS can't reach in and the framework's CSS can't leak out. See: [Shadow DOM UI](docs/shadow-dom.md)
+
 ### Security considerations
 
 #### Content Security Policy (CSP)

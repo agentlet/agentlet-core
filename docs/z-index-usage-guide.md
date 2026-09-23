@@ -6,6 +6,15 @@ Agentlets inject UI elements into existing web applications, which means they ne
 
 ## Key Concepts
 
+### Where the panel is mounted
+
+By default, the panel (and dialogs, toasts, etc.) live inside an open
+shadow root rather than being appended directly to `document.body` - see
+[Shadow DOM UI](shadow-dom.md). This isolates the panel's CSS from the
+host page, but the shadow host element is still a normal part of the
+page's DOM and stacking context, so z-index still competes with the host
+application exactly as described below.
+
 ### Backdrop vs Overlay
 - **Backdrop**: Semi-transparent background that blocks interactions behind modals/dialogs
 - **Overlay**: Any content displayed on top of existing content (may include backdrop + content)
