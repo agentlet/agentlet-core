@@ -187,8 +187,14 @@ export interface DialogAPI {
 
     fullscreen(options: DialogFullscreenOptions, callback?: (value: unknown) => void): void;
 
-    /** `options` may be a bare string, treated as `message` (legacy call form). */
-    showAIProcessing(options?: DialogWaitOptions | string, cancelCallback?: () => void): void;
+    /**
+     * `options` may be a bare string, treated as `message` (legacy call
+     * form). In that legacy form the code also reads a 2nd positional
+     * `allowCancel` boolean via `arguments[1]` before the callback, which
+     * this overload exposes explicitly.
+     */
+    showAIProcessing(message: string, allowCancel?: boolean, cancelCallback?: () => void): void;
+    showAIProcessing(options?: DialogWaitOptions, cancelCallback?: () => void): void;
     showLoading(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
     showAnalyzing(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
     showThinking(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
