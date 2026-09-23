@@ -11,6 +11,13 @@ module.exports = {
   },
   resolve: {
     fullySpecified: false, // Allow importing .mjs files without full extension
+    // agentlet-core is typically installed as a `file:` dependency (a symlink
+    // in node_modules). With the default `symlinks: true`, webpack resolves
+    // such symlinks to their real, outside-of-node_modules path, which makes
+    // the babel-loader `exclude: /node_modules/` rule below fail to exclude
+    // it, causing the whole pre-built agentlet-core bundle to be needlessly
+    // (and slowly) re-transpiled. Keeping the symlink path as-is fixes that.
+    symlinks: false,
   },
   module: {
     rules: [

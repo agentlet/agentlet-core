@@ -26,9 +26,18 @@ class AgentletCoreBuilder {
                 outfile: path.join(this.distDir, 'agentlet-core.js'),
                 globalName: 'AgentletCore',
                 minify: false,
-                sourcemap: true
+                sourcemap: true,
+                // esbuild's iife+globalName output only assigns to the global
+                // variable. Since package.json's "require"/"default" exports
+                // condition resolves to this file, also assign module.exports
+                // (CommonJS/Node/webpack `require`) when available, so both
+                // `<script>` globals and `require('agentlet-core')` work from
+                // the same bundle. Browsers without `module` are unaffected.
+                footer: {
+                    js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
+                }
             },
-            
+
             coreMinified: {
                 entryPoints: [this.entryPoint],
                 bundle: true,
@@ -37,7 +46,20 @@ class AgentletCoreBuilder {
                 outfile: path.join(this.distDir, 'agentlet-core.min.js'),
                 globalName: 'AgentletCore',
                 minify: true,
-                sourcemap: false
+                sourcemap: false,
+                footer: {
+                    js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
+                }
+            },
+
+            coreEsm: {
+                entryPoints: [this.entryPoint],
+                bundle: true,
+                format: 'esm',
+                target: 'es2020',
+                outfile: path.join(this.distDir, 'agentlet-core.esm.js'),
+                minify: false,
+                sourcemap: true
             },
             
             bookmarklet: {
@@ -172,9 +194,46 @@ class AgentletCoreBuilder {
             }
             
             return { success: true, outputFile, size: stats.size };
-            
+
         } catch (error) {
             console.error('❌ Build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Build core framework as an ESM bundle (for "import" consumers)
+     */
+    async buildCoreEsm() {
+        console.log('🔨 Building Agentlet Core (ESM)...');
+
+        // Copy resources for core builds
+        this.copyResources();
+
+        // Copy PDF.js worker
+        this.copyPDFJSWorker();
+
+        const config = this.configs.coreEsm;
+
+        try {
+            const result = await esbuild.build(config);
+
+            const outputFile = config.outfile;
+            const stats = fs.statSync(outputFile);
+            const sizeKB = (stats.size / 1024).toFixed(2);
+
+            console.log(`✅ Core (ESM) built successfully`);
+            console.log(`   📦 Output: ${outputFile}`);
+            console.log(`   📏 Size: ${sizeKB} KB`);
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputFile, size: stats.size };
+
+        } catch (error) {
+            console.error('❌ ESM build failed:', error);
             return { success: false, error };
         }
     }
@@ -549,7 +608,7 @@ export default class ${className} extends BaseModule {
             author: '',
             license: 'MIT',
             peerDependencies: {
-                'agentlet-core': '^1.0.0'
+                'agentlet-core': '^2.0.0'
             },
             devDependencies: {
                 esbuild: '^0.25.5'
@@ -1370,6 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = {
             core: await this.buildCore(false),
             coreMinified: await this.buildCore(true),
+            coreEsm: await this.buildCoreEsm(),
             bookmarklet: await this.buildBookmarklet(),
             extension: await this.buildExtension()
         };
