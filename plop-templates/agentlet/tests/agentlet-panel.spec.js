@@ -91,7 +91,7 @@ test.describe('Agentlet panel', () => {
 
     // Verify panel is visually minimized by checking transform or other visual indicators
     const isVisuallyMinimized = await page.evaluate(() => {
-      const panel = document.getElementById('agentlet-container');
+      const panel = window.agentlet.ui.query('#agentlet-container');
       const computedTransform = getComputedStyle(panel).transform;
       const computedWidth = getComputedStyle(panel).width;
 

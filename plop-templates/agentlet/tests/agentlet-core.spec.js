@@ -12,15 +12,24 @@ test.describe('Agentlet core framework', () => {
     await productionLink.click();
 
     // Wait for the agentlet container to appear
-    await page.waitForSelector('#agentlet-container', { 
+    await page.waitForSelector('#agentlet-container', {
       timeout: 10000,
       state: 'visible'
     });
 
+    // Wait for the module registry to finish registering the module (the
+    // container is visible before the async module bundle finishes loading)
+    await page.waitForFunction(() => {
+      return !!(window.agentlet &&
+             window.agentlet.moduleRegistry &&
+             window.agentlet.moduleRegistry.modules &&
+             window.agentlet.moduleRegistry.modules.size > 0);
+    }, { timeout: 10000 });
+
     // Verify agentlet is properly initialized
     const isInitialized = await page.evaluate(() => {
-      return window.agentlet && 
-             window.agentlet.moduleRegistry && 
+      return window.agentlet &&
+             window.agentlet.moduleRegistry &&
              window.agentlet.moduleRegistry.modules &&
              window.agentlet.moduleRegistry.modules.size > 0;
     });
@@ -48,8 +57,8 @@ test.describe('Agentlet core framework', () => {
     await page.waitForTimeout(1000);
 
     const zIndexComparison = await page.evaluate(() => {
-      const panel = document.getElementById('agentlet-container');
-      const messageContainer = document.getElementById('agentlet-message-bubbles');
+      const panel = window.agentlet.ui.query('#agentlet-container');
+      const messageContainer = window.agentlet.ui.query('#agentlet-message-bubbles');
 
       if (!panel || !messageContainer) return null;
 
@@ -73,8 +82,8 @@ test.describe('Agentlet core framework', () => {
     await page.waitForSelector('.agentlet-dialog-overlay', { state: 'visible' });
 
     const dialogZIndex = await page.evaluate(() => {
-      const panel = document.getElementById('agentlet-container');
-      const overlay = document.querySelector('.agentlet-dialog-overlay');
+      const panel = window.agentlet.ui.query('#agentlet-container');
+      const overlay = window.agentlet.ui.query('.agentlet-dialog-overlay');
 
       if (!panel || !overlay) return null;
 
