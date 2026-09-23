@@ -9,7 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+    # The Playwright e2e suite alone budgets up to 45 minutes on CI (see
+    # .github/WORKFLOWS.md), so give the whole job enough headroom above
+    # that for npm ci / jest / build / browser install.
+    timeout-minutes: 60
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

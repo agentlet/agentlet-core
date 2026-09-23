@@ -2,6 +2,27 @@
  * ShortcutManager - Keyboard shortcuts management using hotkeys-js
  * Provides easy registration and management of keyboard shortcuts for Agentlet
  */
+
+// Modifiers whose combinations never produce ordinary typed text. Shift is
+// deliberately excluded: shift+s is how a user types an uppercase S.
+const SUPPRESSIBLE_MODIFIERS = /(^|\+)\s*(ctrl|control|cmd|command|alt|option|meta)\s*\+/i;
+
+/**
+ * Whether a matched shortcut carries a modifier that makes suppressing the
+ * browser default safe inside an input field.
+ * @param {Object} handler - hotkeys-js handler for the matched combination
+ * @param {string} registeredKeys - Combinations the shortcut was registered with
+ * @returns {boolean}
+ */
+function hasSuppressibleModifier(handler, registeredKeys) {
+    // handler.shortcut is the single combination that actually matched, which
+    // is more precise than the registered string when several were given at
+    // once (for example 'ctrl+;,cmd+;'). Fall back to the registered string.
+    const matched = handler && typeof handler.shortcut === 'string' ? handler.shortcut : null;
+    const candidate = matched || registeredKeys || '';
+    return candidate.split(',').some(combination => SUPPRESSIBLE_MODIFIERS.test(combination.trim()));
+}
+
 class ShortcutManager {
     constructor(librarySetup = null) {
         this.librarySetup = librarySetup;
@@ -106,13 +127,26 @@ class ShortcutManager {
             const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
             
             if (isInput && !config.allowInInputs) {
+                // The shortcut does not fire, but hotkeys-js still matched the
+                // combination, and the browser has not acted on the event yet.
+                // On Firefox a combination such as alt+h otherwise still
+                // inserts its letter into the focused field, so the key of a
+                // shortcut the user believes is blocked leaks into the value.
+                //
+                // Only suppress the default for combinations carrying a
+                // ctrl/cmd/alt modifier. A bare-letter shortcut must keep
+                // typing that letter in a field, which is the whole point of
+                // allowInInputs: false.
+                if (config.preventDefault && hasSuppressibleModifier(handler, keys)) {
+                    event.preventDefault();
+                }
                 return;
             }
-            
+
             if (config.preventDefault) {
                 event.preventDefault();
             }
-            
+
             if (config.stopPropagation) {
                 event.stopPropagation();
             }
