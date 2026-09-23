@@ -150,7 +150,13 @@ class AgentletCore {
         // Initialize centralized module manager
         this.moduleManager = new ModuleManager(this.moduleRegistry);
         this.moduleManager.initialize();
-        
+
+        // The module currently mounted in the content area (via the mount/unmount
+        // API), or null. Tracked here so updateModuleContent() can unmount it
+        // before mounting a different module, and cleanup() can unmount it on
+        // teardown.
+        this.mountedModule = null;
+
         // UI management (delegated to UIManager)
         
         // Performance tracking
@@ -234,8 +240,10 @@ class AgentletCore {
             this.performanceMetrics.moduleLoadTime = performance.now() - moduleStartTime;
 
             // Set up module change callback AFTER modules are loaded and UI is ready
-            this.moduleRegistry.setModuleChangeCallback((activeModule) => {
-                this.onModuleChange(activeModule);
+            this.moduleRegistry.setModuleChangeCallback((activeModule, context) => {
+                this.onModuleChange(activeModule, context).catch(error => {
+                    console.error('Error handling module change:', error);
+                });
             });
 
             // Trigger initial content update for any active modules after DOM is ready
@@ -246,21 +254,23 @@ class AgentletCore {
                 // Use requestAnimationFrame to ensure DOM is fully ready
                 window.requestAnimationFrame(() => {
                     console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
-                    this.onModuleChange(activeModule);
+                    this.onModuleChange(activeModule).catch(error => {
+                        console.error('Error handling initial module change:', error);
+                    });
                 });
             }
 
             // Set up storage change listener
             this.setupLocalStorageListener();
-            
+
             // Load environment variables from storage
             if (this.envManager) {
                 this.envManager.loadFromStorage();
             }
-            
+
             // Manual refresh to catch modules that were registered early
             this.updateApplicationDisplay();
-            this.updateModuleContent();
+            await this.updateModuleContent('init');
             
             // Register default keyboard shortcuts
             if (this.shortcutManager) {
@@ -328,24 +338,28 @@ class AgentletCore {
 
     /**
      * Handle module change
+     * @param {import('./core/Module.js').default | null} activeModule
+     * @param {import('./types/public-api').ModuleActivationContext} [context] - Forwarded by ModuleRegistry; used to tell a urlChange-driven change (same module, new URL) from an actual module switch
      */
-    onModuleChange(activeModule) {
+    async onModuleChange(activeModule, context = {}) {
         console.log('onModuleChange', activeModule);
         // TODO: check if issue with activeModule not being yet the moduleLoader.activeModule
         this.updateApplicationDisplay();
-        this.updateModuleContent();
-        
+        await this.updateModuleContent(context.trigger === 'urlChange' ? 'urlChange' : 'moduleChange');
+
         // Restore panel width for the module if env vars are available
         this.panelManager.restorePanelWidthForModule(activeModule);
-        
+
         // Set up submodule change callback for the active module
         if (activeModule && typeof activeModule.setSubmoduleChangeCallback === 'function') {
             activeModule.setSubmoduleChangeCallback(() => {
                 this.updateApplicationDisplay();
-                this.updateModuleContent();
+                this.updateModuleContent('refresh').catch(error => {
+                    console.error('Error updating module content after submodule change:', error);
+                });
             });
         }
-        
+
         this.eventBus.emit('core:moduleChanged', {
             module: activeModule?.name || null,
             metadata: activeModule?.getMetadata() || null
@@ -449,13 +463,31 @@ class AgentletCore {
     }
 
     /**
-     * Update module content
+     * Update module content: unmounts the previously mounted module (if any),
+     * then mounts (or renders) the active module's content into the panel.
+     * @param {import('./types/public-api').ModuleMountTrigger} [trigger] - Why this update is happening ('init', 'moduleChange', 'urlChange', 'refresh', ...), forwarded to `Module.mount()`/`unmount()` via the mount context
      */
-    updateModuleContent() {
+    async updateModuleContent(trigger = 'refresh') {
         const content = this.ui.content;
         if (!content) {
             console.warn('⚠️ updateModuleContent called but UI content element not ready');
             return;
+        }
+
+        // Unmount the previously mounted module, guarded so a module that was
+        // already unmounted elsewhere (e.g. via its own cleanup(), triggered by
+        // ModuleRegistry.deactivateModule()) is never unmounted twice.
+        const previouslyMounted = this.mountedModule;
+        this.mountedModule = null;
+        if (previouslyMounted && previouslyMounted.mounted) {
+            try {
+                await previouslyMounted.unmount(content);
+            } catch (error) {
+                console.error('Error unmounting module content:', error);
+            }
+            if (typeof previouslyMounted._afterUnmount === 'function') {
+                previouslyMounted._afterUnmount();
+            }
         }
 
         // Clear existing content
@@ -465,8 +497,24 @@ class AgentletCore {
 
         if (activeModule) {
             try {
-                // Use the module's getContent method
-                if (typeof activeModule.getContent === 'function') {
+                if (typeof activeModule.mount === 'function') {
+                    // Full mount/unmount API (every module extending the Module
+                    // base class has this, including modules that only override
+                    // getContent() - they go through the default mount()).
+                    const context = {
+                        root: this.ui.root,
+                        theme: this.themeManager.getTheme(),
+                        eventBus: this.eventBus,
+                        api: window.agentlet,
+                        trigger
+                    };
+                    if (typeof activeModule._beforeMount === 'function') {
+                        activeModule._beforeMount(content, context);
+                    }
+                    await activeModule.mount(content, context);
+                    this.mountedModule = activeModule;
+                } else if (typeof activeModule.getContent === 'function') {
+                    // Duck-typed module (doesn't extend Module, so it has no mount/unmount)
                     const moduleContent = activeModule.getContent();
                     content.innerHTML = moduleContent;
                 } else {
@@ -542,11 +590,13 @@ class AgentletCore {
         console.log(`📦 localStorage changed: ${key} = ${newValue}`);
         
         this.eventBus.emit('localStorage:changed', { key, newValue });
-        
+
         // Update application display and module content
         this.updateApplicationDisplay();
-        this.updateModuleContent();
-        
+        this.updateModuleContent('refresh').catch(error => {
+            console.error('Error updating module content after localStorage change:', error);
+        });
+
         // Notify active module if it requested notifications
         if (this.moduleRegistry.activeModule) {
             if (this.moduleRegistry.activeModule.requiresLocalStorageChangeNotification 
@@ -560,10 +610,10 @@ class AgentletCore {
     /**
      * Action handlers
      */
-    refreshContent() {
+    async refreshContent() {
         console.log('🔄 Refreshing content');
         this.updateApplicationDisplay();
-        this.updateModuleContent();
+        await this.updateModuleContent('refresh');
     }
 
     showSettings() {
@@ -609,7 +659,9 @@ class AgentletCore {
                 ]
             }, (result) => {
                 if (result === 'refresh') {
-                    this.refreshContent();
+                    this.refreshContent().catch(error => {
+                        console.error('Error refreshing content:', error);
+                    });
                     Dialog.success('Settings refreshed!', 'Updated');
                 }
             });
@@ -891,11 +943,16 @@ class AgentletCore {
      */
     async cleanup() {
         try {
-            // Cleanup module registry
+            // Cleanup module registry (deactivates the active module, which
+            // unmounts it via Module.cleanup() if it was still mounted)
             if (this.moduleRegistry) {
                 await this.moduleRegistry.cleanup();
             }
-            
+
+            // The module registry cleanup above already unmounted the module
+            // that was mounted, if any - just clear our own reference to it.
+            this.mountedModule = null;
+
             // Cleanup managers
             if (this.cookieManager) {
                 this.cookieManager.cleanup();

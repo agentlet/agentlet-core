@@ -256,7 +256,11 @@ export class UIManager {
         // Optional action buttons based on configuration
         let refreshBtn = null;
         if (this.core.config.showRefreshButton) {
-            refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => this.core.refreshContent());
+            refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => {
+                this.core.refreshContent().catch(error => {
+                    console.error('Error refreshing content:', error);
+                });
+            });
         }
 
         let settingsBtn = null;
