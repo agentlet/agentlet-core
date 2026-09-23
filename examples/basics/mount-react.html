@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mount API (React) - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <!-- React 18 UMD builds, loaded from a CDN for this example only. A real
+         agentlet bundles React with webpack instead (see the plop scaffold's
+         react template), so two agentlets can each ship their own React copy
+         without colliding: the core never renders a component inside a tree
+         of its own, so it does not care which UI framework (or version) an
+         agentlet brings. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> &rarr; basics &rarr; mount-react
+                </div>
+
+                <h1>Mount API: React</h1>
+
+                <p>The core ships no UI framework of its own. Each agentlet mounts whatever it wants into the container the core hands it through <code>mount(container, context)</code>. This example creates a React 18 root in <code>mount()</code> and tears it down in <code>unmount()</code>, with no build step: <code>React.createElement</code> instead of JSX.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Creating a <code>ReactDOM.createRoot(container)</code> in <code>mount()</code> and rendering into it</li>
+                        <li>Calling <code>this.root.unmount()</code> in <code>unmount()</code> and clearing <code>this.root</code></li>
+                        <li>Why React's own component state does not survive a remount, and how to work around it</li>
+                        <li>Reading <code>context.trigger</code> to show why the last mount happened</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Controls</h4>
+                    <button id="initBtn">Initialize agentlet</button>
+                    <button id="refreshBtn">Refresh panel content</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Module source</h3>
+                    <div class="code-block">
+                        <pre><code class="language-javascript">class MountReactModule extends window.agentlet.Module {
+    constructor() {
+        super({
+            name: 'mount-react-demo',
+            patterns: ['localhost'],
+            description: 'Mount API demo built with React 18'
+        });
+        this.count = 0; // source of truth lives here, not in React state
+        this.root = null;
+    }
+
+    async mount(container, context) {
+        if (!this.root) {
+            this.root = ReactDOM.createRoot(container);
+        }
+        this._render(context.trigger);
+    }
+
+    _render(trigger) {
+        const e = React.createElement;
+        this.root.render(e(Counter, {
+            count: this.count,
+            trigger,
+            onIncrement: () =&gt; { this.count++; this._render(trigger); },
+            onReset: () =&gt; { this.count = 0; this._render(trigger); }
+        }));
+    }
+
+    async unmount(container) {
+        if (this.root) {
+            this.root.unmount();
+            this.root = null;
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>State retention</h4>
+                    <p>Clicking "Refresh panel content" calls <code>window.agentlet.refreshContent()</code>, which unmounts the React root and mounts a brand new one with <code>context.trigger === 'refresh'</code>. A plain <code>useState</code> counter inside the React component would reset to zero on that new root. This example avoids that by keeping <code>this.count</code> on the module instance and passing it into the component as a prop on every render, so the count survives the remount the same way it does in the vanilla example: it never actually lived in React.</p>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>Console output</h3>
+                </div>
+                <div class="console-section" id="output"></div>
+
+                <h3>Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let agentletCore = null;
+        window.__mountDemo = { mounts: 0, unmounts: 0 };
+
+        function log(message, type = 'info') {
+            const el = document.getElementById('output');
+            if (!el) return;
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '[error]' : type === 'success' ? '[ok]' : type === 'warning' ? '[warn]' : '[info]';
+            el.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const el = document.getElementById('status');
+            if (!el) return;
+            el.textContent = message;
+            el.className = `status-section ${type}`;
+        }
+
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existing) existing.remove();
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('Agentlet Core script loaded', 'success');
+                    resolve();
+                };
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Run "npm run build" first.');
+                    log('Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // React/ReactDOM come from the CDN <script> tags in <head>. Wait
+        // (bounded) for them rather than assuming the network request
+        // already finished by the time this script runs.
+        function waitForReact(timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                (function poll() {
+                    if (window.React && window.ReactDOM) {
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - start > timeoutMs) {
+                        reject(new Error('React failed to load from the CDN (network unreachable?)'));
+                        return;
+                    }
+                    setTimeout(poll, 100);
+                })();
+            });
+        }
+    </script>
+
+    <script>
+        document.getElementById('initBtn').addEventListener('click', async function initialize() {
+            try {
+                updateStatus('Waiting for React to load from the CDN...', 'info');
+                log('Waiting for React/ReactDOM to be available...');
+                await waitForReact();
+                log('React and ReactDOM are available', 'success');
+
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('Loading Agentlet Core...');
+                await loadAgentletScript();
+
+                const AgentletConstructor = window.AgentletCore && window.AgentletCore.default;
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({ debugMode: true, startMinimized: false });
+
+                log('Starting initialization...');
+                await agentletCore.init();
+
+                // Plain function component - no JSX, no build step.
+                function Counter({ count, trigger, onIncrement, onReset }) {
+                    const e = React.createElement;
+                    return e('div', { className: 'mount-react-counter' },
+                        e('p', null, 'Rendered by a React 18 root created in mount(). The count is a prop, not React state, so it survives an unmount/remount cycle.'),
+                        e('div', { className: 'counter-row' },
+                            e('span', null, 'Count: ', e('strong', { id: 'mountReactCount' }, String(count))),
+                            e('button', { id: 'mountReactPlus', className: 'agentlet-btn', onClick: onIncrement }, '+1'),
+                            e('button', { id: 'mountReactReset', className: 'agentlet-btn agentlet-btn-secondary', onClick: onReset }, 'Reset')
+                        ),
+                        e('p', null, 'Last mount trigger: ', e('strong', { id: 'mountReactTrigger' }, trigger))
+                    );
+                }
+
+                // Defined here (not at page load) since it extends window.agentlet.Module,
+                // which only exists once the core has initialized.
+                class MountReactModule extends window.agentlet.Module {
+                    constructor() {
+                        super({
+                            name: 'mount-react-demo',
+                            version: '1.0.0',
+                            description: 'Mount API demo built with React 18',
+                            patterns: ['localhost']
+                        });
+                        this.count = 0;
+                        this.root = null;
+                        this._lastTrigger = null;
+                    }
+
+                    async mount(container, context) {
+                        this._lastTrigger = context.trigger;
+                        if (!this.root) {
+                            this.root = ReactDOM.createRoot(container);
+                        }
+                        this._render();
+                        window.__mountDemo.mounts++;
+                        log(`mount() called (trigger: ${context.trigger})`, 'info');
+                    }
+
+                    _render() {
+                        const e = React.createElement;
+                        this.root.render(e(Counter, {
+                            count: this.count,
+                            trigger: this._lastTrigger,
+                            onIncrement: () => {
+                                this.count++;
+                                this._render();
+                            },
+                            onReset: () => {
+                                this.count = 0;
+                                this._render();
+                            }
+                        }));
+                    }
+
+                    async unmount(_container) {
+                        if (this.root) {
+                            this.root.unmount();
+                            this.root = null;
+                        }
+                        window.__mountDemo.unmounts++;
+                        log(`unmount() called (count preserved on the instance: ${this.count})`, 'info');
+                    }
+                }
+
+                window.agentlet.modules.register(new MountReactModule());
+
+                updateStatus('Agentlet Core initialized and module registered', 'success');
+                log('Agentlet Core initialized and module registered', 'success');
+                document.getElementById('initBtn').disabled = true;
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', function refresh() {
+            if (!window.agentlet) {
+                updateStatus('Agentlet not initialized yet', 'warning');
+                return;
+            }
+            log('Calling window.agentlet.refreshContent()...');
+            window.agentlet.refreshContent().then(() => {
+                log('refreshContent() resolved', 'success');
+            }).catch(error => {
+                log(`refreshContent() failed: ${error.message}`, 'error');
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Mount API (React) example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mount API (Lit) - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> &rarr; basics &rarr; mount-lit
+                </div>
+
+                <h1>Mount API: Lit</h1>
+
+                <p>The core ships no UI framework of its own. Each agentlet mounts whatever it wants into the container the core hands it through <code>mount(container, context)</code>. This example defines a Lit custom element and appends an instance of it in <code>mount()</code>, removing it in <code>unmount()</code>.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Defining a custom element (<code>&lt;agentlet-mount-demo&gt;</code>) with Lit, loaded as an ES module from a CDN</li>
+                        <li>Appending/removing that element from <code>mount()</code>/<code>unmount()</code></li>
+                        <li>The element's own shadow root nesting inside the panel's shadow root without issue</li>
+                        <li>Why that nested shadow root means the element must bring its own styles</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Controls</h4>
+                    <button id="initBtn">Initialize agentlet</button>
+                    <button id="refreshBtn">Refresh panel content</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Module source</h3>
+                    <div class="code-block">
+                        <pre><code class="language-javascript">// agentlet-mount-demo.js (loaded as an ES module)
+import { LitElement, html, css } from 'https://cdn.jsdelivr.net/npm/lit@3/+esm';
+
+class MountDemoElement extends LitElement {
+    static properties = { count: { type: Number }, trigger: { type: String } };
+    static styles = css`/* its own styles - nothing from the panel reaches in here */`;
+
+    render() {
+        return html`
+            &lt;div&gt;Count: ${this.count}&lt;/div&gt;
+            &lt;button @click=${() =&gt; this._change(1)}&gt;+1&lt;/button&gt;
+            &lt;button @click=${() =&gt; this._change('reset')}&gt;Reset&lt;/button&gt;
+        `;
+    }
+    // ...dispatches a 'count-changed' event so the module stays the source of truth...
+}
+customElements.define('agentlet-mount-demo', MountDemoElement);
+
+// The agentlet module itself
+class MountLitModule extends window.agentlet.Module {
+    constructor() {
+        super({ name: 'mount-lit-demo', patterns: ['localhost'] });
+        this.count = 0; // source of truth lives here, not in the element
+        this.element = null;
+    }
+
+    async mount(container, context) {
+        this.element = document.createElement('agentlet-mount-demo');
+        this.element.count = this.count;
+        this.element.trigger = context.trigger;
+        this.element.addEventListener('count-changed', (e) =&gt; { this.count = e.detail.count; });
+        container.appendChild(this.element);
+    }
+
+    async unmount(container) {
+        this.element.remove();
+        this.element = null;
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>State retention and nested shadow roots</h4>
+                    <p>Clicking "Refresh panel content" calls <code>window.agentlet.refreshContent()</code>, which removes the custom element and appends a brand new instance with <code>context.trigger === 'refresh'</code>. A plain reactive property on that new instance would reset to its default. This example keeps <code>this.count</code> on the module instance instead, and the element reports changes back up through a <code>count-changed</code> event, so the count survives the same way it does in the vanilla and React examples.</p>
+                    <p><code>&lt;agentlet-mount-demo&gt;</code> attaches its own shadow root by default (that is how Lit's <code>LitElement</code> works), nested inside the panel's own shadow root. That nesting works without issue, but it also means the framework's <code>.agentlet-btn</code> button styling cannot reach across that second shadow boundary, so this element defines its own button styles in <code>static styles</code> instead of relying on it.</p>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>Console output</h3>
+                </div>
+                <div class="console-section" id="output"></div>
+
+                <h3>Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Loaded as an ES module so it can `import` Lit directly from a CDN,
+        // with no build step. Defines the custom element up front (this does
+        // not depend on window.agentlet existing yet); the classic <script>
+        // below defines the agentlet module and only references the element
+        // by its tag name.
+        window.__litReady = false;
+        window.__litLoadError = null;
+        try {
+            const { LitElement, html, css } = await import('https://cdn.jsdelivr.net/npm/lit@3/+esm');
+
+            class MountDemoElement extends LitElement {
+                static properties = {
+                    count: { type: Number },
+                    trigger: { type: String }
+                };
+
+                static styles = css`
+                    :host {
+                        display: block;
+                        border: 1px dashed #999;
+                        padding: 10px 14px;
+                        border-radius: 6px;
+                    }
+                    .counter-row {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin: 10px 0;
+                    }
+                    button {
+                        border: 1px solid #666;
+                        background: #f5f5f5;
+                        border-radius: 4px;
+                        padding: 4px 10px;
+                        cursor: pointer;
+                    }
+                    button.secondary {
+                        background: #fff;
+                    }
+                `;
+
+                constructor() {
+                    super();
+                    this.count = 0;
+                    this.trigger = '';
+                }
+
+                _emitChange(newCount) {
+                    this.count = newCount;
+                    this.dispatchEvent(new CustomEvent('count-changed', {
+                        detail: { count: this.count },
+                        bubbles: true,
+                        composed: true
+                    }));
+                }
+
+                render() {
+                    return html`
+                        <p>Rendered by a Lit custom element appended in mount(). Its own shadow root nests inside the panel's shadow root, so it brings its own button styles above rather than using the framework's <code>.agentlet-btn</code> class.</p>
+                        <div class="counter-row">
+                            <span>Count: <strong id="mountLitCount">${this.count}</strong></span>
+                            <button id="mountLitPlus" @click=${() => this._emitChange(this.count + 1)}>+1</button>
+                            <button id="mountLitReset" class="secondary" @click=${() => this._emitChange(0)}>Reset</button>
+                        </div>
+                        <p>Last mount trigger: <strong id="mountLitTrigger">${this.trigger}</strong></p>
+                    `;
+                }
+            }
+
+            customElements.define('agentlet-mount-demo', MountDemoElement);
+            window.__litReady = true;
+        } catch (error) {
+            window.__litLoadError = error.message || String(error);
+        }
+    </script>
+
+    <script>
+        let agentletCore = null;
+        window.__mountDemo = { mounts: 0, unmounts: 0 };
+
+        function log(message, type = 'info') {
+            const el = document.getElementById('output');
+            if (!el) return;
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '[error]' : type === 'success' ? '[ok]' : type === 'warning' ? '[warn]' : '[info]';
+            el.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const el = document.getElementById('status');
+            if (!el) return;
+            el.textContent = message;
+            el.className = `status-section ${type}`;
+        }
+
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existing) existing.remove();
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('Agentlet Core script loaded', 'success');
+                    resolve();
+                };
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Run "npm run build" first.');
+                    log('Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Lit loads as an ES module from the CDN in the <script type="module">
+        // above. Wait (bounded) for it to finish rather than assuming the
+        // network request already resolved by the time this script runs.
+        function waitForLit(timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                (function poll() {
+                    if (window.__litReady) {
+                        resolve();
+                        return;
+                    }
+                    if (window.__litLoadError) {
+                        reject(new Error(`Lit failed to load from the CDN: ${window.__litLoadError}`));
+                        return;
+                    }
+                    if (Date.now() - start > timeoutMs) {
+                        reject(new Error('Lit failed to load from the CDN (network unreachable?)'));
+                        return;
+                    }
+                    setTimeout(poll, 100);
+                })();
+            });
+        }
+    </script>
+
+    <script>
+        document.getElementById('initBtn').addEventListener('click', async function initialize() {
+            try {
+                updateStatus('Waiting for Lit to load from the CDN...', 'info');
+                log('Waiting for the agentlet-mount-demo element to be defined...');
+                await waitForLit();
+                log('Lit custom element is ready', 'success');
+
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('Loading Agentlet Core...');
+                await loadAgentletScript();
+
+                const AgentletConstructor = window.AgentletCore && window.AgentletCore.default;
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({ debugMode: true, startMinimized: false });
+
+                log('Starting initialization...');
+                await agentletCore.init();
+
+                // Defined here (not at page load) since it extends window.agentlet.Module,
+                // which only exists once the core has initialized.
+                class MountLitModule extends window.agentlet.Module {
+                    constructor() {
+                        super({
+                            name: 'mount-lit-demo',
+                            version: '1.0.0',
+                            description: 'Mount API demo built with a Lit custom element',
+                            patterns: ['localhost']
+                        });
+                        this.count = 0;
+                        this.element = null;
+                        this._onCountChanged = (event) => {
+                            this.count = event.detail.count;
+                        };
+                    }
+
+                    async mount(container, context) {
+                        this.element = document.createElement('agentlet-mount-demo');
+                        this.element.count = this.count;
+                        this.element.trigger = context.trigger;
+                        this.element.addEventListener('count-changed', this._onCountChanged);
+                        container.appendChild(this.element);
+
+                        window.__mountDemo.mounts++;
+                        log(`mount() called (trigger: ${context.trigger})`, 'info');
+                    }
+
+                    async unmount(_container) {
+                        if (this.element) {
+                            this.element.removeEventListener('count-changed', this._onCountChanged);
+                            this.element.remove();
+                            this.element = null;
+                        }
+                        window.__mountDemo.unmounts++;
+                        log(`unmount() called (count preserved on the instance: ${this.count})`, 'info');
+                    }
+                }
+
+                window.agentlet.modules.register(new MountLitModule());
+
+                updateStatus('Agentlet Core initialized and module registered', 'success');
+                log('Agentlet Core initialized and module registered', 'success');
+                document.getElementById('initBtn').disabled = true;
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', function refresh() {
+            if (!window.agentlet) {
+                updateStatus('Agentlet not initialized yet', 'warning');
+                return;
+            }
+            log('Calling window.agentlet.refreshContent()...');
+            window.agentlet.refreshContent().then(() => {
+                log('refreshContent() resolved', 'success');
+            }).catch(error => {
+                log(`refreshContent() failed: ${error.message}`, 'error');
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Mount API (Lit) example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>

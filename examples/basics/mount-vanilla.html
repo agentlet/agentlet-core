@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mount API (vanilla) - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> &rarr; basics &rarr; mount-vanilla
+                </div>
+
+                <h1>Mount API: plain DOM</h1>
+
+                <p>The core ships no UI framework of its own. Each agentlet mounts whatever it wants into the container the core hands it through <code>mount(container, context)</code>. This example builds its content with plain DOM APIs and keeps its state on the module instance, not in the DOM, so a remount does not lose it.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>Overriding <code>mount(container, context)</code> to build DOM imperatively</li>
+                        <li>Overriding <code>unmount(container)</code> to remove the listeners <code>mount()</code> added</li>
+                        <li>Keeping state (<code>this.count</code>) on the module instance so it survives a remount</li>
+                        <li>Reading <code>context.trigger</code> to show why the last mount happened</li>
+                        <li>Injecting scoped CSS with <code>this.injectStyles()</code> once per module</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Controls</h4>
+                    <button id="initBtn">Initialize agentlet</button>
+                    <button id="refreshBtn">Refresh panel content</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Module source</h3>
+                    <div class="code-block">
+                        <pre><code class="language-javascript">class MountVanillaModule extends window.agentlet.Module {
+    constructor() {
+        super({
+            name: 'mount-vanilla-demo',
+            patterns: ['localhost'],
+            description: 'Mount API demo built with plain DOM APIs'
+        });
+        this.count = 0;
+        this._stylesInjected = false;
+    }
+
+    async mount(container, context) {
+        // Build the counter with plain DOM APIs.
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mount-vanilla-counter';
+        // ...append count label, +1 / reset buttons, trigger label...
+        container.appendChild(wrapper);
+
+        this._plusHandler = () =&gt; { this.count++; /* update label */ };
+        this._resetHandler = () =&gt; { this.count = 0; /* update label */ };
+        plusBtn.addEventListener('click', this._plusHandler);
+        resetBtn.addEventListener('click', this._resetHandler);
+
+        if (!this._stylesInjected) {
+            this.injectStyles('.mount-vanilla-counter { ... }');
+            this._stylesInjected = true;
+        }
+    }
+
+    async unmount(container) {
+        // Remove exactly what mount() added.
+        plusBtn.removeEventListener('click', this._plusHandler);
+        resetBtn.removeEventListener('click', this._resetHandler);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>State retention</h4>
+                    <p>Clicking "Refresh panel content" calls <code>window.agentlet.refreshContent()</code>, which unmounts and remounts the active module with <code>context.trigger === 'refresh'</code>. The counter keeps its value across that cycle because it is read from <code>this.count</code> on the module instance when <code>mount()</code> rebuilds the DOM, not from the DOM itself.</p>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>Console output</h3>
+                </div>
+                <div class="console-section" id="output"></div>
+
+                <h3>Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let agentletCore = null;
+        window.__mountDemo = { mounts: 0, unmounts: 0 };
+
+        function log(message, type = 'info') {
+            const el = document.getElementById('output');
+            if (!el) return;
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '[error]' : type === 'success' ? '[ok]' : type === 'warning' ? '[warn]' : '[info]';
+            el.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const el = document.getElementById('status');
+            if (!el) return;
+            el.textContent = message;
+            el.className = `status-section ${type}`;
+        }
+
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existing) existing.remove();
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('Agentlet Core script loaded', 'success');
+                    resolve();
+                };
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Run "npm run build" first.');
+                    log('Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+    </script>
+
+    <script>
+        document.getElementById('initBtn').addEventListener('click', async function initialize() {
+            try {
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('Loading Agentlet Core...');
+
+                await loadAgentletScript();
+
+                const AgentletConstructor = window.AgentletCore && window.AgentletCore.default;
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({ debugMode: true, startMinimized: false });
+
+                log('Starting initialization...');
+                await agentletCore.init();
+
+                // Defined here (not at page load) since it extends window.agentlet.Module,
+                // which only exists once the core has initialized.
+                class MountVanillaModule extends window.agentlet.Module {
+                    constructor() {
+                        super({
+                            name: 'mount-vanilla-demo',
+                            version: '1.0.0',
+                            description: 'Mount API demo built with plain DOM APIs',
+                            patterns: ['localhost']
+                        });
+                        this.count = 0;
+                        this._stylesInjected = false;
+                    }
+
+                    async mount(container, context) {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'mount-vanilla-counter';
+
+                        const info = document.createElement('p');
+                        info.textContent = 'Mounted imperatively by mount(container, context). The count lives on the module instance (this.count), not in the DOM, so it survives an unmount/remount cycle.';
+
+                        const row = document.createElement('div');
+                        row.className = 'counter-row';
+
+                        const countLabel = document.createElement('span');
+                        countLabel.textContent = 'Count: ';
+                        const countValue = document.createElement('strong');
+                        countValue.id = 'mountVanillaCount';
+                        countValue.textContent = String(this.count);
+                        countLabel.appendChild(countValue);
+
+                        const plusBtn = document.createElement('button');
+                        plusBtn.id = 'mountVanillaPlus';
+                        plusBtn.className = 'agentlet-btn';
+                        plusBtn.textContent = '+1';
+
+                        const resetBtn = document.createElement('button');
+                        resetBtn.id = 'mountVanillaReset';
+                        resetBtn.className = 'agentlet-btn agentlet-btn-secondary';
+                        resetBtn.textContent = 'Reset';
+
+                        row.append(countLabel, plusBtn, resetBtn);
+
+                        const triggerLine = document.createElement('p');
+                        triggerLine.textContent = 'Last mount trigger: ';
+                        const triggerValue = document.createElement('strong');
+                        triggerValue.id = 'mountVanillaTrigger';
+                        triggerValue.textContent = context.trigger;
+                        triggerLine.appendChild(triggerValue);
+
+                        wrapper.append(info, row, triggerLine);
+                        container.appendChild(wrapper);
+
+                        this._countValueEl = countValue;
+                        this._plusBtn = plusBtn;
+                        this._resetBtn = resetBtn;
+
+                        this._plusHandler = () => {
+                            this.count++;
+                            this._countValueEl.textContent = String(this.count);
+                        };
+                        this._resetHandler = () => {
+                            this.count = 0;
+                            this._countValueEl.textContent = String(this.count);
+                        };
+                        plusBtn.addEventListener('click', this._plusHandler);
+                        resetBtn.addEventListener('click', this._resetHandler);
+
+                        if (!this._stylesInjected) {
+                            this.injectStyles(`
+                                .mount-vanilla-counter { border: 1px dashed #999; padding: 10px 14px; border-radius: 6px; }
+                                .mount-vanilla-counter .counter-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+                            `);
+                            this._stylesInjected = true;
+                        }
+
+                        window.__mountDemo.mounts++;
+                        log(`mount() called (trigger: ${context.trigger})`, 'info');
+                    }
+
+                    async unmount(_container) {
+                        if (this._plusBtn && this._plusHandler) {
+                            this._plusBtn.removeEventListener('click', this._plusHandler);
+                        }
+                        if (this._resetBtn && this._resetHandler) {
+                            this._resetBtn.removeEventListener('click', this._resetHandler);
+                        }
+                        this._plusBtn = null;
+                        this._resetBtn = null;
+                        this._plusHandler = null;
+                        this._resetHandler = null;
+                        this._countValueEl = null;
+
+                        window.__mountDemo.unmounts++;
+                        log(`unmount() called (count preserved on the instance: ${this.count})`, 'info');
+                    }
+                }
+
+                window.agentlet.modules.register(new MountVanillaModule());
+
+                updateStatus('Agentlet Core initialized and module registered', 'success');
+                log('Agentlet Core initialized and module registered', 'success');
+                document.getElementById('initBtn').disabled = true;
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', function refresh() {
+            if (!window.agentlet) {
+                updateStatus('Agentlet not initialized yet', 'warning');
+                return;
+            }
+            log('Calling window.agentlet.refreshContent()...');
+            window.agentlet.refreshContent().then(() => {
+                log('refreshContent() resolved', 'success');
+            }).catch(error => {
+                log(`refreshContent() failed: ${error.message}`, 'error');
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Mount API (vanilla) example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>
