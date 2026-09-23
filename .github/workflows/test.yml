@@ -29,7 +29,13 @@ jobs:
       
     - name: Run Jest tests
       run: npm test
-      
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Type check
+      run: npm run typecheck
+
     - name: Build project
       run: npm run build
       
