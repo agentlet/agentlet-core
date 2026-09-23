@@ -236,6 +236,15 @@ element.addEventListener('click', handleClick);
 - Never commit & push if tests fail locally
 - Always test first before any git-related action
 
+### TypeScript rules
+
+- Every new file under `src/` is written in TypeScript (`.ts`).
+- Any existing `.js` file under `src/` that a PR touches and that is under 300 lines is converted to `.ts` in that same PR (`git mv`, type strictly, no behaviour change, existing tests unchanged).
+- No `any`. Eslint rejects explicit `any` in `.ts` files; use `unknown` (or a precise union) with a one-line comment for genuinely dynamic values. A justified `any` needs an `eslint-disable-next-line` with the reason on the same line.
+- Client agentlets stay free to be written in JavaScript: they consume the published types (`docs/typescript.md`) and are never required to write TypeScript.
+- Keep `.js` extensions in relative imports even when the target file is `.ts`. Share option/shape types with `src/types/public-api.d.ts` via `import type`, keep `tests/types/public-api.test-d.ts` up to date when a public class changes, and declare optional or duck-typed members with an interface merge, not uninitialized fields.
+- `npm run typecheck` must pass before any commit, alongside `npm test`, `npm run build`, and `npm run lint`.
+
 ### Commit message format (Conventional Commits)
 
 This repository enforces [Conventional Commits](https://www.conventionalcommits.org/) specification using commitlint and husky.
