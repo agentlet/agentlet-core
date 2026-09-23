@@ -109,12 +109,18 @@ We welcome feature requests! Please create an issue with:
 
 ### TypeScript
 
-`src/` and `tests/` accept `.ts` files side by side with the existing `.js` files. There is no requirement to convert existing files: new code may be written in TypeScript, and plain JavaScript keeps working unchanged.
+agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `tests/` accept `.ts` files side by side with the existing `.js` files, and the following rules apply to any PR that touches `src/`:
 
-- Run `npm run typecheck` to type-check the project with `tsc`.
+- Write every new file under `src/` in TypeScript (`.ts`). This keeps the amount of untyped code from growing while the migration is in progress.
+- If your PR touches an existing `.js` file under `src/` and that file is under 300 lines, convert it to `.ts` in the same PR: rename it with `git mv`, add strict types, and keep the behaviour and existing tests unchanged. Larger files can stay JavaScript for now; convert them in a dedicated PR instead of bundling a large rewrite with an unrelated change.
+- Avoid `any`. `typescript-eslint` rejects explicit `any` in `.ts` files as an error. When a value is genuinely dynamic, use `unknown` (or a precise union) and add a one-line comment explaining why. If `any` is truly unavoidable, suppress it locally with `eslint-disable-next-line` and a reason on the same line, rather than disabling the rule broadly.
+- You never have to write TypeScript to build an agentlet on top of this library: agentlets consume the published declarations (see [TypeScript support](docs/typescript.md)) and can stay plain JavaScript.
+- Keep the `.js` extension in relative imports even after a file is converted to `.ts` (e.g. `import { EventBus } from './EventBus.js'`). esbuild, `tsc` (`moduleResolution: bundler`), and Jest's `moduleNameMapper` all resolve it, so imports do not need to change when a file is converted.
+- Share option and shape types with the public API instead of redefining them: import them from `src/types/public-api.d.ts` with `import type`, and update the conformance checks in `tests/types/public-api.test-d.ts` whenever a public class's shape changes.
+- Declare optional or duck-typed members (hooks the core detects with `typeof x === 'function'`) through a declaration merge, for example `interface Module { getPanelTitle?(): string }`, not as an uninitialized class field. An uninitialized field can become an own property set to `undefined` depending on the transpiler, which would shadow a subclass's implementation.
+- Run `npm run typecheck` to type-check the project with `tsc`; it must pass, together with `npm test`, `npm run build`, and `npm run lint`, before you commit.
 - esbuild compiles `.ts` sources natively, so no extra build step is needed.
 - Tests may be written in `.ts`; Jest transforms them with babel-jest, the same as `.js` tests.
-- `.ts` files are linted with `typescript-eslint` and must avoid `any`.
 
 ### Module Development
 
