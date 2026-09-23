@@ -108,13 +108,83 @@ describe('Module', () => {
             module.cleanupModule = jest.fn();
             module.injectStyles('body { color: red; }');
             module.on('test', () => {});
-            
+
             await module.cleanup();
-            
+
             expect(module.isActive).toBe(false);
             expect(module.cleanupModule).toHaveBeenCalled();
             expect(module.styleElement).toBe(null);
             expect(module.eventListeners.size).toBe(0);
+        });
+    });
+
+    describe('Mount / Unmount', () => {
+        const mountContext = () => ({
+            root: document.body,
+            theme: {},
+            eventBus: mockEventBus,
+            api: {},
+            trigger: 'init'
+        });
+
+        test('should start unmounted', () => {
+            expect(module.mounted).toBe(false);
+            expect(module.mountedContainer).toBe(null);
+        });
+
+        test('default mount() renders getContent() into the container', async () => {
+            const container = document.createElement('div');
+
+            await module.mount(container, mountContext());
+
+            expect(container.innerHTML).toContain('test-module');
+            expect(module.mounted).toBe(true);
+            expect(module.mountedContainer).toBe(container);
+        });
+
+        test('default unmount() is a no-op', async () => {
+            await expect(module.unmount(document.createElement('div'))).resolves.toBeUndefined();
+        });
+
+        test('unmount() is called by cleanup() when mounted, once', async () => {
+            const container = document.createElement('div');
+            module.unmount = jest.fn().mockResolvedValue(undefined);
+
+            await module.mount(container, mountContext());
+            await module.cleanup();
+
+            expect(module.unmount).toHaveBeenCalledTimes(1);
+            expect(module.unmount).toHaveBeenCalledWith(container);
+            expect(module.mounted).toBe(false);
+            expect(module.mountedContainer).toBe(null);
+
+            // A module that is no longer mounted must not be unmounted again.
+            await module.cleanup();
+            expect(module.unmount).toHaveBeenCalledTimes(1);
+        });
+
+        test('cleanup() does not call unmount() when never mounted', async () => {
+            module.unmount = jest.fn().mockResolvedValue(undefined);
+
+            await module.cleanup();
+
+            expect(module.unmount).not.toHaveBeenCalled();
+        });
+
+        test('errors thrown by unmount() do not break cleanup()', async () => {
+            const container = document.createElement('div');
+            module.unmount = jest.fn().mockRejectedValue(new Error('unmount boom'));
+            module.cleanupModule = jest.fn();
+
+            await module.mount(container, mountContext());
+
+            await expect(module.cleanup()).resolves.toBeUndefined();
+
+            expect(module.cleanupModule).toHaveBeenCalled();
+            expect(module.isActive).toBe(false);
+            // Mount state is still cleared even though unmount() threw.
+            expect(module.mounted).toBe(false);
+            expect(module.mountedContainer).toBe(null);
         });
     });
 
@@ -163,6 +233,44 @@ describe('Module', () => {
             
             expect(module.styleElement).toBe(null);
             expect(module.injectedStyles.size).toBe(0);
+        });
+
+        test('injectStyles() targets the root captured by mount() when it is not document.body', async () => {
+            const shadowRootStub = { appendChild: jest.fn() };
+            const container = document.createElement('div');
+
+            await module.mount(container, {
+                root: shadowRootStub,
+                theme: {},
+                eventBus: mockEventBus,
+                api: {},
+                trigger: 'init'
+            });
+            module.injectStyles('body { color: red; }');
+
+            expect(shadowRootStub.appendChild).toHaveBeenCalledWith(module.styleElement);
+            expect(document.head.appendChild).not.toHaveBeenCalled();
+        });
+
+        test('injectStyles() falls back to document.head when the mount root is document.body', async () => {
+            const container = document.createElement('div');
+
+            await module.mount(container, {
+                root: document.body,
+                theme: {},
+                eventBus: mockEventBus,
+                api: {},
+                trigger: 'init'
+            });
+            module.injectStyles('body { color: red; }');
+
+            expect(document.head.appendChild).toHaveBeenCalledWith(module.styleElement);
+        });
+
+        test('injectStyles() falls back to document.head when no mount root is known', () => {
+            module.injectStyles('body { color: red; }');
+
+            expect(document.head.appendChild).toHaveBeenCalledWith(module.styleElement);
         });
     });
 
