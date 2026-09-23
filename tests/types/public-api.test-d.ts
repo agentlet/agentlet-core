@@ -21,12 +21,14 @@ import type {
     FormFillResult,
     TableData,
     AIStatus,
+    PageHighlighterAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
 import { EventBus } from '../../src/core/EventBus';
 import { ThemeManager } from '../../src/core/ThemeManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
+import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -154,11 +156,13 @@ const moduleInstanceCheck: AgentletModule = new Module({ name: 'conformance-chec
 const eventBusCheck: EventBusAPI = new EventBus();
 const themeCheck: ThemeManagerAPI = new ThemeManager();
 const zIndexCheck: ZIndexConstants = Z_INDEX;
+const highlighterCheck: PageHighlighterAPI = new PageHighlighter();
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
 void themeCheck;
 void zIndexCheck;
+void highlighterCheck;
 
 // declared -> real
 //
@@ -187,6 +191,10 @@ void themeBackToReal;
 declare const declaredZIndex: ZIndexConstants;
 const zIndexBackToReal: Pick<typeof Z_INDEX, keyof ZIndexConstants> = declaredZIndex;
 void zIndexBackToReal;
+
+declare const declaredHighlighter: PageHighlighterAPI;
+const highlighterBackToReal: Pick<InstanceType<typeof PageHighlighter>, keyof PageHighlighterAPI> = declaredHighlighter;
+void highlighterBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */

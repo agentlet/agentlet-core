@@ -416,6 +416,8 @@ export interface PageHighlighterOverlayControl {
 export interface PageHighlighterHighlightOptions {
     type?: 'border' | 'arrow' | 'sticker' | 'pulse';
     style?: 'primary' | 'success' | 'warning' | 'danger';
+    /** Accepted and defaulted like every other option, but currently unused by the implementation. */
+    overlay?: boolean;
     animation?: 'pulse' | 'glow' | 'bounce' | 'none';
     /** Tooltip text (or the sticker's own label for `type: 'sticker'`). */
     message?: string | null;
