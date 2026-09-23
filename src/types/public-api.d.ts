@@ -718,6 +718,8 @@ export interface ShortcutManagerAPI {
     }): Promise<void>;
     showHelp(): void;
     enabled: boolean;
+    /** Builds the fixed-shape {@link ShortcutsAPI} object exposed as `window.agentlet.utils.shortcuts`. */
+    createProxy(): ShortcutsAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -766,6 +768,8 @@ export interface EnvAPI {
     loadFromObject(envObject: Record<string, string>, merge?: boolean): void;
     addChangeListener(callback: (key: string, newValue: string | undefined, oldValue: string | undefined) => void): void;
     removeChangeListener(callback: (key: string, newValue: string | undefined, oldValue: string | undefined) => void): void;
+    /** Wraps the manager in a passthrough `Proxy` that also allows arbitrary variable-name access; see the class doc comment above. */
+    createProxy(): EnvAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -824,6 +828,9 @@ export interface CookiesAPI {
     setPollFrequency(frequency: number): void;
     getStatistics(): CookieStatistics;
     export(format?: 'json' | 'netscape' | 'curl', includeSensitive?: boolean): string;
+    /** Wraps the manager in a passthrough `Proxy` that also allows arbitrary cookie-name access; see the class doc comment above. */
+    createProxy(): CookiesAPI;
+    cleanup(): void;
     cleanup(): void;
 }
 
@@ -970,6 +977,8 @@ export interface AuthManagerAPI {
     getState(): AuthState;
     updateConfig(config: Partial<AuthManagerConfig>): void;
     cleanup(): void;
+    /** Builds the fixed-shape {@link AuthAPI} object exposed as `window.agentlet.auth`. */
+    createProxy(): AuthAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1218,6 +1227,8 @@ export interface TableExtractorAPI {
     extractAllPages(tableElement: HTMLTableElement, options?: TableExtractAllOptions): Promise<TableAllPagesData>;
     downloadAsExcel(tableData: TableData | TableAllPagesData, options?: TableDownloadOptions): Promise<TableDownloadResult>;
     extractAndDownload(tableElement: HTMLTableElement, options?: TableExtractAndDownloadOptions): Promise<TableDownloadResult>;
+    /** Builds the fixed-shape {@link TablesAPI} object exposed as `window.agentlet.tables`. */
+    createProxy(): TablesAPI;
 }
 
 export interface TablesAPI {
