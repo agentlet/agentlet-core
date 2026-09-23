@@ -26,11 +26,15 @@ class LocalhostDemoModule extends window.agentlet.Module {
     }
 
     getContent() {
+        // Use the built-in .agentlet-btn classes (styled by the core
+        // stylesheet inside the shadow root) rather than a page-defined
+        // class: a host-page <style> can no longer reach content mounted
+        // inside the shadow root, see docs/shadow-dom.md.
         return `
             <div style="padding: 15px;">
                 <div style="margin: 15px 0;">
-                    <button onclick="showLocalhostInfoDialog()" class="panel-action-btn">ℹ️ Info dialog</button>
-                    <button onclick="showLocalhostFullscreenDialog()" class="panel-action-btn secondary">🖥️ Fullscreen dialog</button>
+                    <button onclick="showLocalhostInfoDialog()" class="agentlet-btn">ℹ️ Info dialog</button>
+                    <button onclick="showLocalhostFullscreenDialog()" class="agentlet-btn agentlet-btn-secondary">🖥️ Fullscreen dialog</button>
                 </div>
             </div>
         `;
