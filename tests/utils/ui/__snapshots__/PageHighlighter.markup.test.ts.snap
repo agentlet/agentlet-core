@@ -1,0 +1,5 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`PageHighlighter markup characterization highlight() - border snapshot: border highlight markup 1`] = `"<div id="target"></div><div class="agentlet-highlight-border danger" style="animation: agentletPulse 2s infinite; left: 95px; top: 45px; width: 210px; height: 90px;"></div><div class="agentlet-tooltip top" style="left: 200px; top: 40px;">Fix this</div>"`;
+
+exports[`PageHighlighter markup characterization showOverlay snapshot: overlay + closeable + warning banner markup 1`] = `"<div id="target"></div><div class="agentlet-overlay fade-in" id="overlay_N_bg"></div><div class="agentlet-message-overlay center" id="overlay_N"><div class="agentlet-message-content warning"><p class="agentlet-message-text">Careful now</p><button class="agentlet-message-close" title="Close">×</button></div></div>"`;
