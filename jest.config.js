@@ -20,6 +20,7 @@ module.exports = {
   },
   moduleFileExtensions: ['js', 'ts', 'json'],
   moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^pdfjs-dist$': '<rootDir>/tests/__mocks__/pdfjs-dist.js'
   },
