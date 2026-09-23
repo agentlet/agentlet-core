@@ -238,6 +238,7 @@ export class StyleInjector {
             this.generatePanelStyles() +
             this.generateComponentStyles() +
             this.generateDialogStyles() +
+            this.generateBubbleStyles() +
             this.generateAnimationStyles();
 
         document.head.appendChild(style);
@@ -272,6 +273,7 @@ export class StyleInjector {
             this.generatePanelStyles() +
             this.generateComponentStyles() +
             this.generateDialogStyles() +
+            this.generateBubbleStyles() +
             this.generateAnimationStyles();
 
         const supportsAdoptedStyleSheets =
@@ -623,6 +625,37 @@ export class StyleInjector {
         `;
     }
     /**
+     * Generate message bubble styles (hover state and small-viewport layout).
+     * Moved here from MessageBubble.addStyles() so bubbles are covered by the
+     * core stylesheet in both legacy and shadow mode; MessageBubble keeps a
+     * fallback injector for standalone use (see MessageBubble.addStyles()).
+     */
+    generateBubbleStyles() {
+        return `
+            /* Message Bubble Styles */
+            .agentlet-bubble:hover {
+                transform: translateX(-2px) !important;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+            }
+
+            @media (max-width: 480px) {
+                #agentlet-message-bubbles {
+                    left: 10px !important;
+                    right: 10px !important;
+                    max-width: none !important;
+                }
+
+                .agentlet-bubble {
+                    transform: translateY(-100%) !important;
+                }
+
+                .agentlet-bubble:hover {
+                    transform: translateY(-102px) !important;
+                }
+            }
+        `;
+    }
+    /**
      * Generate animations and image overlay styles
      */
     generateAnimationStyles() {
@@ -674,6 +707,22 @@ export class StyleInjector {
             @keyframes agentlet-dialog-fadein {
                 from { opacity: 0; transform: scale(0.9); }
                 to { opacity: 1; transform: scale(1); }
+            }
+
+            /* Dialog animations (moved here from Dialog.addDialogStyles()) */
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.7; }
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
+            @keyframes agentlet-progress-animate {
+                0% { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
             }
         `;
     }
