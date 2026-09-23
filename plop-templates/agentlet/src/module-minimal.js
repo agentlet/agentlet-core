@@ -21,6 +21,10 @@
             }
         }
 
+        // This module renders through getContent() below (the default
+        // mount() behavior). To mount a UI framework instead, override
+        // mount()/unmount() - see docs/module-mount-api.md in agentlet-core.
+
         getContent() {
             return `
             <div class="agentlet-{{kebabCase name}}-content">

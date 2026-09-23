@@ -2,7 +2,8 @@
 
 This agentlet 📎 was generated using the `agentlet-core` 📎 scaffolding tool.{{#if template}}
 
-**Template**: {{#if (eq template 'minimal')}}Minimal (simple starter){{else}}Full (comprehensive example){{/if}}{{/if}}
+**Template**: {{#if (eq template 'minimal')}}Minimal (simple starter){{else}}Full (comprehensive example){{/if}}{{/if}}{{#if ui}}
+**UI**: {{#if (eq ui 'react')}}React (a React 18 root is mounted into the panel via `Module.mount()`/`unmount()` in `src/module.js`){{else}}html (`getContent()`, no framework){{/if}}. See [Module mount API](https://github.com/agentlet/agentlet-core/blob/main/docs/module-mount-api.md) in `agentlet-core` for the full `mount()`/`unmount()` reference, including vanilla and custom-element (Lit) examples.{{/if}}
 
 ## Getting Started
 
@@ -42,3 +43,16 @@ Once the server is running, open `dist/index.html` in your browser. You will fin
 *   **{{name}} (Debug):** Loads the non-minified version of your agentlet 📎 from the local development server. Use this for debugging with your browser's developer tools.
 
 Drag either of these links to your browser's bookmarks bar. Click the desired bookmarklet on any webpage (especially `http://localhost:8080` for testing the scaffolded agentlet's `matches` function) to load and run your agentlet 📎.
+
+### 5. Run the tests
+
+```bash
+npm test
+```
+
+This runs the generated Playwright specs in `tests/`. `@playwright/test` is
+pinned to an exact version (`1.54.1`, not `^1.54.1`) in `package.json`
+rather than left to float on semver: this is the version this scaffold was
+verified against, and newer Playwright releases have dropped support for
+some still-common operating systems (for example macOS 13). If you need a
+newer Playwright, upgrade deliberately and re-verify `npm test` afterwards.

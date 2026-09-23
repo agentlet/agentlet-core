@@ -34,10 +34,24 @@
         
         async cleanupModule(context = {}) {
             console.log(`Cleaning up {{name}} agentlet`, context);
-            
+
             // Custom cleanup logic goes here
             // Example: Remove event listeners, save state, cleanup resources, etc.
         }
+
+        // This module renders through getContent() below, which is the
+        // default mount() behavior (container.innerHTML = this.getContent()).
+        // To mount a UI framework (React, Lit, ...) instead, override
+        // mount()/unmount() - see docs/module-mount-api.md in agentlet-core,
+        // or scaffold with `--ui=react` for a working example.
+        //
+        // async mount(container, context) {
+        //     container.innerHTML = this.getContent();
+        // }
+        //
+        // async unmount(container) {
+        //     // Tear down whatever mount() set up, if anything.
+        // }
 
         // Example: Override getPanelTitle to provide a dynamic title
         // getPanelTitle() {
