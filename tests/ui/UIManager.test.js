@@ -173,4 +173,31 @@ describe('UIManager - shadow DOM UI root', () => {
     expect(agentlet.ui.root).toBeNull();
     expect(agentlet.ui.host).toBeNull();
   });
+
+  test('window.agentlet.utils.Dialog.info() mounts the overlay inside core.ui.root (shadow mode) or document.body (shadowDom: false)', async () => {
+    const shadowAgentlet = new AgentletCore();
+    await shadowAgentlet.init();
+
+    window.agentlet.utils.Dialog.info('Hello there');
+
+    const overlay = shadowAgentlet.ui.root.querySelector('.agentlet-dialog-overlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay.getRootNode()).toBe(shadowAgentlet.ui.root);
+    expect(document.body.contains(overlay)).toBe(false);
+
+    window.agentlet.utils.Dialog.hide();
+    await shadowAgentlet.cleanup();
+
+    const plainAgentlet = new AgentletCore({ shadowDom: false });
+    await plainAgentlet.init();
+
+    window.agentlet.utils.Dialog.info('Hello there');
+
+    const legacyOverlay = document.body.querySelector('.agentlet-dialog-overlay');
+    expect(legacyOverlay).not.toBeNull();
+    expect(legacyOverlay.parentNode).toBe(document.body);
+
+    window.agentlet.utils.Dialog.hide();
+    await plainAgentlet.cleanup();
+  });
 });

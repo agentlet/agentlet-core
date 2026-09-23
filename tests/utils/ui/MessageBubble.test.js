@@ -14,6 +14,11 @@ describe('MessageBubble', () => {
       document.documentElement.appendChild(document.head);
     }
 
+    // getRoot() falls back to window.agentlet.ui.root before document.body;
+    // this suite exercises the document.body fallback, so make sure no
+    // stray window.agentlet from another suite/order is left over.
+    delete window.agentlet;
+
     // Mock DOM methods to avoid JSDOM issues
     jest.spyOn(document.body, 'appendChild').mockImplementation((child) => {
       // Ensure child has necessary DOM methods
@@ -225,5 +230,75 @@ describe('MessageBubble', () => {
 
       expect(result).toBe(false);
     });
+  });
+});
+
+/**
+ * setRoot()/shadow root mounting, exercised against a real jsdom DOM (not the
+ * plain-object mocks used above), the same way tests/ui/UIManager.test.js and
+ * tests/ui/StyleInjector.test.js restore jsdom's native implementations.
+ */
+describe('MessageBubble - shadow DOM mounting', () => {
+  beforeEach(() => {
+    delete document.createElement;
+    delete document.head;
+
+    document.body.innerHTML = '';
+    delete window.agentlet;
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    document.getElementById('agentlet-bubble-styles')?.remove();
+    delete window.agentlet;
+  });
+
+  function createShadowRoot() {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    return host.attachShadow({ mode: 'open' });
+  }
+
+  test('setRoot(shadowRoot) mounts the container inside the shadow root, not document.body', () => {
+    const shadowRoot = createShadowRoot();
+    const messageBubble = new MessageBubble();
+    messageBubble.setRoot(shadowRoot);
+
+    messageBubble.show({ message: 'Hello', duration: 0 });
+
+    expect(messageBubble.container).not.toBeNull();
+    expect(messageBubble.container.getRootNode()).toBe(shadowRoot);
+    expect(shadowRoot.querySelector('#agentlet-message-bubbles')).toBe(messageBubble.container);
+    expect(document.body.contains(messageBubble.container)).toBe(false);
+  });
+
+  test('falls back to window.agentlet.ui.root when setRoot() was never called', () => {
+    const shadowRoot = createShadowRoot();
+    window.agentlet = { ui: { root: shadowRoot } };
+
+    const messageBubble = new MessageBubble();
+    messageBubble.show({ message: 'Hello', duration: 0 });
+
+    expect(messageBubble.container.getRootNode()).toBe(shadowRoot);
+  });
+
+  test('without setRoot and without window.agentlet, mounts on document.body', () => {
+    const messageBubble = new MessageBubble();
+    messageBubble.show({ message: 'Hello', duration: 0 });
+
+    expect(messageBubble.container.parentNode).toBe(document.body);
+  });
+
+  test('no fallback #agentlet-bubble-styles is injected when a core stylesheet is already present', () => {
+    const shadowRoot = createShadowRoot();
+    const coreStyle = document.createElement('style');
+    coreStyle.id = 'agentlet-core-styles';
+    shadowRoot.appendChild(coreStyle);
+
+    const messageBubble = new MessageBubble();
+    messageBubble.setRoot(shadowRoot);
+    messageBubble.show({ message: 'Hello', duration: 0 });
+
+    expect(shadowRoot.querySelector('#agentlet-bubble-styles')).toBeNull();
   });
 });
