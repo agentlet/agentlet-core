@@ -497,6 +497,10 @@ export interface ZIndexConstants {
     readonly INPUT: number;
     readonly BUTTON: number;
     readonly BACKDROP: number;
+    /** Dim page overlay shown while picking an element; below SELECTION_HIGHLIGHT, above page content. */
+    readonly SELECTION_BACKDROP: number;
+    /** Backdrop behind a highlighted element; below ELEMENT_HIGHLIGHT, above page content. */
+    readonly HIGHLIGHT_BACKDROP: number;
     /** Intentionally the same value as DIALOG_OVERLAY. */
     readonly MODAL_BACKDROP: number;
     readonly HOVER_HIGHLIGHT: number;
@@ -519,6 +523,8 @@ export interface ZIndexConstants {
     readonly LOADING_OVERLAY: number;
     readonly ERROR_OVERLAY: number;
     readonly IMAGE_OVERLAY: number;
+    /** Always-on-top layer (e.g. the panel toggle button); stays above every other overlay. */
+    readonly CRITICAL_OVERLAY: number;
 }
 
 export interface ZIndexDetectionResult {

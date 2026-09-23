@@ -27,6 +27,10 @@ export const Z_INDEX: ZIndexConstants = {
 
     // Background elements
     BACKDROP: AGENTLET_BASE + 10,
+    // Dim page overlay shown while picking an element; below SELECTION_HIGHLIGHT, above page content
+    SELECTION_BACKDROP: AGENTLET_BASE + 20,
+    // Backdrop behind a highlighted element; below ELEMENT_HIGHLIGHT, above page content
+    HIGHLIGHT_BACKDROP: AGENTLET_BASE + 30,
     MODAL_BACKDROP: AGENTLET_BASE + 150,
 
     // Interactive highlights
@@ -56,7 +60,9 @@ export const Z_INDEX: ZIndexConstants = {
     // Critical overlays
     LOADING_OVERLAY: AGENTLET_BASE + 300,
     ERROR_OVERLAY: AGENTLET_BASE + 350,
-    IMAGE_OVERLAY: AGENTLET_BASE + 400
+    IMAGE_OVERLAY: AGENTLET_BASE + 400,
+    // Always-on-top layer (e.g. the panel toggle button); stays above every other overlay
+    CRITICAL_OVERLAY: AGENTLET_BASE + 450
 };
 
 /** Key of a {@link Z_INDEX} entry, e.g. `'PANEL'` or `'DIALOG_OVERLAY'`. */
@@ -162,6 +168,7 @@ export function suggestAgentletZIndexBase(): ZIndexSuggestionResult {
  */
 export function analyzeZIndexDistribution(): ZIndexAnalysisResult {
     const detection = detectMaxZIndex({ excludeAgentlet: false });
+    const agentletMax = Math.max(...Object.values(Z_INDEX));
 
     return {
         detection,
@@ -169,7 +176,7 @@ export function analyzeZIndexDistribution(): ZIndexAnalysisResult {
         summary: {
             totalElements: detection.totalElements,
             maxZIndex: detection.maxZIndex,
-            agentletRange: `${AGENTLET_BASE} - ${AGENTLET_BASE + 400}`,
+            agentletRange: `${AGENTLET_BASE} - ${agentletMax}`,
             status: detection.isSafe ? '✅ Safe' : '⚠️ Potential conflicts'
         }
     };
