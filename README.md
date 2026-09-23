@@ -34,7 +34,7 @@ Deliver tactical improvements that create strategic advantage without infrastruc
 - **Simple form automation** with extraction, AI processing, and intelligent filling
 - **Table-to-Excel export** with user-controlled pagination (Excel optional)
 - **Screenshot capture** integration for AI-powered visual analysis
-- **Clean module architecture** with 3-hook lifecycle for predictable behavior
+- **Clean module architecture** with a predictable lifecycle (`initModule`, `activateModule`, `cleanupModule`) plus optional `mount`/`unmount` hooks for mounting a UI framework root
 - **Optional authentication** management with identity provider integration
 - **Built-in scaffolding tools** for rapid agentlet development
 - **Focused & lightweight** - only the features you actually need
@@ -288,6 +288,10 @@ This approach is especially useful in environments where deploying new backend f
 ### UI isolation (shadow DOM)
 
 By default, the agentlet panel, dialogs and toasts mount inside an isolated shadow root, so the host page's CSS can't reach in and the framework's CSS can't leak out. See: [Shadow DOM UI](docs/shadow-dom.md)
+
+### Module mount API
+
+Alongside the `initModule`/`activateModule`/`cleanupModule` hooks, a module can override `mount()`/`unmount()` to attach a UI framework root (React, Lit, or any other) directly into its panel container, instead of only returning an HTML string. The core never renders agentlet content in a tree of its own, so two agentlets can use two different frameworks (or two copies of the same one) on the same page without interfering. See: [Module mount API](docs/module-mount-api.md)
 
 ### Security considerations
 

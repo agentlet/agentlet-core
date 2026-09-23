@@ -159,7 +159,8 @@ assertions on the `shadowDom: false` path.
   unchanged either way.
 - **`Module.injectStyles(css)` targets the UI root.** When the module is
   mounted (via the `mount()`/`unmount()` lifecycle described in
-  `src/core/Module.ts`), `injectStyles()` appends its `<style>` element to
+  [Module mount API](module-mount-api.md) and `src/core/Module.ts`),
+  `injectStyles()` appends its `<style>` element to
   the root captured from the mount context - the shadow root in the default
   `shadowDom: true` mode, so the CSS reaches the module's own content
   rendered inside it. In `shadowDom: false` mode (where the UI root is
