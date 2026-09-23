@@ -1,12 +1,18 @@
 {
   "name": "agentlet-core",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Core framework for AI-powered bookmarklet system with extensible plugin architecture",
-  "main": "src/index.js",
+  "main": "dist/agentlet-core.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
-      "import": "./src/index.js",
-      "require": "./src/index.js"
+      "import": "./dist/agentlet-core.esm.js",
+      "require": "./dist/agentlet-core.js",
+      "default": "./dist/agentlet-core.js"
     }
   },
   "scripts": {
@@ -31,7 +37,8 @@
     "create-module": "node tools/create-module.js",
     "scaffold:agentlet": "plop agentlet",
     "scaffold:agentlet:defaults": "plop agentlet --defaults",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "bookmarklet",

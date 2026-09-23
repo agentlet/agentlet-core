@@ -181,10 +181,36 @@ npm run build
 ```
 
 This creates:
-- `dist/agentlet-core.js` - Development version
-- `dist/agentlet-core.min.js` - Production version  
+- `dist/agentlet-core.js` - Development version (IIFE global, also usable via `require('agentlet-core')`)
+- `dist/agentlet-core.esm.js` - ES module version, used by bundlers that `import` the package
+- `dist/agentlet-core.min.js` - Production version
 - `dist/bookmarklet.js` - Bookmarklet version
 - `dist/bookmarklet.html` - Installation page
+
+### Using agentlet-core as a package dependency
+
+As of version 2.0.0, the package ships the built `dist` output instead of raw `src` sources. Install it like any other npm dependency:
+
+```bash
+npm install agentlet-core
+```
+
+```javascript
+// Resolves to dist/agentlet-core.esm.js. The default export is the class.
+import AgentletCore from 'agentlet-core';
+import { Dialog, FormExtractor } from 'agentlet-core';
+```
+
+```javascript
+// Resolves to dist/agentlet-core.js, which exposes the module namespace
+// rather than the class itself, so read the class off `default`. This
+// matches the browser global, where the class is `window.AgentletCore.default`.
+const { default: AgentletCore, Dialog } = require('agentlet-core');
+```
+
+Named exports such as `Dialog`, `FormExtractor` and `TableExtractor` behave identically on both paths.
+
+Consumers no longer need their own bundler rule to transpile `agentlet-core`'s sources (for example a `babel-loader` rule targeting `node_modules/agentlet-core`): the package is pre-built, so a bundler only needs to resolve and include it as-is. If you are upgrading from 1.x and had such a rule pointing at `agentlet-core`, it can be removed, since `node_modules` is typically excluded from bundler transform rules already.
 
 ## Architecture
 
