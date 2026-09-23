@@ -18,6 +18,7 @@ import type {
     EventBusAPI,
     ThemeManagerAPI,
     ZIndexConstants,
+    PanelManagerAPI,
     FormFillResult,
     TableData,
     AIStatus,
@@ -38,6 +39,7 @@ import CookieManager from '../../src/utils/config-persistence/CookieManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
+import { PanelManager } from '../../src/ui/PanelManager';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -202,6 +204,14 @@ void scriptInjectorInstanceCheck;
 void envCheck;
 void cookiesCheck;
 
+// PanelManager's constructor takes an internal (unexported) core shape, not
+// a public config object like Module's, so both directions below use
+// `declare const` the same way the "declared -> real" checks do further
+// down, rather than constructing a real instance.
+declare const realPanelManager: PanelManager;
+const panelManagerCheck: PanelManagerAPI = realPanelManager;
+void panelManagerCheck;
+
 // declared -> real
 //
 // The real classes intentionally have a larger public surface than these
@@ -248,6 +258,10 @@ void envBackToReal;
 declare const declaredCookies: CookiesAPI;
 const cookiesBackToReal: Pick<InstanceType<typeof CookieManager>, keyof CookiesAPI> = declaredCookies;
 void cookiesBackToReal;
+
+declare const declaredPanelManager: PanelManagerAPI;
+const panelManagerBackToReal: Pick<PanelManager, keyof PanelManagerAPI> = declaredPanelManager;
+void panelManagerBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
