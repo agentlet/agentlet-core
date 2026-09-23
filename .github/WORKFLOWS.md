@@ -91,6 +91,23 @@ npm run lint
 npm run typecheck
 ```
 
+### Running two e2e suites in parallel
+
+`tests/examples/playwright.config.js` reads the port to serve examples on
+(and to point every test's `baseURL` at) from `E2E_PORT`, defaulting to
+`3030`. This matters when two worktrees of this repository sit on the same
+machine and both run `npm run test:examples`: Playwright's
+`reuseExistingServer: true` means the second run would find a server already
+listening on 3030 and reuse it, silently testing whichever checkout started
+that server instead of its own. Give each worktree its own port:
+
+```bash
+E2E_PORT=3131 npm run test:examples
+```
+
+CI always uses the default port, since each job runs in its own isolated
+environment.
+
 ## Status Badges
 Add these to your README.md:
 ```markdown
