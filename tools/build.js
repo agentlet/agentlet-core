@@ -14,7 +14,8 @@ class AgentletCoreBuilder {
         this.srcDir = path.join(__dirname, '..', 'src');
         this.distDir = path.join(__dirname, '..', 'dist');
         this.resourcesDir = path.join(__dirname, '..', 'resources');
-        this.entryPoint = path.join(this.srcDir, 'index.js');
+        const tsEntryPoint = path.join(this.srcDir, 'index.ts');
+        this.entryPoint = fs.existsSync(tsEntryPoint) ? tsEntryPoint : path.join(this.srcDir, 'index.js');
         
         // Build configurations
         this.configs = {

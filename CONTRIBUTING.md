@@ -107,6 +107,15 @@ We welcome feature requests! Please create an issue with:
 - Add comments for complex logic
 - Keep functions small and focused
 
+### TypeScript
+
+`src/` and `tests/` accept `.ts` files side by side with the existing `.js` files. There is no requirement to convert existing files: new code may be written in TypeScript, and plain JavaScript keeps working unchanged.
+
+- Run `npm run typecheck` to type-check the project with `tsc`.
+- esbuild compiles `.ts` sources natively, so no extra build step is needed.
+- Tests may be written in `.ts`; Jest transforms them with babel-jest, the same as `.js` tests.
+- `.ts` files are linted with `typescript-eslint` and must avoid `any`.
+
 ### Module Development
 
 When creating new modules:

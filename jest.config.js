@@ -3,18 +3,22 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   testMatch: [
     '<rootDir>/tests/**/*.test.js',
-    '<rootDir>/src/**/*.test.js'
+    '<rootDir>/src/**/*.test.js',
+    '<rootDir>/tests/**/*.test.ts',
+    '<rootDir>/src/**/*.test.ts'
   ],
   collectCoverageFrom: [
-    'src/**/*.js',
-    '!src/**/*.test.js',
-    '!src/**/index.js'
+    'src/**/*.{js,ts}',
+    '!src/**/*.test.{js,ts}',
+    '!src/**/index.js',
+    '!src/**/*.d.ts'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   transform: {
-    '^.+\\.js$': 'babel-jest'
+    '^.+\\.[jt]s$': 'babel-jest'
   },
+  moduleFileExtensions: ['js', 'ts', 'json'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^pdfjs-dist$': '<rootDir>/tests/__mocks__/pdfjs-dist.js'
