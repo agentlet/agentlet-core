@@ -182,11 +182,15 @@ Steps:
 The published version is whatever is in `package.json` at the tagged
 commit, not the tag name itself. npm does not derive the version from the
 git tag, so the tag pushed and the `version` field in `package.json` must
-agree before tagging, otherwise npm either refuses the publish (if a
-version with that number already exists) or publishes a version that does
-not match the tag. There is no check enforcing this in the workflow itself,
-so verify it by hand (or in a future improvement, add a step that compares
-the tag to `package.json`) before pushing a release tag.
+agree. An npm version is immutable once published, so a mismatch is not a
+recoverable mistake: pushing `v2.0.1` while `package.json` still reads
+`2.0.0` would either publish `2.0.0` under a `v2.0.1` tag, or fail with a
+confusing "version already exists" error.
+
+The workflow therefore compares the two before doing any work, in a step
+that runs ahead of `npm ci`, and fails with a message naming both values
+when they disagree. Prerelease tags such as `v2.0.0-beta.1` compare
+correctly, since the check only strips the leading `v`.
 
 ### Required repository secret: `NPM_TOKEN`
 
@@ -228,3 +232,5 @@ Actual publishing is intentionally deferred until phase 1 of the rework
 `2.0.0` in a separate, unrelated pull request. Before the first real
 release, confirm the `NPM_TOKEN` secret described above has been added,
 and that `package.json`'s `version` matches the tag about to be pushed.
+The workflow verifies that last point itself and fails early if it does
+not hold, but checking before tagging avoids a pointless failed run.

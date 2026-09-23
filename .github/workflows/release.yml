@@ -32,6 +32,21 @@ jobs:
         # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
         registry-url: 'https://registry.npmjs.org'
 
+    - name: Check the tag matches the package version
+      # An npm version is immutable once published. Pushing tag v2.0.1 while
+      # package.json still says 2.0.0 would silently publish 2.0.0, or fail
+      # with a confusing error if that version already exists. Fail early and
+      # say which is which instead.
+      run: |
+        tag_version="${GITHUB_REF_NAME#v}"
+        pkg_version="$(node -p 'require("./package.json").version')"
+        if [ "$tag_version" != "$pkg_version" ]; then
+          echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg_version}." >&2
+          echo "Bump the version in package.json and retag, or push the matching tag." >&2
+          exit 1
+        fi
+        echo "Tag ${GITHUB_REF_NAME} matches package.json version ${pkg_version}."
+
     - name: Install dependencies
       run: npm ci
 
