@@ -1368,8 +1368,8 @@ export interface ModuleRegistryAPI {
     unregister(moduleName: string): Promise<boolean>;
     findMatchingModule(url?: string): AgentletModule | null;
     activateModule(module: AgentletModule, context?: ModuleActivationContext): Promise<void>;
-    deactivateModule(): Promise<void>;
-    setModuleChangeCallback(callback: (module: AgentletModule | null) => void): void;
+    deactivateModule(context?: ModuleActivationContext): Promise<void>;
+    setModuleChangeCallback(callback: (module: AgentletModule | null, context?: ModuleActivationContext) => void): void;
     initialize(): Promise<void>;
     getAll(): string[];
     get(name: string): AgentletModule | null;
@@ -1382,7 +1382,7 @@ export interface ModuleRegistryAPI {
 /* ------------------------------------------------------------------ */
 
 export interface UIAPI {
-    refreshContent(): void;
+    refreshContent(): Promise<void>;
     show(): void;
     hide(): void;
     minimize(): void;
@@ -1540,6 +1540,34 @@ export interface ModuleActivationContext {
     [key: string]: unknown;
 }
 
+/**
+ * Why `Module.mount()`/`unmount()` is being invoked for the active module:
+ * `'init'` on the core's first `init()`, `'moduleChange'` when a different
+ * module becomes active, `'urlChange'` when the URL changed but the same
+ * module stays active, `'refresh'` from `window.agentlet.refreshContent()` /
+ * `ui.refreshContent()`, or a caller-supplied string.
+ */
+export type ModuleMountTrigger = 'init' | 'moduleChange' | 'urlChange' | 'refresh' | string;
+
+/**
+ * Passed to `Module.mount()`/`unmount()` by the core. Gives module authors
+ * everything needed to mount a UI framework root (React, Lit, ...) into
+ * `container`: where the panel lives in the DOM, the active theme, the
+ * shared event bus, and the full `window.agentlet` surface.
+ */
+export interface ModuleMountContext {
+    /** UI mount root: the shadow root when `shadowDom` is enabled, or `document.body` otherwise (same value as `window.agentlet.ui.root`). */
+    root: ShadowRoot | HTMLElement;
+    /** The current theme, as returned by `window.agentlet.themeManager.getTheme()`. */
+    theme: AgentletTheme;
+    /** The shared core event bus, same instance as `window.agentlet.eventBus`. */
+    eventBus: EventBusAPI;
+    /** The full `window.agentlet` API surface. */
+    api: AgentletAPI;
+    /** Why this mount/unmount is happening. */
+    trigger: ModuleMountTrigger;
+}
+
 export interface ModuleMetadata {
     name: string;
     version: string;
@@ -1564,6 +1592,10 @@ export declare class AgentletModule {
     eventBus?: EventBusAPI;
     injectedStyles: Set<string>;
     styleElement: HTMLStyleElement | null;
+    /** `true` between a successful `mount()` call and the matching `unmount()`. */
+    mounted: boolean;
+    /** The container passed to the most recent `mount()` call, or `null` when not mounted. */
+    mountedContainer: HTMLElement | null;
     performanceMetrics: { initTime: number; activateTime: number; cleanupTime: number };
     /** Set by `ModuleRegistry` after the first successful `init()`; not initialized in the constructor. */
     isInitialized?: boolean;
@@ -1585,6 +1617,21 @@ export declare class AgentletModule {
 
     /** Override to return the HTML shown in the agentlet panel. */
     getContent(): string;
+    /**
+     * Render this module's content into `container`. Called by the core
+     * whenever this module becomes (or stays) the active module - on init,
+     * module switch, URL change, or a manual refresh; see `context.trigger`.
+     * Override for imperative DOM mounting (e.g. a React or Lit root).
+     * Default implementation: `container.innerHTML = this.getContent();`.
+     */
+    mount(container: HTMLElement, context: ModuleMountContext): Promise<void>;
+    /**
+     * Tear down what `mount()` set up. Called by the core before a different
+     * module mounts, and by `cleanup()` if this module is still mounted. The
+     * core clears the container's content itself, so the default
+     * implementation is a no-op.
+     */
+    unmount(container: HTMLElement): Promise<void>;
     getMetadata(): ModuleMetadata;
 
     on(event: string, callback: (data: unknown) => void): void;
@@ -1750,7 +1797,7 @@ export interface AgentletAPI {
     hide(): void;
     minimize(): void;
     maximize(): void;
-    refreshContent(): void;
+    refreshContent(): Promise<void>;
     showSettings(): void;
     showHelp(): void;
     showError(message: string): void;
@@ -1759,12 +1806,13 @@ export interface AgentletAPI {
     regenerateStyles(): void;
     getPerformanceMetrics(): AgentletPerformanceReport;
     updateApplicationDisplay(): void;
-    updateModuleContent(): void;
+    /** Mounts (or renders) the active module's content into the panel; see `Module.mount()`/`unmount()`. */
+    updateModuleContent(trigger?: ModuleMountTrigger): Promise<void>;
 
     /** @internal called once during `init()` to wire up core event-bus handlers. */
     setupEventListeners(): void;
     /** @internal called by `ModuleRegistry` whenever the active module changes. */
-    onModuleChange(activeModule: AgentletModule | null): void;
+    onModuleChange(activeModule: AgentletModule | null, context?: ModuleActivationContext): void;
     /** @internal builds the discrete close button in the panel header. */
     createDiscreteCloseButton(): HTMLButtonElement;
     /** @internal builds one action button for the panel header. */

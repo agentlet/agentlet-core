@@ -15,6 +15,8 @@ import type {
     AgentletAPI,
     AgentletModule,
     ModuleActivationContext,
+    ModuleMountContext,
+    ModuleMountTrigger,
     EventBusAPI,
     ThemeManagerAPI,
     ZIndexConstants,
@@ -170,6 +172,60 @@ myAgentlet.on('my-agentlet:activated', (data: unknown) => {
 window.agentlet.modules.register(myAgentlet);
 
 /* -------------------------------------------------------------- */
+/* Module mount / unmount API                                       */
+/* -------------------------------------------------------------- */
+
+declare const mountContainer: HTMLElement;
+
+class ImperativeAgentlet extends window.agentlet.Module {
+    async mount(container: HTMLElement, context: ModuleMountContext): Promise<void> {
+        // `this.mounted`/`this.mountedContainer` are tracked by the core even
+        // though this override doesn't render via `getContent()`.
+        const root: ShadowRoot | HTMLElement = context.root;
+        const trigger: ModuleMountTrigger = context.trigger;
+        void container;
+        void root;
+        void trigger;
+    }
+
+    async unmount(container: HTMLElement): Promise<void> {
+        void container;
+    }
+}
+
+const imperativeAgentlet = new ImperativeAgentlet({ name: 'imperative-agentlet', patterns: ['example.com'] });
+const mounted: boolean = imperativeAgentlet.mounted;
+const mountedContainer: HTMLElement | null = imperativeAgentlet.mountedContainer;
+void mounted;
+void mountedContainer;
+
+// Every module (whether or not it overrides mount()/unmount()) exposes the
+// full mount/unmount API, since the base implementation is not abstract.
+const plainAgentletMount: (container: HTMLElement, context: ModuleMountContext) => Promise<void> = myAgentlet.mount.bind(myAgentlet);
+void plainAgentletMount;
+
+declare const mountContext: ModuleMountContext;
+const mountContextRoot: ShadowRoot | HTMLElement = mountContext.root;
+const mountContextTheme: import('../../src/types/public-api').AgentletTheme = mountContext.theme;
+const mountContextEventBus: EventBusAPI = mountContext.eventBus;
+const mountContextApi: AgentletAPI = mountContext.api;
+const mountContextTrigger: ModuleMountTrigger = mountContext.trigger;
+void mountContextRoot;
+void mountContextTheme;
+void mountContextEventBus;
+void mountContextApi;
+void mountContextTrigger;
+
+void imperativeAgentlet.mount(mountContainer, mountContext);
+void imperativeAgentlet.unmount(mountContainer);
+
+// window.agentlet.updateModuleContent() mounts/renders the active module and
+// accepts an optional trigger describing why.
+const contentUpdated: Promise<void> = window.agentlet.updateModuleContent('refresh');
+void contentUpdated;
+void window.agentlet.updateModuleContent();
+
+/* -------------------------------------------------------------- */
 /* Conformance: real classes <-> hand-written declarations          */
 /* -------------------------------------------------------------- */
 
@@ -279,6 +335,11 @@ new window.agentlet.Module({ patterns: ['example.com'] });
 class BadAgentlet extends window.agentlet.Module {
     // @ts-expect-error cleanupModule must return void or Promise<void>, not a string
     cleanupModule(): string {
+        return 'nope';
+    }
+
+    // @ts-expect-error unmount must return Promise<void>, not a string
+    unmount(_container: HTMLElement): string {
         return 'nope';
     }
 }
