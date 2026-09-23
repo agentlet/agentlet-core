@@ -782,7 +782,11 @@ class AgentletCore {
         
         modal.className = 'modal';
         modal.appendChild(dialog);
-        document.body.appendChild(modal);
+        // Mount inside the UI root (shadow root in shadowDom mode, otherwise
+        // document.body) so this fallback modal is styled/scoped consistently
+        // with the rest of the panel; falls back to document.body if called
+        // before the root exists.
+        (this.ui.root || document.body).appendChild(modal);
         
         // Close on background click
         modal.onclick = (e) => {
@@ -1157,13 +1161,16 @@ class AgentletCore {
         };
         
         window.addEnvVar = () => {
-            const key = document.getElementById('env-var-key').value.trim();
-            const value = document.getElementById('env-var-value').value.trim();
-            
+            // These inputs live inside the fullscreen Dialog content, itself
+            // mounted in the UI root (shadow root in shadowDom mode), hence
+            // this.ui.query() rather than document.getElementById().
+            const key = this.ui.query('#env-var-key').value.trim();
+            const value = this.ui.query('#env-var-value').value.trim();
+
             if (key) {
                 this.envManager.set(key, value);
-                document.getElementById('env-var-key').value = '';
-                document.getElementById('env-var-value').value = '';
+                this.ui.query('#env-var-key').value = '';
+                this.ui.query('#env-var-value').value = '';
                 this.refreshEnvVarsDialog();
             }
         };
@@ -1256,8 +1263,9 @@ class AgentletCore {
     refreshEnvVarsDialog() {
         console.log('🔧 Refreshing environment variables dialog content');
         
-        // Try to update the content in place first
-        const envVarsContainer = document.querySelector('.env-vars-list');
+        // Try to update the content in place first (the container lives inside
+        // the Dialog content, itself mounted in the UI root)
+        const envVarsContainer = this.ui.query('.env-vars-list');
         if (envVarsContainer) {
             console.log('🔧 Updating environment variables list in place');
             envVarsContainer.innerHTML = this.generateEnvVarsListHTML();

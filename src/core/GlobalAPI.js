@@ -51,6 +51,16 @@ export class GlobalAPI {
             }
         };
         
+        // Point Dialog/MessageBubble at the UI root immediately if it already
+        // exists (defensive: setupGlobalAccess() normally runs from the
+        // AgentletCore constructor, before UIManager.ensureRoot() creates the
+        // root, in which case UIManager.ensureRoot() does this wiring itself
+        // once the root is created).
+        if (this.core.ui && this.core.ui.root) {
+            window.agentlet.utils.Dialog.setRoot(this.core.ui.root);
+            window.agentlet.utils.MessageBubble.setRoot(this.core.ui.root);
+        }
+
         // Add PageHighlighter with error handling
         try {
             window.agentlet.utils.PageHighlighter = new PageHighlighter();

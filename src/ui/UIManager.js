@@ -58,6 +58,19 @@ export class UIManager {
             this.core.styleInjector.setRoot(this.ui.root);
         }
 
+        // Point the shared Dialog/MessageBubble utility instances (created by
+        // GlobalAPI.setupGlobalAccess(), which runs from the constructor,
+        // before this root exists) at the same root, so dialogs and toasts
+        // triggered via window.agentlet.utils.* mount inside it too.
+        if (window.agentlet && window.agentlet.utils) {
+            if (window.agentlet.utils.Dialog) {
+                window.agentlet.utils.Dialog.setRoot(this.ui.root);
+            }
+            if (window.agentlet.utils.MessageBubble) {
+                window.agentlet.utils.MessageBubble.setRoot(this.ui.root);
+            }
+        }
+
         return this.ui.root;
     }
 
