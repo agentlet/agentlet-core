@@ -61,6 +61,25 @@ window.agentlet.utils.Dialog.confirm('Are you sure?', 'Confirm', (value) => {
 
 window.agentlet.utils.Dialog.showProgress({ title: 'Working', totalSteps: 3 }).updateProgress(50, 'Halfway there');
 
+window.agentlet.utils.Dialog.setRoot(document.body);
+window.agentlet.utils.MessageBubble.setRoot(null);
+
+/* -------------------------------------------------------------- */
+/* Shadow DOM UI root                                               */
+/* -------------------------------------------------------------- */
+
+const uiRoot: ShadowRoot | HTMLElement | null = window.agentlet.ui.root;
+void uiRoot;
+const uiHost: HTMLElement | null = window.agentlet.ui.host;
+void uiHost;
+const queried: Element | null = window.agentlet.ui.query('#agentlet-toggle');
+void queried;
+const queriedAll: NodeListOf<Element> = window.agentlet.ui.queryAll('.agentlet-action-btn');
+void queriedAll;
+
+const shadowConfig: import('../../src/types/public-api').AgentletCoreConfig = { shadowDom: false };
+void shadowConfig;
+
 /* -------------------------------------------------------------- */
 /* Forms                                                           */
 /* -------------------------------------------------------------- */

@@ -138,6 +138,15 @@ export interface DialogCommandOptions {
 export interface DialogAPI {
     readonly isActive: boolean;
 
+    /**
+     * Sets the element/root dialogs mount into (a `ShadowRoot`, or an
+     * `HTMLElement` such as `document.body`). AgentletCore calls this
+     * automatically once its UI root exists; pass `null` to fall back to
+     * `window.agentlet.ui.root`, or `document.body` when neither is set
+     * (standalone use of the `Dialog` class without AgentletCore).
+     */
+    setRoot(root: ShadowRoot | HTMLElement | null): void;
+
     show(type: 'info', options?: DialogInfoOptions, callback?: (value: unknown) => void): void;
     show(type: 'input', options?: DialogInputOptions, callback?: (value: string | null) => void): void;
     show(type: 'wait', options?: DialogWaitOptions, cancelCallback?: () => void): void;
@@ -239,6 +248,14 @@ export interface MessageBubbleRecord {
 }
 
 export interface MessageBubbleAPI {
+    /**
+     * Sets the element/root the bubble container mounts into (a
+     * `ShadowRoot`, or an `HTMLElement` such as `document.body`).
+     * AgentletCore calls this automatically once its UI root exists; pass
+     * `null` to fall back to `window.agentlet.ui.root`, or `document.body`
+     * when neither is set (standalone use without AgentletCore).
+     */
+    setRoot(root: ShadowRoot | HTMLElement | null): void;
     /** Lazily creates the fixed-position container; idempotent. */
     init(): void;
     /** Shows one bubble and returns its id (e.g. `"bubble-1"`). */
@@ -1361,6 +1378,18 @@ export interface UIAPI {
     header: HTMLElement | null;
     actions: HTMLElement | null;
     imageOverlay: HTMLElement | null;
+    /**
+     * UI mount root: an open `ShadowRoot` when `shadowDom` is enabled
+     * (the default), or `document.body` when `shadowDom: false`. `null`
+     * before `UIManager.ensureRoot()` runs (i.e. before `init()` completes).
+     */
+    root: ShadowRoot | HTMLElement | null;
+    /** `#agentlet-host` element mounted on `document.body`, or `null` in legacy (`shadowDom: false`) mode. */
+    host: HTMLElement | null;
+    /** `root.querySelector()`, so callers never need to know whether the UI lives in a shadow root or directly in the page. */
+    query(selector: string): Element | null;
+    /** `root.querySelectorAll()`, mirroring `query()`. */
+    queryAll(selector: string): NodeListOf<Element>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1589,6 +1618,15 @@ export interface AgentletCoreConfig {
     envManager?: EnvAPI | null;
     resizablePanel?: boolean;
     minimumPanelWidth?: number;
+    /**
+     * Mount the panel UI (and dialogs/toasts triggered through
+     * `window.agentlet.utils.Dialog`/`MessageBubble`) inside an open shadow
+     * root under a `#agentlet-host` element, isolating it from the host
+     * page's CSS in both directions. Default `true`; set to `false` to
+     * restore the pre-shadow-DOM behavior of mounting directly on
+     * `document.body`.
+     */
+    shadowDom?: boolean;
     /** Enables the Ctrl/Cmd+; quick command dialog shortcut. Default `false`. */
     quickCommandDialogShortcut?: boolean;
     quickCommandCallback?: ((result: unknown) => void) | null;
