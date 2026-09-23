@@ -23,6 +23,48 @@ function hasSuppressibleModifier(handler, registeredKeys) {
     return candidate.split(',').some(combination => SUPPRESSIBLE_MODIFIERS.test(combination.trim()));
 }
 
+/**
+ * Resolve the element an event actually originated from, undoing shadow DOM
+ * retargeting. hotkeys-js binds its listener on `document`, so for an event
+ * dispatched inside an open shadow root (for example an input field in the
+ * agentlet panel, which lives under `#agentlet-host`), `event.target` as
+ * observed from `document` is the shadow host itself, not the focused
+ * element inside it. `composedPath()[0]` returns the innermost original
+ * target regardless of shadow boundaries, so it is preferred whenever it is
+ * available.
+ * @param {Event} event - The event to resolve the real target for
+ * @returns {EventTarget|null}
+ */
+function getEventTarget(event) {
+    if (event && typeof event.composedPath === 'function') {
+        const path = event.composedPath();
+        if (path && path.length > 0) {
+            return path[0];
+        }
+    }
+    return event ? (event.target || event.srcElement) : null;
+}
+
+/**
+ * Whether a target behaves like a text-editable field for the purposes of
+ * `allowInInputs`.
+ *
+ * SELECT is deliberately excluded, matching the behavior before this
+ * refactor: a <select> does not accept typed text, so a bare-letter
+ * shortcut has never been blocked while one is focused (browsers already
+ * use letter keys to jump to a matching option there). Keep it that way
+ * unless a concrete regression shows otherwise.
+ * @param {EventTarget|null} target - The candidate target element
+ * @returns {boolean}
+ */
+function isEditableTarget(target) {
+    if (!target || typeof target !== 'object') {
+        return false;
+    }
+    const tagName = target.tagName;
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || !!target.isContentEditable;
+}
+
 class ShortcutManager {
     constructor(librarySetup = null) {
         this.librarySetup = librarySetup;
@@ -122,9 +164,12 @@ class ShortcutManager {
                 return;
             }
             
-            // Check if we should allow this shortcut in input fields
-            const target = event.target || event.srcElement;
-            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            // Check if we should allow this shortcut in input fields. Resolve
+            // the real target through composedPath() so an event dispatched
+            // inside the agentlet panel's shadow root is not seen as the
+            // opaque shadow host.
+            const target = getEventTarget(event);
+            const isInput = isEditableTarget(target);
             
             if (isInput && !config.allowInInputs) {
                 // The shortcut does not fire, but hotkeys-js still matched the
