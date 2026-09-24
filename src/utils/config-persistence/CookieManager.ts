@@ -2,30 +2,63 @@
  * CookieManager - Cookie management utility with change detection for Agentlet Core
  * Provides cookie CRUD operations and change subscription capabilities
  */
+import type {
+    CookieDeleteOptions,
+    CookieSetOptions,
+    CookieStatistics,
+    CookiesAPI
+} from '../../types/public-api';
 
-export default class CookieManager {
+/** A single cookie change-listener callback, matching {@link CookiesAPI}. */
+type CookieChangeListener = (name: string, newValue: string | undefined, oldValue: string | undefined) => void;
+
+/** Attributes parsed off a Set-Cookie-format string by the static `parseCookie()` helper. */
+interface ParsedCookieAttributes {
+    expires?: Date;
+    maxAge?: number;
+    domain?: string;
+    path?: string;
+    secure?: boolean;
+    httpOnly?: boolean;
+    sameSite?: string;
+    /** Any other attribute the string carries, duck-typed since Set-Cookie attributes are open-ended. */
+    [key: string]: unknown;
+}
+
+interface ParsedCookie {
+    name: string;
+    value: string;
+    attributes: ParsedCookieAttributes;
+}
+
+export default class CookieManager implements CookiesAPI {
+    listeners: Set<CookieChangeListener>;
+    cookieSnapshot: Map<string, string>;
+    pollInterval: ReturnType<typeof setInterval> | null;
+    pollFrequency: number;
+
     constructor() {
         this.listeners = new Set();
         this.cookieSnapshot = new Map();
         this.pollInterval = null;
         this.pollFrequency = 1000; // Poll every 1 second by default
-        
+
         // Take initial snapshot
         this.updateSnapshot();
-        
+
         // Start monitoring for changes
         this.startMonitoring();
-        
+
         console.log('CookieManager initialized');
     }
 
     /**
      * Get a cookie value
-     * @param {string} name - Cookie name
-     * @param {string} defaultValue - Default value if cookie doesn't exist
-     * @returns {string|undefined} Cookie value
+     * @param name - Cookie name
+     * @param defaultValue - Default value if cookie doesn't exist
+     * @returns Cookie value
      */
-    get(name, defaultValue = undefined) {
+    get(name: string, defaultValue: string | undefined = undefined): string | undefined {
         if (!name || typeof name !== 'string') {
             throw new Error('Cookie name must be a non-empty string');
         }
@@ -36,18 +69,18 @@ export default class CookieManager {
 
     /**
      * Set a cookie
-     * @param {string} name - Cookie name
-     * @param {string} value - Cookie value
-     * @param {Object} options - Cookie options
-     * @param {number} options.maxAge - Max age in seconds
-     * @param {Date} options.expires - Expiration date
-     * @param {string} options.path - Cookie path
-     * @param {string} options.domain - Cookie domain
-     * @param {boolean} options.secure - Secure flag
-     * @param {string} options.sameSite - SameSite attribute
-     * @param {boolean} options.httpOnly - HttpOnly flag (Note: not effective in client-side JS)
+     * @param name - Cookie name
+     * @param value - Cookie value
+     * @param options - Cookie options
+     * @param options.maxAge - Max age in seconds
+     * @param options.expires - Expiration date
+     * @param options.path - Cookie path
+     * @param options.domain - Cookie domain
+     * @param options.secure - Secure flag
+     * @param options.sameSite - SameSite attribute
+     * @param options.httpOnly - HttpOnly flag (Note: not effective in client-side JS)
      */
-    set(name, value, options = {}) {
+    set(name: string, value: string, options: CookieSetOptions = {}): void {
         if (!name || typeof name !== 'string') {
             throw new Error('Cookie name must be a non-empty string');
         }
@@ -94,30 +127,30 @@ export default class CookieManager {
         // Set the cookie
         try {
             document.cookie = cookieString;
-            
+
             // Update snapshot and notify listeners
             this.updateSnapshot();
             this.notifyChange(name, stringValue, oldValue);
-            
+
             console.log(`Cookie set: ${name} = ${this.maskSensitive(name, stringValue)}`);
         } catch (error) {
             console.error('Failed to set cookie:', error);
-            throw new Error(`Failed to set cookie: ${error.message}`);
+            throw new Error(`Failed to set cookie: ${(error as Error).message}`);
         }
     }
 
     /**
      * Delete a cookie
-     * @param {string} name - Cookie name
-     * @param {Object} options - Cookie options (path, domain needed for proper deletion)
+     * @param name - Cookie name
+     * @param options - Cookie options (path, domain needed for proper deletion)
      */
-    delete(name, options = {}) {
+    delete(name: string, options: CookieDeleteOptions = {}): boolean {
         if (!name || typeof name !== 'string') {
             throw new Error('Cookie name must be a non-empty string');
         }
 
         const oldValue = this.get(name);
-        
+
         if (oldValue !== undefined) {
             // Set cookie with past expiration date
             this.set(name, '', {
@@ -129,32 +162,32 @@ export default class CookieManager {
             console.log(`Cookie deleted: ${name}`);
             return true;
         }
-        
+
         return false;
     }
 
     /**
      * Check if a cookie exists
-     * @param {string} name - Cookie name
-     * @returns {boolean} True if cookie exists
+     * @param name - Cookie name
+     * @returns True if cookie exists
      */
-    has(name) {
+    has(name: string): boolean {
         return this.get(name) !== undefined;
     }
 
     /**
      * Get all cookies as an object
-     * @returns {Object} Object containing all cookies
+     * @returns Object containing all cookies
      */
-    getAllCookies() {
-        const cookies = {};
-        
+    getAllCookies(): Record<string, string> {
+        const cookies: Record<string, string> = {};
+
         if (document.cookie) {
             document.cookie.split(';').forEach(cookie => {
                 const [name, ...valueParts] = cookie.split('=');
                 const trimmedName = name.trim();
                 const value = valueParts.join('=').trim();
-                
+
                 if (trimmedName) {
                     try {
                         cookies[decodeURIComponent(trimmedName)] = decodeURIComponent(value);
@@ -165,64 +198,64 @@ export default class CookieManager {
                 }
             });
         }
-        
+
         return cookies;
     }
 
     /**
      * Clear all cookies (attempts to delete all accessible cookies)
-     * @param {Object} options - Options for deletion (path, domain)
+     * @param options - Options for deletion (path, domain)
      */
-    clearAll(options = {}) {
+    clearAll(options: CookieDeleteOptions = {}): number {
         const cookies = this.getAllCookies();
         const cookieNames = Object.keys(cookies);
-        
+
         cookieNames.forEach(name => {
             this.delete(name, options);
         });
-        
+
         console.log(`Attempted to clear ${cookieNames.length} cookies`);
         return cookieNames.length;
     }
 
     /**
      * Get cookies matching a pattern
-     * @param {string|RegExp} pattern - Pattern to match cookie names
-     * @returns {Object} Object containing matching cookies
+     * @param pattern - Pattern to match cookie names
+     * @returns Object containing matching cookies
      */
-    getMatching(pattern) {
+    getMatching(pattern: string | RegExp): Record<string, string> {
         const allCookies = this.getAllCookies();
-        const matching = {};
-        
+        const matching: Record<string, string> = {};
+
         const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-        
+
         Object.entries(allCookies).forEach(([name, value]) => {
             if (regex.test(name)) {
                 matching[name] = value;
             }
         });
-        
+
         return matching;
     }
 
     /**
      * Add a change listener
-     * @param {Function} callback - Callback function (name, newValue, oldValue) => void
+     * @param callback - Callback function (name, newValue, oldValue) => void
      */
-    addChangeListener(callback) {
+    addChangeListener(callback: CookieChangeListener): void {
         if (typeof callback !== 'function') {
             throw new Error('Callback must be a function');
         }
-        
+
         this.listeners.add(callback);
         console.log('Cookie change listener added');
     }
 
     /**
      * Remove a change listener
-     * @param {Function} callback - Callback function to remove
+     * @param callback - Callback function to remove
      */
-    removeChangeListener(callback) {
+    removeChangeListener(callback: CookieChangeListener): boolean {
         const removed = this.listeners.delete(callback);
         if (removed) {
             console.log('Cookie change listener removed');
@@ -233,7 +266,7 @@ export default class CookieManager {
     /**
      * Start monitoring cookies for changes
      */
-    startMonitoring() {
+    startMonitoring(): void {
         if (this.pollInterval) {
             return; // Already monitoring
         }
@@ -248,7 +281,7 @@ export default class CookieManager {
     /**
      * Stop monitoring cookies for changes
      */
-    stopMonitoring() {
+    stopMonitoring(): void {
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
@@ -258,15 +291,15 @@ export default class CookieManager {
 
     /**
      * Set the polling frequency for change detection
-     * @param {number} frequency - Frequency in milliseconds
+     * @param frequency - Frequency in milliseconds
      */
-    setPollFrequency(frequency) {
+    setPollFrequency(frequency: number): void {
         if (typeof frequency !== 'number' || frequency < 100) {
             throw new Error('Poll frequency must be a number >= 100ms');
         }
 
         this.pollFrequency = frequency;
-        
+
         // Restart monitoring with new frequency
         if (this.pollInterval) {
             this.stopMonitoring();
@@ -278,10 +311,10 @@ export default class CookieManager {
      * Check for cookie changes
      * @private
      */
-    checkForChanges() {
+    checkForChanges(): void {
         const currentCookies = this.getAllCookies();
         const currentSnapshot = new Map(Object.entries(currentCookies));
-        
+
         // Check for new or changed cookies
         for (const [name, value] of currentSnapshot) {
             const oldValue = this.cookieSnapshot.get(name);
@@ -289,14 +322,14 @@ export default class CookieManager {
                 this.notifyChange(name, value, oldValue);
             }
         }
-        
+
         // Check for deleted cookies
         for (const [name, oldValue] of this.cookieSnapshot) {
             if (!currentSnapshot.has(name)) {
                 this.notifyChange(name, undefined, oldValue);
             }
         }
-        
+
         // Update snapshot
         this.cookieSnapshot = currentSnapshot;
     }
@@ -305,7 +338,7 @@ export default class CookieManager {
      * Update the cookie snapshot
      * @private
      */
-    updateSnapshot() {
+    updateSnapshot(): void {
         const cookies = this.getAllCookies();
         this.cookieSnapshot = new Map(Object.entries(cookies));
     }
@@ -314,7 +347,7 @@ export default class CookieManager {
      * Notify all listeners of a change
      * @private
      */
-    notifyChange(name, newValue, oldValue) {
+    notifyChange(name: string, newValue: string | undefined, oldValue: string | undefined): void {
         this.listeners.forEach(callback => {
             try {
                 callback(name, newValue, oldValue);
@@ -328,40 +361,40 @@ export default class CookieManager {
      * Mask sensitive values for logging
      * @private
      */
-    maskSensitive(name, value) {
+    maskSensitive(name: string, value: string): string {
         const sensitiveKeys = ['session', 'auth', 'token', 'password', 'secret', 'key'];
-        const isSensitive = sensitiveKeys.some(sensitive => 
+        const isSensitive = sensitiveKeys.some(sensitive =>
             name.toLowerCase().includes(sensitive)
         );
-        
+
         if (isSensitive && value && value.length > 4) {
             return value.substring(0, 2) + '*'.repeat(value.length - 4) + value.substring(value.length - 2);
         }
-        
+
         return value;
     }
 
     /**
      * Parse cookie attributes from Set-Cookie header format
-     * @param {string} cookieString - Cookie string in Set-Cookie format
-     * @returns {Object} Parsed cookie object
+     * @param cookieString - Cookie string in Set-Cookie format
+     * @returns Parsed cookie object
      */
-    static parseCookie(cookieString) {
+    static parseCookie(cookieString: string): ParsedCookie {
         const parts = cookieString.split(';');
         const [nameValue] = parts;
         const [name, value] = nameValue.split('=');
-        
-        const parsed = {
+
+        const parsed: ParsedCookie = {
             name: name.trim(),
             value: value ? value.trim() : '',
             attributes: {}
         };
-        
+
         // Parse attributes
         parts.slice(1).forEach(part => {
             const [key, val] = part.split('=');
             const trimmedKey = key.trim().toLowerCase();
-            
+
             switch (trimmedKey) {
             case 'expires':
                 parsed.attributes.expires = new Date(val);
@@ -388,18 +421,18 @@ export default class CookieManager {
                 parsed.attributes[trimmedKey] = val ? val.trim() : true;
             }
         });
-        
+
         return parsed;
     }
 
     /**
      * Get statistics about cookies
-     * @returns {Object} Statistics object
+     * @returns Statistics object
      */
-    getStatistics() {
+    getStatistics(): CookieStatistics {
         const cookies = this.getAllCookies();
         const entries = Object.entries(cookies);
-        
+
         return {
             total: entries.length,
             totalSize: document.cookie.length,
@@ -413,23 +446,23 @@ export default class CookieManager {
 
     /**
      * Export cookies in various formats
-     * @param {string} format - Export format ('json', 'netscape', 'curl')
-     * @param {boolean} includeSensitive - Whether to include sensitive values
-     * @returns {string} Formatted export string
+     * @param format - Export format ('json', 'netscape', 'curl')
+     * @param includeSensitive - Whether to include sensitive values
+     * @returns Formatted export string
      */
-    export(format = 'json', includeSensitive = false) {
+    export(format = 'json', includeSensitive = false): string {
         const cookies = this.getAllCookies();
-        const processedCookies = {};
-        
+        const processedCookies: Record<string, string> = {};
+
         // Process cookies (mask sensitive if needed)
         Object.entries(cookies).forEach(([name, value]) => {
             processedCookies[name] = includeSensitive ? value : this.maskSensitive(name, value);
         });
-        
+
         switch (format.toLowerCase()) {
         case 'json':
             return JSON.stringify(processedCookies, null, 2);
-                
+
         case 'netscape': {
             // Netscape cookie file format
             let netscape = '# Netscape HTTP Cookie File\n';
@@ -438,13 +471,13 @@ export default class CookieManager {
             });
             return netscape;
         }
-                
+
         case 'curl':
             // cURL cookie format
             return Object.entries(processedCookies)
                 .map(([name, value]) => `${name}=${value}`)
                 .join('; ');
-                    
+
         default:
             throw new Error(`Unsupported export format: ${format}`);
         }
@@ -452,36 +485,44 @@ export default class CookieManager {
 
     /**
      * Create a proxy object for convenient access
-     * @returns {Proxy} Proxy object for cookie access
+     * @returns Proxy object for cookie access
      */
-    createProxy() {
+    createProxy(): CookiesAPI {
         return new Proxy(this, {
-            get(target, property) {
-                if (typeof property === 'string' && !target[property]) {
+            get(target, property: string | symbol): unknown {
+                // Dynamic cookie-name access (see CookiesAPI's doc comment):
+                // `target[property]` reads either a real method/field or -
+                // when it isn't one - falls through to `target.get(property)`.
+                const indexable = target as unknown as Record<string | symbol, unknown>;
+                if (typeof property === 'string' && !indexable[property]) {
                     return target.get(property);
                 }
-                return target[property];
+                return indexable[property];
             },
-            
-            set(target, property, value) {
-                if (typeof property === 'string' && !target[property]) {
-                    target.set(property, value);
+
+            set(target, property: string | symbol, value: unknown): boolean {
+                const indexable = target as unknown as Record<string | symbol, unknown>;
+                if (typeof property === 'string' && !indexable[property]) {
+                    // `value`'s real type is whatever the caller assigned via
+                    // `agentlet.cookies.myCookie = ...` (see CookiesAPI's doc
+                    // comment); set() itself expects a string.
+                    target.set(property, value as string);
                     return true;
                 }
-                target[property] = value;
+                indexable[property] = value;
                 return true;
             },
-            
-            has(target, property) {
-                return target.has(property) || property in target;
+
+            has(target, property: string | symbol): boolean {
+                return target.has(property as string) || property in target;
             }
-        });
+        }) as unknown as CookiesAPI;
     }
 
     /**
      * Cleanup method
      */
-    cleanup() {
+    cleanup(): void {
         this.stopMonitoring();
         this.listeners.clear();
         console.log('CookieManager cleaned up');
