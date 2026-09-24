@@ -147,6 +147,14 @@ export interface DialogAPI {
      */
     setRoot(root: ShadowRoot | HTMLElement | null): void;
 
+    /**
+     * Resolves the element/root dialogs currently mount into: an explicitly
+     * set root (setRoot()), else `window.agentlet.ui.root`, else
+     * `document.body` (standalone use of the `Dialog` class without
+     * AgentletCore).
+     */
+    getRoot(): ShadowRoot | HTMLElement;
+
     show(type: 'info', options?: DialogInfoOptions, callback?: (value: unknown) => void): void;
     show(type: 'input', options?: DialogInputOptions, callback?: (value: string | null) => void): void;
     show(type: 'wait', options?: DialogWaitOptions, cancelCallback?: () => void): void;
