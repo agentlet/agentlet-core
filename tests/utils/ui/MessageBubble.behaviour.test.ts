@@ -381,7 +381,7 @@ describe('MessageBubble - click/close listener wiring', () => {
         const onClick = jest.fn();
         const id = showBubble(messageBubble, { message: 'Clickable', duration: 0, onClick });
 
-        const bubble = (messageBubble.getBubble(id) as { element: { addEventListener: jest.Mock } }).element;
+        const bubble = (messageBubble.getBubble(id) as unknown as { element: { addEventListener: jest.Mock } }).element;
         expect(bubble.addEventListener).toHaveBeenCalledWith('click', onClick);
     });
 
@@ -389,7 +389,7 @@ describe('MessageBubble - click/close listener wiring', () => {
         const onClose = jest.fn();
         const id = showBubble(messageBubble, { message: 'Closable', duration: 0, onClose });
 
-        const bubble = (messageBubble.getBubble(id) as { element: { addEventListener: jest.Mock } }).element;
+        const bubble = (messageBubble.getBubble(id) as unknown as { element: { addEventListener: jest.Mock } }).element;
         expect(bubble.addEventListener).toHaveBeenCalledWith('agentlet-bubble-close', onClose);
     });
 });

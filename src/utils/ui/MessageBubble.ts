@@ -3,16 +3,41 @@
  * Provides toast-style notifications and messages
  */
 import { Z_INDEX } from './ZIndex.js';
-export default class MessageBubble {
+import type { MessageBubbleAPI, MessageBubbleOptions, MessageBubbleRecord, MessageBubbleType } from '../../types/public-api';
+
+/** Per-type visual styling used by `createBubble()`/`getTypeStyle()`. */
+interface MessageBubbleTypeStyle {
+    background: string;
+    color: string;
+    border: string;
+    accent: string;
+    defaultIcon: string | null;
+}
+
+/** The subset of container CSS properties `updateContainerPosition()` toggles per position. */
+interface MessageBubbleContainerPosition {
+    top: string;
+    right: string;
+    bottom: string;
+    left: string;
+}
+
+class MessageBubble implements MessageBubbleAPI {
+    bubbles: Map<string, MessageBubbleRecord>;
+    bubbleCounter: number;
+    container: HTMLDivElement | null;
+    initialized: boolean;
+    // UI mount root (ShadowRoot, or an HTMLElement/document.body). Resolved
+    // lazily via getRoot() - see setRoot()/getRoot() - since init() only
+    // runs on first show(), by which time AgentletCore's root normally
+    // already exists.
+    root: ShadowRoot | HTMLElement | null;
+
     constructor() {
         this.bubbles = new Map();
         this.bubbleCounter = 0;
         this.container = null;
         this.initialized = false;
-        // UI mount root (ShadowRoot, or an HTMLElement/document.body). Resolved
-        // lazily via getRoot() - see setRoot()/getRoot() - since init() only
-        // runs on first show(), by which time AgentletCore's root normally
-        // already exists.
         this.root = null;
     }
 
@@ -20,9 +45,8 @@ export default class MessageBubble {
      * Explicitly set the root this message bubble container mounts into.
      * Called by GlobalAPI / AgentletCore once the shadow root (or
      * document.body, in legacy mode) is available.
-     * @param {ShadowRoot|HTMLElement|null} root
      */
-    setRoot(root) {
+    setRoot(root: ShadowRoot | HTMLElement | null): void {
         this.root = root || null;
     }
 
@@ -30,9 +54,8 @@ export default class MessageBubble {
      * Resolve the element/root the bubble container should mount into.
      * Resolution order mirrors Dialog.getRoot(): an explicitly set root, then
      * window.agentlet.ui.root, then document.body for standalone use.
-     * @returns {ShadowRoot|HTMLElement}
      */
-    getRoot() {
+    getRoot(): ShadowRoot | HTMLElement {
         if (this.root) {
             return this.root;
         }
@@ -45,7 +68,7 @@ export default class MessageBubble {
     /**
      * Initialize the bubble container
      */
-    init() {
+    init(): void {
         if (this.initialized) return;
 
         this.container = document.createElement('div');
@@ -69,21 +92,10 @@ export default class MessageBubble {
 
     /**
      * Show a message bubble
-     * @param {Object} options - Bubble configuration
-     * @param {string} options.message - Message text
-     * @param {string} options.type - Type: 'info', 'success', 'warning', 'error', 'custom'
-     * @param {string} options.title - Optional title
-     * @param {string} options.icon - Optional icon (emoji or HTML)
-     * @param {number} options.duration - Auto-hide duration in ms (0 = manual close only)
-     * @param {boolean} options.closable - Whether to show close button (default: true)
-     * @param {boolean} options.allowHtml - Whether to allow HTML in message (default: false)
-     * @param {string} options.position - Position: 'top-right', 'top-left', 'bottom-right', 'bottom-left'
-     * @param {Object} options.style - Custom style overrides
-     * @param {Function} options.onClick - Click handler
-     * @param {Function} options.onClose - Close handler
-     * @returns {string} Bubble ID for later reference
+     * @param options - Bubble configuration
+     * @returns Bubble ID for later reference
      */
-    show(options = {}) {
+    show(options: MessageBubbleOptions = {}): string {
         if (!this.initialized) this.init();
 
         const {
@@ -114,7 +126,7 @@ export default class MessageBubble {
         });
 
         // Add to container
-        this.container.appendChild(bubble);
+        (this.container as HTMLDivElement).appendChild(bubble);
 
         // Animate in
         setTimeout(() => {
@@ -133,7 +145,18 @@ export default class MessageBubble {
     /**
      * Create bubble element
      */
-    createBubble(bubbleId, message, type, title, icon, closable, allowHtml, customStyle, onClick, onClose) {
+    createBubble(
+        bubbleId: string,
+        message: string,
+        type: MessageBubbleType,
+        title: string | null,
+        icon: string | null,
+        closable: boolean,
+        allowHtml: boolean,
+        customStyle: Partial<CSSStyleDeclaration>,
+        onClick: ((event: MouseEvent) => void) | null,
+        onClose: ((event: CustomEvent) => void) | null
+    ): HTMLDivElement {
         const bubble = document.createElement('div');
         bubble.id = bubbleId;
         bubble.className = `agentlet-bubble agentlet-bubble-${type}`;
@@ -269,7 +292,7 @@ export default class MessageBubble {
 
         // Add close handler
         if (onClose) {
-            bubble.addEventListener('agentlet-bubble-close', onClose);
+            bubble.addEventListener('agentlet-bubble-close', onClose as EventListener);
         }
 
         return bubble;
@@ -278,8 +301,8 @@ export default class MessageBubble {
     /**
      * Get styling for bubble type
      */
-    getTypeStyle(type) {
-        const styles = {
+    getTypeStyle(type: MessageBubbleType): MessageBubbleTypeStyle {
+        const styles: Record<MessageBubbleType, MessageBubbleTypeStyle> = {
             info: {
                 background: '#e3f2fd',
                 color: '#1565c0',
@@ -323,10 +346,10 @@ export default class MessageBubble {
     /**
      * Update container position
      */
-    updateContainerPosition(position) {
+    updateContainerPosition(position: string): void {
         if (!this.container) return;
 
-        const positions = {
+        const positions: Record<string, MessageBubbleContainerPosition> = {
             'top-right': { top: '20px', right: '20px', left: 'auto', bottom: 'auto' },
             'top-left': { top: '20px', left: '20px', right: 'auto', bottom: 'auto' },
             'bottom-right': { bottom: '20px', right: '20px', left: 'auto', top: 'auto' },
@@ -347,7 +370,7 @@ export default class MessageBubble {
     /**
      * Set auto-hide timer for bubble
      */
-    setAutoHide(bubbleId, duration) {
+    setAutoHide(bubbleId: string, duration: number): void {
         const bubbleData = this.bubbles.get(bubbleId);
         if (!bubbleData) return;
 
@@ -359,7 +382,7 @@ export default class MessageBubble {
     /**
      * Hide a specific bubble
      */
-    hide(bubbleId) {
+    hide(bubbleId: string): void {
         const bubbleData = this.bubbles.get(bubbleId);
         if (!bubbleData) return;
 
@@ -388,7 +411,7 @@ export default class MessageBubble {
     /**
      * Hide all bubbles
      */
-    hideAll() {
+    hideAll(): void {
         const bubbleIds = Array.from(this.bubbles.keys());
         bubbleIds.forEach(id => this.hide(id));
     }
@@ -404,15 +427,15 @@ export default class MessageBubble {
      *
      * Idempotent per root: safe to call every time init() runs.
      */
-    addStyles() {
+    addStyles(): void {
         const root = this.getRoot();
 
         // A core stylesheet already covers these rules: nothing to do.
         // (document.body has no adoptedStyleSheets of its own, so this only
         // ever matches a shadow root - no need to reference ShadowRoot
         // directly, which also isn't declared as an ESLint browser global.)
-        const hasAdoptedCoreStyles = Array.isArray(root.adoptedStyleSheets) &&
-            root.adoptedStyleSheets.length > 0;
+        const hasAdoptedCoreStyles = Array.isArray((root as ShadowRoot).adoptedStyleSheets) &&
+            (root as ShadowRoot).adoptedStyleSheets.length > 0;
         const hasCoreStyleInRoot = typeof root.querySelector === 'function' &&
             !!root.querySelector('#agentlet-core-styles');
         const hasCoreStyleInHead = typeof document !== 'undefined' &&
@@ -458,42 +481,42 @@ export default class MessageBubble {
     /**
      * Convenience method for info bubble
      */
-    info(message, options = {}) {
+    info(message: string, options: MessageBubbleOptions = {}): string {
         return this.show({ ...options, message, type: 'info' });
     }
 
     /**
      * Convenience method for success bubble
      */
-    success(message, options = {}) {
+    success(message: string, options: MessageBubbleOptions = {}): string {
         return this.show({ ...options, message, type: 'success' });
     }
 
     /**
      * Convenience method for warning bubble
      */
-    warning(message, options = {}) {
+    warning(message: string, options: MessageBubbleOptions = {}): string {
         return this.show({ ...options, message, type: 'warning' });
     }
 
     /**
      * Convenience method for error bubble
      */
-    error(message, options = {}) {
+    error(message: string, options: MessageBubbleOptions = {}): string {
         return this.show({ ...options, message, type: 'error' });
     }
 
     /**
      * Convenience method for custom bubble
      */
-    custom(message, options = {}) {
+    custom(message: string, options: MessageBubbleOptions = {}): string {
         return this.show({ ...options, message, type: 'custom' });
     }
 
     /**
      * Show temporary message (auto-hide)
      */
-    toast(message, type = 'info', duration = 3000) {
+    toast(message: string, type: MessageBubbleType = 'info', duration: number = 3000): string {
         return this.show({
             message,
             type,
@@ -505,7 +528,7 @@ export default class MessageBubble {
     /**
      * Show persistent message (manual close only)
      */
-    notify(message, type = 'info', title = null) {
+    notify(message: string, type: MessageBubbleType = 'info', title: string | null = null): string {
         return this.show({
             message,
             type,
@@ -518,7 +541,7 @@ export default class MessageBubble {
     /**
      * Show loading message
      */
-    loading(message = 'Loading...', options = {}) {
+    loading(message: string = 'Loading...', options: MessageBubbleOptions = {}): string {
         return this.show({
             ...options,
             message,
@@ -537,28 +560,28 @@ export default class MessageBubble {
     /**
      * Get bubble count
      */
-    getCount() {
+    getCount(): number {
         return this.bubbles.size;
     }
 
     /**
      * Get bubble by ID
      */
-    getBubble(bubbleId) {
+    getBubble(bubbleId: string): MessageBubbleRecord | undefined {
         return this.bubbles.get(bubbleId);
     }
 
     /**
      * Check if bubble exists
      */
-    exists(bubbleId) {
+    exists(bubbleId: string): boolean {
         return this.bubbles.has(bubbleId);
     }
 
     /**
      * Update bubble message
      */
-    updateMessage(bubbleId, newMessage, allowHtml = false) {
+    updateMessage(bubbleId: string, newMessage: string, allowHtml: boolean = false): boolean {
         const bubbleData = this.bubbles.get(bubbleId);
         if (!bubbleData) return false;
 
@@ -577,7 +600,7 @@ export default class MessageBubble {
     /**
      * Cleanup - remove all bubbles and container
      */
-    cleanup() {
+    cleanup(): void {
         this.hideAll();
         if (this.container) {
             this.container.remove();
@@ -586,3 +609,5 @@ export default class MessageBubble {
         this.initialized = false;
     }
 }
+
+export default MessageBubble;

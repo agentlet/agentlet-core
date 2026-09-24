@@ -43,6 +43,9 @@ import type {
     TablesAPI,
     PDFProcessorAPI,
     AIManagerAPI,
+    MessageBubbleAPI,
+    ShortcutManagerAPI,
+    ShortcutsAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -64,6 +67,8 @@ import FormFiller from '../../src/utils/data-processing/FormFiller';
 import TableExtractor from '../../src/utils/data-processing/TableExtractor';
 import PDFProcessor from '../../src/utils/ai/PDFProcessor';
 import { AIManager } from '../../src/utils/ai/AIProvider';
+import MessageBubble from '../../src/utils/ui/MessageBubble';
+import ShortcutManager from '../../src/utils/ui/ShortcutManager';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -288,6 +293,9 @@ const tablesApiCheck: TablesAPI = new TableExtractor().createProxy();
 const pdfProcessorCheck: PDFProcessorAPI = new PDFProcessor();
 declare const envStub: EnvAPI;
 const aiManagerCheck: AIManagerAPI = new AIManager(envStub);
+const messageBubbleCheck: MessageBubbleAPI = new MessageBubble();
+const shortcutManagerCheck: ShortcutManagerAPI = new ShortcutManager();
+const shortcutsApiCheck: ShortcutsAPI = new ShortcutManager().createProxy();
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -312,6 +320,9 @@ void tableExtractorCheck;
 void tablesApiCheck;
 void pdfProcessorCheck;
 void aiManagerCheck;
+void messageBubbleCheck;
+void shortcutManagerCheck;
+void shortcutsApiCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -417,6 +428,18 @@ void pdfProcessorBackToReal;
 declare const declaredAiManager: AIManagerAPI;
 const aiManagerBackToReal: Pick<InstanceType<typeof AIManager>, keyof AIManagerAPI> = declaredAiManager;
 void aiManagerBackToReal;
+
+declare const declaredMessageBubble: MessageBubbleAPI;
+const messageBubbleBackToReal: Pick<InstanceType<typeof MessageBubble>, keyof MessageBubbleAPI> = declaredMessageBubble;
+void messageBubbleBackToReal;
+
+declare const declaredShortcutManager: ShortcutManagerAPI;
+const shortcutManagerBackToReal: Pick<InstanceType<typeof ShortcutManager>, keyof ShortcutManagerAPI> = declaredShortcutManager;
+void shortcutManagerBackToReal;
+
+declare const declaredShortcutsApi: ShortcutsAPI;
+const shortcutsApiBackToReal: Pick<ReturnType<InstanceType<typeof ShortcutManager>['createProxy']>, keyof ShortcutsAPI> = declaredShortcutsApi;
+void shortcutsApiBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */

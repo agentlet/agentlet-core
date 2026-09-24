@@ -42,6 +42,18 @@ function register(
     ) => Promise<boolean>)(keys, callback, options);
 }
 
+/**
+ * `ShortcutManager.init()` expects the minimal local `HotkeysLike` shape it
+ * declares for itself (not exported - see ShortcutManager.ts), while the
+ * real `hotkeys-js` import is typed via the package's own richer, overloaded
+ * `Hotkeys` interface. The two don't structurally unify (TS's overload
+ * assignability check picks an incompatible overload), so bridge through
+ * `init()`'s own parameter type rather than re-declaring `HotkeysLike` here.
+ */
+function initWithRealHotkeys(manager: ShortcutManager): void {
+    manager.init(hotkeys as unknown as Parameters<ShortcutManager['init']>[0]);
+}
+
 /** Minimal shape of `window.agentlet.utils.Dialog` these tests need. */
 interface DialogMock {
     show: jest.Mock;
@@ -68,7 +80,7 @@ describe('ShortcutManager - register()', () => {
 
     beforeEach(() => {
         manager = new ShortcutManager();
-        manager.init(hotkeys);
+        initWithRealHotkeys(manager);
     });
 
     afterEach(() => {
@@ -176,7 +188,7 @@ describe('ShortcutManager - unregister()/setEnabled()/getShortcuts()/isRegistere
 
     beforeEach(() => {
         manager = new ShortcutManager();
-        manager.init(hotkeys);
+        initWithRealHotkeys(manager);
     });
 
     afterEach(() => {
@@ -334,7 +346,7 @@ describe('ShortcutManager - showHelp()', () => {
     beforeEach(() => {
         delete (window as unknown as { agentlet?: unknown }).agentlet;
         manager = new ShortcutManager();
-        manager.init(hotkeys);
+        initWithRealHotkeys(manager);
     });
 
     afterEach(() => {
