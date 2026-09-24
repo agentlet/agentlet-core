@@ -1,0 +1,516 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateAnimationStyles() 1`] = `
+"
+            /* Image Overlay Styles */
+            .agentlet-image-overlay {
+                position: fixed;
+                bottom: var(--agentlet-image-overlay-bottom);
+                right: var(--agentlet-image-overlay-right);
+                width: var(--agentlet-image-overlay-width);
+                height: var(--agentlet-image-overlay-height);
+                z-index: var(--agentlet-image-overlay-z-index);
+                cursor: pointer;
+                transition: var(--agentlet-image-overlay-transition);
+                overflow: hidden;
+            }
+            
+            .agentlet-image-overlay:hover {
+                transform: scale(var(--agentlet-image-overlay-hover-scale));
+            }
+            
+            .agentlet-image-overlay img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                display: block;
+            }
+            
+            /* Background scroll blocking when dialogs are open */
+            body.agentlet-dialog-open {
+                overflow: hidden !important;
+                position: fixed !important;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            
+            /* Ensure dialog overlays and content remain scrollable */
+            .agentlet-dialog-overlay,
+            .agentlet-info-dialog {
+                overflow-y: auto !important;
+            }
+            
+            .agentlet-dialog-content {
+                overflow-y: auto !important;
+                max-height: calc(100vh - 120px) !important;
+            }
+
+            /* Animations */
+            @keyframes agentlet-dialog-fadein {
+                from { opacity: 0; transform: scale(0.9); }
+                to { opacity: 1; transform: scale(1); }
+            }
+
+            /* Dialog animations (moved here from Dialog.addDialogStyles()) */
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.7; }
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
+            @keyframes agentlet-progress-animate {
+                0% { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateBubbleStyles() 1`] = `
+"
+            /* Message Bubble Styles */
+            .agentlet-bubble:hover {
+                transform: translateX(-2px) !important;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+            }
+
+            @media (max-width: 480px) {
+                #agentlet-message-bubbles {
+                    left: 10px !important;
+                    right: 10px !important;
+                    max-width: none !important;
+                }
+
+                .agentlet-bubble {
+                    transform: translateY(-100%) !important;
+                }
+
+                .agentlet-bubble:hover {
+                    transform: translateY(-102px) !important;
+                }
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateCSSProperties(theme) for the default theme 1`] = `
+"
+            /* CSS Custom Properties for Theme */
+            :root {
+                --agentlet-primary-color: #1E3A8A;
+                --agentlet-secondary-color: #F97316;
+                --agentlet-background-color: #ffffff;
+                --agentlet-content-background: #f8f9fa;
+                --agentlet-text-color: #333333;
+                --agentlet-border-color: #e0e0e0;
+                --agentlet-header-background: #ffffff;
+                --agentlet-header-text-color: #333333;
+                --agentlet-action-button-background: #f8f9fa;
+                --agentlet-action-button-border: #dee2e6;
+                --agentlet-action-button-hover: #e9ecef;
+                --agentlet-action-button-text: #333333;
+                --agentlet-actions-justify-content: space-between;
+                --agentlet-panel-width: 320px;
+                --agentlet-border-radius: 0px;
+                --agentlet-box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+                --agentlet-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                --agentlet-header-padding: 15px;
+                --agentlet-content-padding: 15px;
+                --agentlet-actions-padding: 10px 15px;
+                --agentlet-border-width: 2px;
+                --agentlet-transition-duration: 0.3s;
+                
+                /* Dialog Theme Variables */
+                --agentlet-dialog-overlay-background: rgba(0, 0, 0, 0.5);
+                --agentlet-dialog-background: #ffffff;
+                --agentlet-dialog-border-radius: 8px;
+                --agentlet-dialog-box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                --agentlet-dialog-header-background: #ffffff;
+                --agentlet-dialog-header-text-color: #333333;
+                --agentlet-dialog-content-background: #ffffff;
+                --agentlet-dialog-content-text-color: #333333;
+                --agentlet-dialog-button-primary-background: #1E3A8A;
+                --agentlet-dialog-button-primary-hover: #1E40AF;
+                --agentlet-dialog-button-secondary-background: #6B7280;
+                --agentlet-dialog-button-secondary-hover: #4B5563;
+                --agentlet-dialog-button-danger-background: #DC2626;
+                --agentlet-dialog-button-danger-hover: #B91C1C;
+                --agentlet-dialog-progress-bar-background: linear-gradient(90deg, #1E3A8A, #F97316);
+                --agentlet-dialog-progress-bar-track-background: #f0f0f0;
+                
+                /* Spinner Theme Variables */
+                --agentlet-spinner-track-color: #f3f3f3;
+                --agentlet-spinner-color: #667eea;
+                
+                /* Image Overlay Theme Variables */
+                --agentlet-image-overlay-width: 100px;
+                --agentlet-image-overlay-height: 100px;
+                --agentlet-image-overlay-bottom: 20px;
+                --agentlet-image-overlay-right: 20px;
+                --agentlet-image-overlay-z-index: 100400;
+                --agentlet-image-overlay-transition: all 0.3s ease;
+                --agentlet-image-overlay-hover-scale: 1.05;
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateComponentStyles() 1`] = `
+"
+            /* Header */
+            .agentlet-header {
+                padding: var(--agentlet-header-padding);
+                border-bottom: 1px solid var(--agentlet-border-color);
+                background: var(--agentlet-header-background);
+                color: var(--agentlet-header-text-color);
+                flex-shrink: 0;
+                cursor: default;
+            }
+
+            .agentlet-app-display {
+                font-size: 14px;
+                text-align: center;
+                font-weight: 500;
+            }
+
+            #agentlet-app-name {
+                
+            }
+
+            /* Content Area */
+            .agentlet-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: var(--agentlet-content-padding);
+                background: var(--agentlet-content-background);
+            }
+
+            /* Actions Area */
+            .agentlet-actions {
+                padding: var(--agentlet-actions-padding);
+                border-top: 1px solid var(--agentlet-border-color);
+                background: var(--agentlet-background-color);
+                flex-shrink: 0;
+                display: flex;
+                justify-content: var(--agentlet-actions-justify-content);
+                align-items: center;
+            }
+
+            .agentlet-actions-left {
+                display: flex;
+                align-items: center;
+            }
+
+            .agentlet-actions-right {
+                display: flex;
+                align-items: center;
+            }
+
+            /* Action Buttons */
+            .agentlet-action-btn {
+                background: var(--agentlet-action-button-background);
+                border: 1px solid var(--agentlet-action-button-border);
+                border-radius: 4px;
+                padding: 6px 8px;
+                cursor: pointer;
+                font-size: 12px;
+                color: var(--agentlet-action-button-text);
+                transition: all var(--agentlet-transition-duration) ease;
+            }
+
+            .agentlet-action-btn:hover {
+                background: var(--agentlet-action-button-hover);
+                border-color: var(--agentlet-action-button-border);
+            }
+
+
+            /* Module Content Styles */
+            .agentlet-module-content {
+                margin-bottom: 15px;
+                padding: 12px;
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                background: white;
+            }
+            
+            .agentlet-module-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            .agentlet-module-header h3 {
+                margin: 0;
+                font-size: 14px;
+                color: #495057;
+            }
+            
+            .agentlet-module-version {
+                font-size: 11px;
+                color: #6c757d;
+                background: #f8f9fa;
+                padding: 2px 6px;
+                border-radius: 10px;
+            }
+            
+            .agentlet-btn {
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                margin: 2px;
+                transition: background-color 0.2s ease;
+            }
+            
+            .agentlet-btn:hover {
+                background: #0056b3;
+            }
+            
+            .agentlet-btn-secondary {
+                background: #6c757d;
+            }
+            
+            .agentlet-btn-secondary:hover {
+                background: #545b62;
+            }
+            
+            .agentlet-btn-sm {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            
+            .agentlet-submodule-content {
+                margin-top: 10px;
+                padding: 8px;
+                background: #f8f9fa;
+                border-radius: 4px;
+                border-left: 3px solid #007bff;
+            }
+            
+            .agentlet-submodule-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 6px;
+            }
+            
+            .agentlet-submodule-header h4 {
+                margin: 0;
+                font-size: 12px;
+                color: #495057;
+            }
+            
+            .agentlet-submodule-status.active {
+                color: #28a745;
+                font-weight: bold;
+            }
+            
+            .agentlet-submodule-status.inactive {
+                color: #6c757d;
+            }
+            
+            .agentlet-welcome {
+                text-align: center;
+                padding: 20px;
+                color: #6c757d;
+            }
+            
+            .agentlet-error {
+                background: #f8d7da;
+                color: #721c24;
+                padding: 10px;
+                border-radius: 4px;
+                border: 1px solid #f5c6cb;
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateDialogStyles() 1`] = `
+"
+            /* Unified Dialog Styles - Applied to all utility dialogs */
+            .agentlet-dialog-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: var(--agentlet-dialog-overlay-background);
+                z-index: 100150;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: var(--agentlet-font-family);
+            }
+            
+            .agentlet-dialog-container {
+                background: var(--agentlet-dialog-background);
+                border-radius: var(--agentlet-dialog-border-radius);
+                box-shadow: var(--agentlet-dialog-box-shadow);
+                max-width: 90vw;
+                max-height: 90vh;
+                overflow: hidden;
+                animation: agentlet-dialog-fadein 0.3s ease;
+            }
+            
+            .agentlet-dialog-header {
+                background: var(--agentlet-dialog-header-background);
+                color: var(--agentlet-dialog-header-text-color);
+                padding: 16px 20px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-weight: 600;
+                font-size: 16px;
+            }
+            
+            .agentlet-dialog-content {
+                background: var(--agentlet-dialog-content-background);
+                color: var(--agentlet-dialog-content-text-color);
+                padding: 20px;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            
+            .agentlet-dialog-actions {
+                background: var(--agentlet-dialog-content-background);
+                padding: 16px 20px;
+                border-top: 1px solid var(--agentlet-border-color);
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+            }
+            
+            .agentlet-dialog-btn {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+                transition: all var(--agentlet-transition-duration) ease;
+                min-width: 80px;
+            }
+            
+            .agentlet-dialog-btn-primary {
+                background: var(--agentlet-dialog-button-primary-background);
+                color: white;
+            }
+            
+            .agentlet-dialog-btn-primary:hover {
+                background: var(--agentlet-dialog-button-primary-hover);
+            }
+            
+            .agentlet-dialog-btn-secondary {
+                background: var(--agentlet-dialog-button-secondary-background);
+                color: white;
+            }
+            
+            .agentlet-dialog-btn-secondary:hover {
+                background: var(--agentlet-dialog-button-secondary-hover);
+            }
+            
+            .agentlet-dialog-btn-danger {
+                background: var(--agentlet-dialog-button-danger-background);
+                color: white;
+            }
+            
+            .agentlet-dialog-btn-danger:hover {
+                background: var(--agentlet-dialog-button-danger-hover);
+            }
+            
+            .agentlet-progress-bar-themed {
+                background: var(--agentlet-dialog-progress-bar-background);
+            }
+            
+            .agentlet-progress-track-themed {
+                background: var(--agentlet-dialog-progress-bar-track-background);
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generateHostResetStyles() 1`] = `
+"
+            :host {
+                all: initial;
+                display: contents;
+                font-family: var(--agentlet-font-family);
+                color: var(--agentlet-text-color);
+                line-height: 1.4;
+                font-size: 14px;
+            }
+        "
+`;
+
+exports[`StyleInjector behaviour characterization generate*Styles() snapshots (byte-identical CSS contract) generatePanelStyles() 1`] = `
+"
+            /* Main Panel */
+            .agentlet-panel {
+                position: fixed;
+                top: 0;
+                height: 100vh;
+                z-index: 100100;
+                background: var(--agentlet-background-color);
+                font-family: var(--agentlet-font-family);
+                transition: all var(--agentlet-transition-duration) ease;
+                user-select: auto;
+                display: flex;
+                flex-direction: column;
+                width: var(--agentlet-panel-width);
+                max-width: 90vw;
+                border-radius: var(--agentlet-border-radius);
+                right: 0;
+                border-left: var(--agentlet-border-width) solid var(--agentlet-border-color);
+                box-shadow: var(--agentlet-box-shadow);
+            }
+
+            /* Toggle Button */
+            .agentlet-toggle {
+                position: fixed;
+                top: 50%;
+                right: var(--agentlet-panel-width);
+                background: var(--agentlet-secondary-color);
+                border: var(--agentlet-border-width) solid var(--agentlet-border-color);
+                border-radius: 5px 0px 0px 5px;
+                box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+                font-size: 12px;
+                cursor: pointer;
+                color: #FFF;
+                padding: 8px 4px;
+                margin: 0px;
+                width: 20px;
+                height: 40px;
+                line-height: 1;
+                transition: all var(--agentlet-transition-duration) ease;
+                z-index: 100450;
+            }
+
+            /* Resize Handle */
+            .agentlet-resize-handle {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 4px;
+                height: 100%;
+                cursor: ew-resize;
+                background: transparent;
+                z-index: 1000001;
+            }
+
+            .agentlet-resize-handle:hover {
+                background: var(--agentlet-primary-color);
+                opacity: 0.3;
+            }
+
+            .agentlet-resize-handle:active {
+                background: var(--agentlet-primary-color);
+                opacity: 0.5;
+            }
+        "
+`;

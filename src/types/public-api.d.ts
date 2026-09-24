@@ -1764,14 +1764,22 @@ export interface StyleInjectorAPI {
     regenerateStyles(): void;
 }
 
-/** @internal minimal surface of `UIManager`, exposed as `window.agentlet.uiManager`. Prefer `agentlet.ui.*`. */
+/**
+ * @internal minimal surface of `UIManager`, exposed as `window.agentlet.uiManager`. Prefer `agentlet.ui.*`.
+ *
+ * Does NOT declare `isMinimized`: the real class deliberately has no such
+ * member (its constructor comment says "Use core's isMinimized instead of
+ * our own"; minimized state lives only on `AgentletCore.isMinimized`). An
+ * earlier version of this declaration claimed `readonly isMinimized:
+ * boolean`, which `UIManager implements UIManagerInternalAPI` would have
+ * failed to satisfy without adding a member that doesn't exist at runtime.
+ */
 export interface UIManagerInternalAPI {
     show(): void;
     hide(): void;
     minimize(): void;
     maximize(): void;
     setupBaseUI(): void;
-    readonly isMinimized: boolean;
 }
 
 export interface PanelManagerAPI {

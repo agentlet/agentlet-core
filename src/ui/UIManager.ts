@@ -3,12 +3,68 @@
  * Handles UI creation, management, and interactions for the Agentlet panel
  */
 
-// import { Z_INDEX } from '../utils/ui/ZIndex.js';
+import type { AgentletCoreConfig, EventBusAPI, EnvAPI, AgentletModule, UIManagerInternalAPI } from '../types/public-api';
 
-export class UIManager {
-    constructor(agentletCore) {
+/**
+ * The DOM/query references shared between `AgentletCore` and `UIManager`
+ * (`agentletCore.ui`, the same object `UIManager` stores as `this.ui`).
+ * Mirrors `UIAPI`'s DOM-reference fields plus the `query`/`queryAll`
+ * helpers, kept mutable here since `UIManager` writes to it directly.
+ */
+export interface UIManagerUIState {
+    host: HTMLElement | null;
+    root: ShadowRoot | HTMLElement | null;
+    container: HTMLElement | null;
+    content: HTMLElement | null;
+    header: HTMLElement | null;
+    actions: HTMLElement | null;
+    imageOverlay: HTMLElement | null;
+    query(selector: string): Element | null;
+    queryAll(selector: string): NodeListOf<Element>;
+}
+
+/**
+ * Minimal shape of the `AgentletCore` instance this class needs. Not the
+ * full `AgentletAPI` from `src/types/public-api.d.ts`: this class reaches
+ * into framework-internal wiring (`styleInjector.setRoot()`,
+ * `createActionButton()`, `createDiscreteCloseButton()`, ...) that
+ * `AgentletAPI` marks `@internal` or omits, and narrows a few members
+ * (`minimumPanelWidth` always populated by the time `UIManager` runs, same
+ * as `PanelManagerCore` in `src/ui/PanelManager.ts`).
+ */
+export interface UIManagerCore {
+    config: Omit<AgentletCoreConfig, 'minimumPanelWidth'> & {
+        /** Always populated by the time `UIManager` runs: `AgentletCore`'s
+         * constructor defaults it (`config.minimumPanelWidth || 320`) even
+         * though `AgentletCoreConfig.minimumPanelWidth` itself is optional. */
+        minimumPanelWidth: number;
+    };
+    ui: UIManagerUIState;
+    styleInjector: { setRoot(root: ShadowRoot | HTMLElement | null): void };
+    isMinimized: boolean;
+    eventBus: EventBusAPI;
+    authManager: { createLoginButton(): HTMLButtonElement | null };
+    envManager: EnvAPI | null;
+    moduleRegistry: { activeModule: AgentletModule | null };
+    panelManager: {
+        savePanelWidthForModule(width: number): void;
+        restorePanelWidthForModule(activeModule: AgentletModule | null): void;
+    };
+    refreshContent(): Promise<void>;
+    showSettings(): void;
+    showHelp(): void;
+    showEnvVarsDialog(): void;
+    createActionButton(icon: string, title: string, onClick: (event: MouseEvent) => void): HTMLButtonElement;
+    createDiscreteCloseButton(): HTMLButtonElement;
+}
+
+export class UIManager implements UIManagerInternalAPI {
+    core: UIManagerCore;
+    ui: UIManagerUIState;
+
+    constructor(agentletCore: UIManagerCore) {
         this.core = agentletCore;
-        
+
         // Use shared UI references and state from AgentletCore
         this.ui = agentletCore.ui;
         // Use core's isMinimized instead of our own
@@ -25,7 +81,7 @@ export class UIManager {
      * styles are injected) and setupBaseUI() can call it again defensively
      * without tearing down and recreating the shadow root on every call.
      */
-    ensureRoot() {
+    ensureRoot(): ShadowRoot | HTMLElement {
         if (this.ui.root) {
             return this.ui.root;
         }
@@ -62,6 +118,11 @@ export class UIManager {
         // GlobalAPI.setupGlobalAccess(), which runs from the constructor,
         // before this root exists) at the same root, so dialogs and toasts
         // triggered via window.agentlet.utils.* mount inside it too.
+        // `window.agentlet` is declared non-optional in src/types/public-api.d.ts
+        // (it literally is the AgentletCore instance once constructed), but at
+        // this point in the constructor/init sequence it may genuinely not
+        // exist yet, so the runtime guard stays even though the static type
+        // doesn't require it.
         if (window.agentlet && window.agentlet.utils) {
             if (window.agentlet.utils.Dialog) {
                 window.agentlet.utils.Dialog.setRoot(this.ui.root);
@@ -77,12 +138,12 @@ export class UIManager {
     /**
      * Enhanced UI setup with responsive design
      */
-    setupBaseUI() {
+    setupBaseUI(): void {
         // Make sure we have a mount root (normally already created by init()
         // via ensureRoot(), but create one lazily if setupBaseUI() is called
         // standalone).
         this.ensureRoot();
-        const root = this.ui.root;
+        const root = this.ui.root as ShadowRoot | HTMLElement;
 
         // Remove existing container if present
         const existingContainer = root.querySelector ? root.querySelector('#agentlet-container') : null;
@@ -94,28 +155,28 @@ export class UIManager {
         const container = document.createElement('div');
         container.id = 'agentlet-container';
         container.className = 'agentlet-panel';
-        
+
         // Create toggle button only if minimizeWithImage is not configured
-        let toggleButton = null;
+        let toggleButton: HTMLButtonElement | null = null;
         if (!this.core.config.minimizeWithImage || typeof this.core.config.minimizeWithImage !== 'string') {
             toggleButton = this.createToggleButton();
         }
-        
+
         // Create header
         const header = this.createHeader();
-        
+
         // Create content area
         const content = this.createContentArea();
-        
+
         // Create actions area
         const actions = this.createActionsArea();
-        
+
         // Create resize handle if resizable is enabled
-        let resizeHandle = null;
+        let resizeHandle: HTMLElement | null = null;
         if (this.core.config.resizablePanel) {
             resizeHandle = this.createResizeHandle(container);
         }
-        
+
         // Assemble UI
         if (resizeHandle) {
             container.appendChild(resizeHandle);
@@ -123,7 +184,7 @@ export class UIManager {
         container.appendChild(header);
         container.appendChild(content);
         container.appendChild(actions);
-        
+
         // Add to document (the shadow root when shadowDom is enabled, otherwise document.body)
         if (toggleButton) {
             root.appendChild(toggleButton);
@@ -131,7 +192,7 @@ export class UIManager {
         } else {
             root.appendChild(container);
         }
-        
+
         // Store UI references in both UIManager and AgentletCore
         this.ui.container = container;
         this.ui.content = content;
@@ -143,30 +204,30 @@ export class UIManager {
         this.core.ui.content = content;
         this.core.ui.header = header;
         this.core.ui.actions = actions;
-        
+
         // Ensure image overlay is shown if panel is minimized and image is configured
         this.ensureImageOverlay();
-        
+
         // Handle startMinimized option
         if (this.core.config.startMinimized) {
             this.core.isMinimized = true;
-            
+
             // Apply minimized state to container
             if (container) {
                 container.style.transform = 'translateX(100%)';
             }
-            
+
             // Update toggle button if it exists
             if (toggleButton) {
                 toggleButton.innerHTML = '◀';
                 toggleButton.style.right = '-2px';
             }
-            
+
             // Show image overlay if configured
             if (this.core.config.minimizeWithImage && typeof this.core.config.minimizeWithImage === 'string') {
                 this.showImageOverlay();
             }
-            
+
             console.log('🎨 UI setup completed (started minimized)');
         } else {
             console.log('🎨 UI setup completed');
@@ -176,43 +237,43 @@ export class UIManager {
     /**
      * Create toggle button
      */
-    createToggleButton() {
+    createToggleButton(): HTMLButtonElement {
         const toggleButton = document.createElement('button');
         toggleButton.innerHTML = '▶';
         toggleButton.id = 'agentlet-toggle';
         toggleButton.className = 'agentlet-toggle';
-        
+
         toggleButton.onclick = (e) => {
             e.stopPropagation();
             this.toggleCollapse();
         };
-        
+
         return toggleButton;
     }
 
     /**
      * Create header section
      */
-    createHeader() {
+    createHeader(): HTMLElement {
         const header = document.createElement('div');
         header.id = 'agentlet-header';
         header.className = 'agentlet-header';
-        
+
         // Application display
         const appDisplay = document.createElement('div');
         appDisplay.id = 'agentlet-app-display';
         appDisplay.className = 'agentlet-app-display';
         appDisplay.innerHTML = '<strong>Agentlet:</strong> <span id="agentlet-app-name">Ready</span>';
-        
+
         header.appendChild(appDisplay);
-        
+
         return header;
     }
 
     /**
      * Create content area
      */
-    createContentArea() {
+    createContentArea(): HTMLElement {
         const content = document.createElement('div');
         content.id = 'agentlet-content';
         content.className = 'agentlet-content';
@@ -224,37 +285,37 @@ export class UIManager {
     /**
      * UI control methods
      */
-    show() {
+    show(): void {
         if (this.ui && this.ui.container) {
             this.ui.container.style.display = 'flex';
         }
     }
 
-    hide() {
+    hide(): void {
         if (this.ui && this.ui.container) {
             this.ui.container.style.display = 'none';
         }
     }
 
-    minimize() {
+    minimize(): void {
         if (!this.core.isMinimized) {
             this.toggleCollapse();
         }
     }
 
-    maximize() {
+    maximize(): void {
         if (this.core.isMinimized) {
             this.toggleCollapse();
         }
     }
 
-    createActionsArea() {
+    createActionsArea(): HTMLElement {
         const actions = document.createElement('div');
         actions.id = 'agentlet-actions';
         actions.className = 'agentlet-actions';
-        
+
         // Optional action buttons based on configuration
-        let refreshBtn = null;
+        let refreshBtn: HTMLButtonElement | null = null;
         if (this.core.config.showRefreshButton) {
             refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => {
                 this.core.refreshContent().catch(error => {
@@ -263,25 +324,25 @@ export class UIManager {
             });
         }
 
-        let settingsBtn = null;
+        let settingsBtn: HTMLButtonElement | null = null;
         if (this.core.config.showSettingsButton) {
             settingsBtn = this.core.createActionButton('⚙️', 'Settings', () => this.core.showSettings());
         }
-        
-        let helpBtn = null;
+
+        let helpBtn: HTMLButtonElement | null = null;
         if (this.core.config.showHelpButton) {
             helpBtn = this.core.createActionButton('❓', 'Help', () => this.core.showHelp());
         }
-        
+
         // Add environment variables button if enabled and envManager is available
-        let envVarsBtn = null;
+        let envVarsBtn: HTMLButtonElement | null = null;
         if (this.core.config.showEnvVarsButton && this.core.envManager) {
             envVarsBtn = this.core.createActionButton('🔧', 'Environment Variables', () => this.core.showEnvVarsDialog());
         }
-        
+
         // Add authentication button if enabled
         const authBtn = this.core.authManager.createLoginButton();
-        
+
         // Create discrete close button
         const closeBtn = this.core.createDiscreteCloseButton();
 
@@ -320,170 +381,170 @@ export class UIManager {
         return actions;
     }
 
-    createResizeHandle(container) {
+    createResizeHandle(container: HTMLElement): HTMLElement {
         const resizeHandle = document.createElement('div');
         resizeHandle.className = 'agentlet-resize-handle';
-        
+
         let isResizing = false;
         let startX = 0;
         let startWidth = 0;
-        
-        const startResize = (e) => {
+
+        const startResize = (e: MouseEvent): void => {
             isResizing = true;
             startX = e.clientX;
             startWidth = container.offsetWidth;
-            
+
             document.addEventListener('mousemove', handleResize);
             document.addEventListener('mouseup', stopResize);
-            
+
             // Prevent text selection during resize
             document.body.style.userSelect = 'none';
-            
+
             // Disable transitions during resize for smooth dragging
             container.style.transition = 'none';
-            
+
             // Also disable toggle button transitions during resize
-            const toggleButton = this.ui.query('#agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle') as HTMLElement | null;
             if (toggleButton) {
                 toggleButton.style.transition = 'none';
             }
-            
+
             e.preventDefault();
         };
-        
-        const handleResize = (e) => {
+
+        const handleResize = (e: MouseEvent): void => {
             if (!isResizing) return;
-            
+
             const diff = startX - e.clientX; // Negative diff means expanding left
             const newWidth = Math.max(this.core.config.minimumPanelWidth, startWidth + diff);
-            
+
             container.style.width = `${newWidth}px`;
-            
+
             // Update CSS custom property for consistent theming
             document.documentElement.style.setProperty('--agentlet-panel-width', `${newWidth}px`);
-            
+
             // Update toggle button position if it exists
-            const toggleButton = this.ui.query('#agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle') as HTMLElement | null;
             if (toggleButton && !this.core.isMinimized) {
                 toggleButton.style.right = `${newWidth}px`;
             }
         };
-        
-        const stopResize = () => {
+
+        const stopResize = (): void => {
             if (!isResizing) return;
-            
+
             isResizing = false;
             document.removeEventListener('mousemove', handleResize);
             document.removeEventListener('mouseup', stopResize);
-            
+
             // Restore text selection
             document.body.style.userSelect = '';
-            
+
             // Restore transitions
             container.style.transition = '';
-            
+
             // Restore toggle button transitions
-            const toggleButton = this.ui.query('#agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle') as HTMLElement | null;
             if (toggleButton) {
                 toggleButton.style.transition = '';
             }
-            
+
             // Emit resize complete event
             this.core.eventBus.emit('panel:resizeComplete', { width: container.offsetWidth });
-            
+
             // Save panel width for the current module if env vars are available
             this.core.panelManager.savePanelWidthForModule(container.offsetWidth);
         };
-        
+
         resizeHandle.addEventListener('mousedown', startResize);
-        
+
         return resizeHandle;
     }
 
-    toggleCollapse() {
+    toggleCollapse(): void {
         const container = this.ui && this.ui.container;
-        const toggleButton = this.ui.query('#agentlet-toggle');
-        
+        const toggleButton = this.ui.query('#agentlet-toggle') as HTMLElement | null;
+
         // Safety check for container
         if (!container) return;
-        
+
         if (!this.core.isMinimized) {
             // Collapse
             container.style.transform = 'translateX(100%)';
-            
+
             // Update toggle button if it exists
             if (toggleButton) {
                 toggleButton.innerHTML = '◀';
                 toggleButton.style.right = '-2px';
             }
-            
+
             this.core.isMinimized = true;
-            
+
             // Show image overlay if minimizeWithImage is configured
             if (this.core.config.minimizeWithImage && typeof this.core.config.minimizeWithImage === 'string') {
                 this.showImageOverlay();
             }
-            
+
             this.core.eventBus.emit('ui:minimized');
         } else {
             // Expand
             container.style.transform = 'translateX(0)';
-            
+
             // Update toggle button if it exists
             if (toggleButton) {
                 toggleButton.innerHTML = '▶';
                 toggleButton.style.right = '';
             }
-            
+
             this.core.isMinimized = false;
-            
+
             // Restore panel width for current module when maximizing
             if (this.core.moduleRegistry.activeModule) {
                 this.core.panelManager.restorePanelWidthForModule(this.core.moduleRegistry.activeModule);
             }
-            
+
             // Don't hide image overlay - it should always be visible when minimizeWithImage is configured
             // The image overlay will handle the toggle functionality
-            
+
             this.core.eventBus.emit('ui:maximized');
         }
     }
 
-    showImageOverlay() {
+    showImageOverlay(): void {
         // Only show if minimizeWithImage is configured
         if (!this.core.config.minimizeWithImage || typeof this.core.config.minimizeWithImage !== 'string') {
             return;
         }
-        
+
         // Remove existing overlay if present
         this.hideImageOverlay();
-        
+
         // Create image overlay
         const imageOverlay = document.createElement('div');
         imageOverlay.className = 'agentlet-image-overlay';
         imageOverlay.innerHTML = `<img src="${this.core.config.minimizeWithImage}" alt="Agentlet" />`;
-        
+
         // Add click handler to toggle collapse
         imageOverlay.addEventListener('click', () => {
             this.toggleCollapse();
         });
-        
+
         // Add to document (the shadow root when shadowDom is enabled, otherwise document.body)
         this.ensureRoot();
-        this.ui.root.appendChild(imageOverlay);
+        (this.ui.root as ShadowRoot | HTMLElement).appendChild(imageOverlay);
 
         // Store reference
         this.ui.imageOverlay = imageOverlay;
     }
 
-    hideImageOverlay() {
+    hideImageOverlay(): void {
         if (this.ui.imageOverlay) {
             this.ui.imageOverlay.remove();
             this.ui.imageOverlay = null;
         }
     }
 
-    ensureImageOverlay() {
+    ensureImageOverlay(): void {
         if (this.core.config.minimizeWithImage && typeof this.core.config.minimizeWithImage === 'string') {
             this.showImageOverlay();
         }
