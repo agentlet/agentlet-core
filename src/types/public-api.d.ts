@@ -453,6 +453,7 @@ export interface PageHighlighterTourStep extends PageHighlighterHighlightOptions
 
 export interface PageHighlighterTourControl {
     steps: PageHighlighterTourStep[];
+    /** Live index of the step last navigated to by start()/next()/previous()/goTo(). */
     currentStep: number;
     start(): void;
     next(): boolean;
