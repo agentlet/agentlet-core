@@ -190,7 +190,11 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         // Cleanup the module
         if (typeof module.cleanup === 'function') {
-            await module.cleanup();
+            try {
+                await module.cleanup();
+            } catch (error) {
+                console.error(`Error cleaning up module ${module.name}:`, error);
+            }
         }
 
         this.modules.delete(moduleName);

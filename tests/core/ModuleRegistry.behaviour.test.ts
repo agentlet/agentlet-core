@@ -16,8 +16,9 @@
  *   `replaceState` overrides.
  * - activateModule()'s already-active no-op, its cascade-prevention guard,
  *   and `init()` only running once per module.
- * - unregister() propagating a rejecting `module.cleanup()` (unlike
- *   activateModule()/deactivateModule(), it has no try/catch around it).
+ * - unregister() removing the module and resolving `true` even when
+ *   `module.cleanup()` rejects, the same try/catch-and-log pattern used by
+ *   activateModule()/deactivateModule()/cleanup().
  * - setModuleChangeCallback().
  * - the registry/script-injection loading path (loadFromRegistry(),
  *   loadRegistryScript(), loadAgentletModule(), loadScript() - the
@@ -374,16 +375,20 @@ describe('ModuleRegistry behaviour characterization', () => {
     });
 
     describe('unregister()', () => {
-        test('propagates a rejecting module.cleanup() (no try/catch around it, unlike activateModule()/deactivateModule())', async () => {
+        test('resolves true and removes the module even when module.cleanup() rejects, logging the error', async () => {
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
             const module = new Module({ name: 'boom', patterns: ['x'] });
             const error = new Error('cleanup boom');
             module.cleanup = jest.fn().mockRejectedValue(error);
             registry.register(module);
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-            await expect(registry.unregister('boom')).rejects.toThrow('cleanup boom');
-            // The rejection happens before `this.modules.delete()` runs, so the module is still registered.
-            expect(registry.modules.has('boom')).toBe(true);
+            await expect(registry.unregister('boom')).resolves.toBe(true);
+
+            expect(consoleSpy).toHaveBeenCalledWith('Error cleaning up module boom:', error);
+            expect(registry.modules.has('boom')).toBe(false);
+            expect(mockEventBus.emit).toHaveBeenCalledWith('module:unregistered', { module: 'boom' });
+            consoleSpy.mockRestore();
         });
     });
 
