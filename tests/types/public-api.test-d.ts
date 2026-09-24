@@ -46,6 +46,8 @@ import type {
     MessageBubbleAPI,
     ShortcutManagerAPI,
     ShortcutsAPI,
+    StyleInjectorAPI,
+    UIManagerInternalAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -60,6 +62,8 @@ import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
 import { PanelManager } from '../../src/ui/PanelManager';
+import { StyleInjector } from '../../src/ui/StyleInjector';
+import { UIManager } from '../../src/ui/UIManager';
 import ElementSelector from '../../src/utils/ui/ElementSelector';
 import ScreenCapture from '../../src/utils/ui/ScreenCapture';
 import FormExtractor from '../../src/utils/data-processing/FormExtractor';
@@ -332,6 +336,15 @@ declare const realPanelManager: PanelManager;
 const panelManagerCheck: PanelManagerAPI = realPanelManager;
 void panelManagerCheck;
 
+const styleInjectorCheck: StyleInjectorAPI = new StyleInjector(new ThemeManager());
+void styleInjectorCheck;
+
+// UIManager's constructor takes an internal (unexported) core shape too
+// (UIManagerCore in src/ui/UIManager.ts), same situation as PanelManager above.
+declare const realUIManager: UIManager;
+const uiManagerCheck: UIManagerInternalAPI = realUIManager;
+void uiManagerCheck;
+
 // declared -> real
 //
 // The real classes intentionally have a larger public surface than these
@@ -382,6 +395,15 @@ void cookiesBackToReal;
 declare const declaredPanelManager: PanelManagerAPI;
 const panelManagerBackToReal: Pick<PanelManager, keyof PanelManagerAPI> = declaredPanelManager;
 void panelManagerBackToReal;
+
+declare const declaredStyleInjector: StyleInjectorAPI;
+const styleInjectorBackToReal: Pick<InstanceType<typeof StyleInjector>, keyof StyleInjectorAPI> = declaredStyleInjector;
+void styleInjectorBackToReal;
+
+declare const declaredUIManager: UIManagerInternalAPI;
+const uiManagerBackToReal: Pick<UIManager, keyof UIManagerInternalAPI> = declaredUIManager;
+void uiManagerBackToReal;
+
 declare const declaredStorageManager: StorageManagerAPI;
 const storageManagerBackToReal: Pick<InstanceType<typeof StorageManager>, keyof StorageManagerAPI> = declaredStorageManager;
 void storageManagerBackToReal;
