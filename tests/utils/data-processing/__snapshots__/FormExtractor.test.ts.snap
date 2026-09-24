@@ -1,0 +1,139 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`FormExtractor exportForAI matches the pinned snapshot shape 1`] = `
+{
+  "forms": [
+    {
+      "action": "/submit",
+      "elements": [
+        {
+          "disabled": false,
+          "id": "email",
+          "interactable": true,
+          "label": "Email",
+          "name": "email",
+          "placeholder": null,
+          "required": false,
+          "selector": "#email",
+          "type": "email",
+          "value": "a@b.com",
+          "visible": true,
+        },
+        {
+          "disabled": false,
+          "id": "country",
+          "interactable": true,
+          "label": null,
+          "name": "country",
+          "options": [
+            {
+              "disabled": false,
+              "selected": false,
+              "text": "France",
+              "value": "fr",
+            },
+            {
+              "disabled": false,
+              "selected": true,
+              "text": "USA",
+              "value": "us",
+            },
+          ],
+          "placeholder": null,
+          "required": false,
+          "selector": "#country",
+          "type": "select",
+          "value": {
+            "selectedOptions": [
+              {
+                "text": "USA",
+                "value": "us",
+              },
+            ],
+            "selectedValue": "us",
+          },
+          "visible": true,
+        },
+        {
+          "disabled": false,
+          "id": "agree",
+          "interactable": true,
+          "label": null,
+          "name": "agree",
+          "options": [
+            {
+              "checked": true,
+              "label": null,
+              "value": "on",
+            },
+          ],
+          "placeholder": null,
+          "required": false,
+          "selector": "#agree",
+          "type": "checkbox",
+          "value": {
+            "checked": true,
+            "value": "on",
+          },
+          "visible": true,
+        },
+      ],
+      "id": "f1",
+      "method": "post",
+      "name": null,
+      "selector": "#f1",
+    },
+  ],
+  "metadata": {
+    "extractedAt": Any<String>,
+    "title": "",
+    "totalElements": 4,
+    "totalForms": 1,
+    "url": "http://localhost/",
+  },
+  "standaloneElements": [
+    {
+      "disabled": false,
+      "id": "standaloneSearch",
+      "interactable": true,
+      "label": null,
+      "name": "standaloneSearch",
+      "placeholder": "Search",
+      "required": false,
+      "selector": "#standaloneSearch",
+      "type": "search",
+      "value": null,
+      "visible": true,
+    },
+  ],
+}
+`;
+
+exports[`FormExtractor quickExport matches the pinned snapshot shape 1`] = `
+[
+  {
+    "label": null,
+    "name": "s",
+    "options": [
+      {
+        "disabled": false,
+        "selected": true,
+        "text": "One",
+        "value": "1",
+      },
+    ],
+    "required": false,
+    "selector": "#s",
+    "type": "select",
+    "value": {
+      "selectedOptions": [
+        {
+          "text": "One",
+          "value": "1",
+        },
+      ],
+      "selectedValue": "1",
+    },
+  },
+]
+`;
