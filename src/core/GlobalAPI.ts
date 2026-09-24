@@ -14,10 +14,7 @@ import PageHighlighter from '../utils/ui/PageHighlighter.js';
 import { Z_INDEX, createZIndexConstants, detectMaxZIndex, suggestAgentletZIndexBase, analyzeZIndexDistribution } from '../utils/ui/ZIndex.js';
 import type {
     AgentletAPI,
-    AgentletUtils,
-    ElementSelectorConstructor,
-    ScriptInjectorConstructor,
-    PageHighlighterAPI
+    AgentletUtils
 } from '../types/public-api';
 
 export class GlobalAPI {
@@ -39,36 +36,33 @@ export class GlobalAPI {
 
         // Expose utility classes for creating new instances
         //
-        // ElementSelector/ScriptInjector (and the still-`.js` utility classes
-        // instantiated into `utils` below) predate this file's conversion and
-        // are out of scope for it. Without JSDoc types, tsc infers their
-        // shape/constructor signatures loosely from usage (e.g. an untyped
-        // `attributes: {}` field, or a `constructor(librarySetup = null)`
-        // whose inferred parameter type is just `null`), which doesn't line
-        // up with the richer hand-written declarations in public-api.d.ts -
-        // drift that predates this file being typed at all and is invisible
-        // until something typed (this file) crosses the boundary into them.
-        // Fixing that drift belongs to converting those classes themselves,
-        // not to this conversion, so the casts below (`unknown`/`never`,
-        // never `any`) bridge the boundary without changing any runtime call.
-        window.agentlet.ElementSelectorClass = ElementSelector as unknown as ElementSelectorConstructor;
-        window.agentlet.ScriptInjectorClass = ScriptInjector as unknown as ScriptInjectorConstructor;
-
-        // MessageBubble's real (inferred) constructor takes no parameters -
-        // the theme argument below is pre-existing dead code, silently
-        // dropped by JS at runtime; only the cast is new here.
-        const MessageBubbleFlexible = MessageBubble as unknown as new (theme?: unknown) => MessageBubble;
+        // ElementSelector and ScriptInjector are already `.ts` and implement
+        // `ElementSelectorAPI`/`ScriptInjectorAPI` (with matching statics for
+        // ScriptInjector), so their classes satisfy
+        // `ElementSelectorConstructor`/`ScriptInjectorConstructor` directly -
+        // no cast needed.
+        window.agentlet.ElementSelectorClass = ElementSelector;
+        window.agentlet.ScriptInjectorClass = ScriptInjector;
 
         // Expose utilities
-        const utils = {
+        //
+        // MessageBubble's constructor takes no parameters; passing a theme
+        // here was pre-existing dead code (silently dropped by JS at
+        // runtime even before this conversion), so it is simply dropped
+        // rather than kept as an inert argument.
+        //
+        // `PageHighlighter: null` below is overwritten a few lines down
+        // (PageHighlighter is constructed separately, inside a try/catch,
+        // since its constructor can throw) - it exists purely so this object
+        // satisfies `AgentletUtils` without a cast; nothing reads
+        // `utils.PageHighlighter` in between.
+        const utils: AgentletUtils = {
             ElementSelector: new ElementSelector(),
             Dialog: new Dialog({ theme: this.core.themeManager.getTheme() }),
-            MessageBubble: new MessageBubbleFlexible(this.core.themeManager.getTheme()),
-            // `librarySetup` below: same drift as above, real constructor
-            // parameter inferred as `null | undefined` only.
-            ScreenCapture: new ScreenCapture(this.core.librarySetup as never),
+            MessageBubble: new MessageBubble(),
+            ScreenCapture: new ScreenCapture(this.core.librarySetup),
             ScriptInjector: new ScriptInjector(),
-            PDFProcessor: new PDFProcessor(this.core.librarySetup as never),
+            PDFProcessor: new PDFProcessor(this.core.librarySetup),
             shortcuts: this.core.shortcutManager ? this.core.shortcutManager.createProxy() : null,
             // Z-Index utilities for agentlet development
             zIndex: {
@@ -77,9 +71,10 @@ export class GlobalAPI {
                 analyze: analyzeZIndexDistribution,
                 constants: Z_INDEX,
                 createConstants: createZIndexConstants
-            }
+            },
+            PageHighlighter: null
         };
-        window.agentlet.utils = utils as unknown as AgentletUtils;
+        window.agentlet.utils = utils;
 
         // Point Dialog/MessageBubble at the UI root immediately if it already
         // exists (defensive: setupGlobalAccess() normally runs from the
@@ -93,7 +88,7 @@ export class GlobalAPI {
 
         // Add PageHighlighter with error handling
         try {
-            window.agentlet.utils.PageHighlighter = new PageHighlighter() as unknown as PageHighlighterAPI;
+            window.agentlet.utils.PageHighlighter = new PageHighlighter();
             console.log('✅ PageHighlighter instantiated successfully');
         } catch (error) {
             console.error('❌ Failed to instantiate PageHighlighter:', error);

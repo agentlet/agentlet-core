@@ -2,19 +2,73 @@
  * ShortcutManager - Keyboard shortcuts management using hotkeys-js
  * Provides easy registration and management of keyboard shortcuts for Agentlet
  */
+import type { ShortcutInfo, ShortcutManagerAPI, ShortcutRegisterOptions, ShortcutsAPI } from '../../types/public-api';
 
 // Modifiers whose combinations never produce ordinary typed text. Shift is
 // deliberately excluded: shift+s is how a user types an uppercase S.
 const SUPPRESSIBLE_MODIFIERS = /(^|\+)\s*(ctrl|control|cmd|command|alt|option|meta)\s*\+/i;
 
 /**
+ * Minimal shape of the object hotkeys-js passes as the second argument to a
+ * bound callback. Only the member this file reads (`shortcut`) is modeled -
+ * not the package's own richer `HotkeysEvent` type - and the index
+ * signature keeps it structurally assignable to the broader
+ * `Record<string, unknown>` handler type the public callback signature
+ * uses (see `ShortcutRegisterOptions`/`ShortcutsAPI` in public-api.d.ts).
+ */
+interface HotkeysHandler {
+    shortcut?: string;
+    // hotkeys-js does not export a stable handler contract; other fields are
+    // genuinely dynamic, hence `unknown` rather than a fuller shape.
+    [key: string]: unknown;
+}
+
+/**
+ * Minimal shape of the `hotkeys-js` library this file actually uses (a
+ * global exposed via `window.hotkeys`, or handed to init() once
+ * LibrarySetup lazily loads it) - not the whole surface the package's own
+ * bundled types describe, mirroring how other converted utilities (e.g.
+ * ScreenCapture.ts's `Html2CanvasFn`) type third-party globals locally.
+ */
+interface HotkeysLike {
+    (keys: string, scope: string, callback: (event: KeyboardEvent, handler: HotkeysHandler) => void): void;
+    filter: (event: KeyboardEvent) => boolean;
+    unbind(keys?: string, scope?: string): void;
+}
+
+/**
+ * Minimal shape of `src/libraries/LibrarySetup.js` this file actually uses -
+ * deliberately not the whole class, just the one method `ensureHotkeys()`
+ * calls. `LibrarySetup.js` is untyped plain JS, so callers (GlobalAPI.js)
+ * pass a real `LibrarySetup` instance duck-typed against this interface.
+ */
+interface LibrarySetupLike {
+    ensureLibrary(name: string): Promise<boolean>;
+}
+
+/**
+ * Accessed through this helper (via `window`) rather than a bare
+ * `window.hotkeys` property read scattered through the file, since there is
+ * no ambient type declaration for it under strict tsc.
+ */
+function getWindowHotkeys(): HotkeysLike | undefined {
+    return (window as unknown as { hotkeys?: HotkeysLike }).hotkeys;
+}
+
+/** Best-effort extraction of a `.message` string from an unknown error-like value. */
+function extractMessage(error: unknown): unknown {
+    return (error && typeof error === 'object' && 'message' in error)
+        ? (error as { message?: unknown }).message
+        : undefined;
+}
+
+/**
  * Whether a matched shortcut carries a modifier that makes suppressing the
  * browser default safe inside an input field.
- * @param {Object} handler - hotkeys-js handler for the matched combination
- * @param {string} registeredKeys - Combinations the shortcut was registered with
- * @returns {boolean}
+ * @param handler - hotkeys-js handler for the matched combination
+ * @param registeredKeys - Combinations the shortcut was registered with
  */
-function hasSuppressibleModifier(handler, registeredKeys) {
+function hasSuppressibleModifier(handler: HotkeysHandler | null | undefined, registeredKeys: string): boolean {
     // handler.shortcut is the single combination that actually matched, which
     // is more precise than the registered string when several were given at
     // once (for example 'ctrl+;,cmd+;'). Fall back to the registered string.
@@ -32,10 +86,9 @@ function hasSuppressibleModifier(handler, registeredKeys) {
  * element inside it. `composedPath()[0]` returns the innermost original
  * target regardless of shadow boundaries, so it is preferred whenever it is
  * available.
- * @param {Event} event - The event to resolve the real target for
- * @returns {EventTarget|null}
+ * @param event - The event to resolve the real target for
  */
-function getEventTarget(event) {
+function getEventTarget(event: Event): EventTarget | null {
     if (event && typeof event.composedPath === 'function') {
         const path = event.composedPath();
         if (path && path.length > 0) {
@@ -54,102 +107,117 @@ function getEventTarget(event) {
  * shortcut has never been blocked while one is focused (browsers already
  * use letter keys to jump to a matching option there). Keep it that way
  * unless a concrete regression shows otherwise.
- * @param {EventTarget|null} target - The candidate target element
- * @returns {boolean}
+ * @param target - The candidate target element
  */
-function isEditableTarget(target) {
+function isEditableTarget(target: EventTarget | null): boolean {
     if (!target || typeof target !== 'object') {
         return false;
     }
-    const tagName = target.tagName;
-    return tagName === 'INPUT' || tagName === 'TEXTAREA' || !!target.isContentEditable;
+    // EventTarget doesn't expose `tagName`/`isContentEditable` itself - duck
+    // type the two members read below, exactly as the pre-conversion code
+    // accessed them without a static type.
+    const candidate = target as { tagName?: unknown; isContentEditable?: unknown };
+    const tagName = candidate.tagName;
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || !!candidate.isContentEditable;
 }
 
-class ShortcutManager {
-    constructor(librarySetup = null) {
+/** Registered shortcut config with every `ShortcutRegisterOptions` default filled in. */
+type ShortcutConfig = Required<ShortcutRegisterOptions>;
+
+interface ShortcutRegistryEntry {
+    callback: (event: KeyboardEvent, handler: HotkeysHandler) => void;
+    config: ShortcutConfig;
+    registered: Date;
+}
+
+class ShortcutManager implements ShortcutManagerAPI {
+    librarySetup: LibrarySetupLike | null;
+    shortcuts: Map<string, ShortcutRegistryEntry>;
+    enabled: boolean;
+    hotkeys: HotkeysLike | null; // Will be set when hotkeys-js is available
+
+    constructor(librarySetup: LibrarySetupLike | null = null) {
         this.librarySetup = librarySetup;
         this.shortcuts = new Map();
         this.enabled = true;
-        this.hotkeys = null; // Will be set when hotkeys-js is available
-        
+        this.hotkeys = null;
+
         console.log('⌨️ ShortcutManager initialized');
     }
-    
+
     /**
      * Check if hotkeys-js is available
-     * @returns {boolean}
      */
-    isHotkeysAvailable() {
-        return typeof window.hotkeys !== 'undefined' || this.hotkeys !== null;
+    isHotkeysAvailable(): boolean {
+        return typeof getWindowHotkeys() !== 'undefined' || this.hotkeys !== null;
     }
-    
+
     /**
      * Ensure hotkeys-js library is loaded
-     * @returns {Promise<boolean>}
      */
-    async ensureHotkeys() {
+    async ensureHotkeys(): Promise<boolean> {
         if (this.isHotkeysAvailable()) {
             return true;
         }
-        
+
         if (this.librarySetup) {
             try {
                 console.log('⌨️ Loading hotkeys-js library for keyboard shortcuts...');
                 const success = await this.librarySetup.ensureLibrary('hotkeys');
-                if (success && window.hotkeys) {
-                    this.init(window.hotkeys);
+                const windowHotkeys = getWindowHotkeys();
+                if (success && windowHotkeys) {
+                    this.init(windowHotkeys);
                 }
                 return success;
             } catch (error) {
-                console.warn('⌨️ Failed to load hotkeys-js library:', error.message);
+                console.warn('⌨️ Failed to load hotkeys-js library:', extractMessage(error));
                 return false;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Initialize with hotkeys-js library
-     * @param {Object} hotkeysLib - The hotkeys-js library instance
+     * @param hotkeysLib - The hotkeys-js library instance
      */
-    init(hotkeysLib) {
+    init(hotkeysLib: HotkeysLike): void {
         this.hotkeys = hotkeysLib;
-        
+
         // Configure hotkeys-js
-        this.hotkeys.filter = (_event) => {
+        this.hotkeys.filter = (_event: KeyboardEvent): boolean => {
             // Allow shortcuts to work even in input fields if explicitly configured
             return true;
         };
-        
+
         console.log('⌨️ ShortcutManager initialized with hotkeys-js');
     }
-    
+
     /**
      * Register a keyboard shortcut
-     * @param {string} keys - Key combination (e.g., 'ctrl+k', 'shift+shift', 'cmd+/')
-     * @param {Function} callback - Function to call when shortcut is triggered
-     * @param {Object} options - Additional options
-     * @param {string} options.description - Description of what the shortcut does
-     * @param {boolean} options.preventDefault - Whether to prevent default behavior (default: true)
-     * @param {boolean} options.stopPropagation - Whether to stop event propagation (default: true)
-     * @param {string} options.scope - Scope for the shortcut (default: 'all')
-     * @param {boolean} options.allowInInputs - Allow shortcut to work in input fields (default: false)
-     * @returns {Promise<boolean>} - True if registered successfully
+     * @param keys - Key combination (e.g., 'ctrl+k', 'shift+shift', 'cmd+/')
+     * @param callback - Function to call when shortcut is triggered
+     * @param options - Additional options
+     * @returns True if registered successfully
      */
-    async register(keys, callback, options = {}) {
+    async register(
+        keys: string,
+        callback: (event: KeyboardEvent, handler: HotkeysHandler) => void,
+        options: ShortcutRegisterOptions = {}
+    ): Promise<boolean> {
         const hotkeysAvailable = await this.ensureHotkeys();
         if (!hotkeysAvailable) {
             console.warn('⌨️ Hotkeys library not available. Keyboard shortcuts are disabled.');
             return false;
         }
-        
+
         if (!keys || typeof callback !== 'function') {
             console.error('⌨️ Invalid shortcut registration: keys and callback are required');
             return false;
         }
-        
-        const config = {
+
+        const config: ShortcutConfig = {
             description: options.description || `Shortcut for ${keys}`,
             preventDefault: options.preventDefault !== false,
             stopPropagation: options.stopPropagation !== false,
@@ -157,20 +225,20 @@ class ShortcutManager {
             allowInInputs: options.allowInInputs || false,
             ...options
         };
-        
+
         // Wrap callback with our logic
-        const wrappedCallback = (event, handler) => {
+        const wrappedCallback = (event: KeyboardEvent, handler: HotkeysHandler): void => {
             if (!this.enabled) {
                 return;
             }
-            
+
             // Check if we should allow this shortcut in input fields. Resolve
             // the real target through composedPath() so an event dispatched
             // inside the agentlet panel's shadow root is not seen as the
             // opaque shadow host.
             const target = getEventTarget(event);
             const isInput = isEditableTarget(target);
-            
+
             if (isInput && !config.allowInInputs) {
                 // The shortcut does not fire, but hotkeys-js still matched the
                 // combination, and the browser has not acted on the event yet.
@@ -195,14 +263,14 @@ class ShortcutManager {
             if (config.stopPropagation) {
                 event.stopPropagation();
             }
-            
+
             try {
                 callback(event, handler);
             } catch (error) {
                 console.error(`⌨️ Error in shortcut callback for ${keys}:`, error);
             }
         };
-        
+
         // Register with hotkeys-js
         if (this.hotkeys && typeof this.hotkeys === 'function') {
             this.hotkeys(keys, config.scope, wrappedCallback);
@@ -210,51 +278,51 @@ class ShortcutManager {
             console.error('⌨️ Hotkeys library not properly initialized');
             return false;
         }
-        
+
         // Store in our registry
         this.shortcuts.set(keys, {
             callback,
             config,
             registered: new Date()
         });
-        
+
         console.log(`⌨️ Registered shortcut: ${keys} - ${config.description}`);
         return true;
     }
-    
+
     /**
      * Unregister a keyboard shortcut
-     * @param {string} keys - Key combination to unregister
-     * @param {string} scope - Scope to unregister from (default: 'all')
-     * @returns {boolean} - True if unregistered successfully
+     * @param keys - Key combination to unregister
+     * @param scope - Scope to unregister from (default: 'all')
+     * @returns True if unregistered successfully
      */
-    unregister(keys, scope = 'all') {
+    unregister(keys: string, scope: string = 'all'): boolean {
         if (!this.hotkeys) {
             console.warn('⌨️ Hotkeys library not initialized');
             return false;
         }
-        
+
         this.hotkeys.unbind(keys, scope);
         this.shortcuts.delete(keys);
-        
+
         console.log(`⌨️ Unregistered shortcut: ${keys}`);
         return true;
     }
-    
+
     /**
      * Enable or disable all shortcuts
-     * @param {boolean} enabled - Whether shortcuts should be enabled
+     * @param enabled - Whether shortcuts should be enabled
      */
-    setEnabled(enabled) {
+    setEnabled(enabled: boolean): void {
         this.enabled = enabled;
         console.log(`⌨️ Shortcuts ${enabled ? 'enabled' : 'disabled'}`);
     }
-    
+
     /**
      * Get all registered shortcuts
-     * @returns {Array} - Array of shortcut information
+     * @returns Array of shortcut information
      */
-    getShortcuts() {
+    getShortcuts(): ShortcutInfo[] {
         return Array.from(this.shortcuts.entries()).map(([keys, data]) => ({
             keys,
             description: data.config.description,
@@ -263,38 +331,41 @@ class ShortcutManager {
             allowInInputs: data.config.allowInInputs
         }));
     }
-    
+
     /**
      * Check if a shortcut is registered
-     * @param {string} keys - Key combination to check
-     * @returns {boolean} - True if registered
+     * @param keys - Key combination to check
+     * @returns True if registered
      */
-    isRegistered(keys) {
+    isRegistered(keys: string): boolean {
         return this.shortcuts.has(keys);
     }
-    
+
     /**
      * Clear all registered shortcuts
      */
-    clear() {
+    clear(): void {
         if (!this.hotkeys) {
             return;
         }
-        
+
         // Unbind all shortcuts
         for (const [keys, data] of this.shortcuts) {
             this.hotkeys.unbind(keys, data.config.scope);
         }
-        
+
         this.shortcuts.clear();
         console.log('⌨️ All shortcuts cleared');
     }
-    
+
     /**
      * Register common Agentlet shortcuts
-     * @param {Object} config - Configuration object
+     * @param config - Configuration object
      */
-    async registerDefaultShortcuts(config = {}) {
+    async registerDefaultShortcuts(config: {
+        quickCommandDialogShortcut?: boolean;
+        quickCommandCallback?: (result: unknown) => void;
+    } = {}): Promise<void> {
         if (!window.agentlet?.utils?.Dialog) {
             console.warn('⌨️ Dialog not available, skipping default shortcuts');
             return;
@@ -302,7 +373,7 @@ class ShortcutManager {
 
         // Ctrl/Cmd + ; - Quick Command (only if enabled)
         if (config.quickCommandDialogShortcut) {
-            const callback = config.quickCommandCallback || ((result) => {
+            const callback = config.quickCommandCallback || ((result: unknown) => {
                 if (result) {
                     console.log('⌨️ Quick command:', result);
                     // Here you could add logic to parse and execute commands
@@ -316,7 +387,7 @@ class ShortcutManager {
                 allowInInputs: false
             });
         }
-        
+
         // Escape - Close dialogs (handled by Dialog class, but we can add global escape)
         await this.register('esc', () => {
             if (window.agentlet?.utils?.Dialog?.isActive) {
@@ -326,21 +397,21 @@ class ShortcutManager {
             description: 'Close active dialog',
             allowInInputs: true
         });
-        
+
         console.log('⌨️ Default Agentlet shortcuts registered');
     }
-    
+
     /**
      * Show help dialog with all registered shortcuts
      */
-    showHelp() {
+    showHelp(): void {
         if (!window.agentlet?.utils?.Dialog) {
             console.warn('⌨️ Dialog not available for shortcuts help');
             return;
         }
-        
+
         const shortcuts = this.getShortcuts();
-        const shortcutsList = shortcuts.map(shortcut => 
+        const shortcutsList = shortcuts.map(shortcut =>
             `<tr>
                 <td style="padding: 8px; border: 1px solid #ddd; font-family: monospace; background: #f8f9fa;">
                     <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 12px;">
@@ -353,7 +424,7 @@ class ShortcutManager {
                 </td>
             </tr>`
         ).join('');
-        
+
         const content = `
             <div style="max-height: 400px; overflow-y: auto;">
                 <p>Currently registered keyboard shortcuts:</p>
@@ -369,7 +440,7 @@ class ShortcutManager {
                         ${shortcutsList || '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #666;">No shortcuts registered</td></tr>'}
                     </tbody>
                 </table>
-                
+
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 4px;">
                     <h4 style="margin: 0 0 10px 0; color: #007bff;">💡 Tips:</h4>
                     <ul style="margin: 0; padding-left: 20px;">
@@ -380,7 +451,7 @@ class ShortcutManager {
                 </div>
             </div>
         `;
-        
+
         window.agentlet.utils.Dialog.show('info', {
             title: 'Keyboard Shortcuts',
             message: content,
@@ -391,11 +462,11 @@ class ShortcutManager {
             ]
         });
     }
-    
+
     /**
      * Create a proxy object for global access
      */
-    createProxy() {
+    createProxy(): ShortcutsAPI {
         return {
             register: (keys, callback, options) => this.register(keys, callback, options),
             unregister: (keys, scope) => this.unregister(keys, scope),
