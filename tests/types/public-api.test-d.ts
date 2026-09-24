@@ -66,6 +66,9 @@ window.agentlet.utils.Dialog.showProgress({ title: 'Working', totalSteps: 3 }).u
 window.agentlet.utils.Dialog.setRoot(document.body);
 window.agentlet.utils.MessageBubble.setRoot(null);
 
+const dialogRoot: ShadowRoot | HTMLElement = window.agentlet.utils.Dialog.getRoot();
+void dialogRoot;
+
 /* -------------------------------------------------------------- */
 /* Shadow DOM UI root                                               */
 /* -------------------------------------------------------------- */
