@@ -86,6 +86,7 @@ interface ModuleRegistryTestInstance {
     deactivateModule(context?: ModuleActivationContext): Promise<void>;
     checkUrlChange(): void;
     startUrlMonitoring(): void;
+    stopUrlMonitoring(): void;
     setModuleChangeCallback(callback: (module: AgentletModule | null, context?: ModuleActivationContext) => void): void;
     loadFromRegistry(registryUrl?: string | null): Promise<void>;
     loadRegistryScript(url: string): Promise<unknown>;
@@ -118,10 +119,11 @@ class RealCustomEvent<T = unknown> extends Event {
     }
 }
 
-// The constructor calls startUrlMonitoring(), which sets a 1s setInterval
-// that is never cleared (a pre-existing quirk - see tests/core/ModuleRegistry.test.js's
-// own top-level jest.useFakeTimers() for precedent); fake timers keep that
-// from leaving real dangling timers across every test in this file.
+// The constructor calls startUrlMonitoring(), which sets a 1s setInterval;
+// most tests here never call cleanup()/stopUrlMonitoring() to clear it (see
+// tests/core/ModuleRegistry.test.js's own top-level jest.useFakeTimers() for
+// precedent), so fake timers keep that from leaving real dangling timers
+// across every test in this file.
 jest.useFakeTimers();
 
 // Captured once, before any ModuleRegistry instance can wrap them, so every
@@ -259,6 +261,62 @@ describe('ModuleRegistry behaviour characterization', () => {
             expect(window.location.pathname).toBe('/replaced-page');
             jest.advanceTimersByTime(100);
             expect(checkUrlChangeSpy).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('startUrlMonitoring() / stopUrlMonitoring() - lifecycle', () => {
+        test('a second startUrlMonitoring() call while monitoring is active does not install a second interval', () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+            checkUrlChangeSpy.mockClear();
+
+            registry.startUrlMonitoring();
+
+            jest.advanceTimersByTime(1000);
+            expect(checkUrlChangeSpy).toHaveBeenCalledTimes(1);
+        });
+
+        test('cleanup() stops the interval, removes the popstate listener, and restores history.pushState/replaceState', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+
+            await registry.cleanup();
+            checkUrlChangeSpy.mockClear();
+
+            jest.advanceTimersByTime(5000);
+            history.pushState({}, '', '/after-cleanup-push');
+            history.replaceState({}, '', '/after-cleanup-replace');
+            window.dispatchEvent(new Event('popstate'));
+            jest.advanceTimersByTime(1000);
+
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
+            expect(history.pushState).toBe(nativePushState);
+            expect(history.replaceState).toBe(nativeReplaceState);
+        });
+
+        test('when another script wraps history.pushState after startUrlMonitoring(), cleanup() leaves that wrapper in place and calling it stays harmless', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+
+            // A later script wraps pushState again, on top of ours.
+            const ourPushState = history.pushState;
+            const outerPushState = function (...args: Parameters<History['pushState']>): void {
+                ourPushState.apply(history, args);
+            };
+            history.pushState = outerPushState;
+
+            await registry.cleanup();
+            checkUrlChangeSpy.mockClear();
+
+            // Not restored: it isn't ours to touch.
+            expect(history.pushState).toBe(outerPushState);
+
+            // The call still reaches our (now-inert) wrapper through the
+            // chain, but the cleaned-up registry no longer reacts to it.
+            history.pushState({}, '', '/through-outer-wrapper');
+            jest.advanceTimersByTime(1000);
+
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
         });
     });
 
