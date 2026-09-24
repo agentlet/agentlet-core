@@ -1043,8 +1043,12 @@ export interface FormElementInfo {
     interactable: boolean;
     label: string | null;
     options: FormElementOptionsInfo;
-    /** Only present when `includeBoundingBoxes` was passed. */
-    boundingBox?: { x: number; y: number; width: number; height: number; visible: boolean };
+    /**
+     * Only present when `includeBoundingBoxes` was passed. `null` in the
+     * (practically unreachable outside a real DOM) case where the element
+     * has no `getBoundingClientRect` method at all.
+     */
+    boundingBox?: { x: number; y: number; width: number; height: number; visible: boolean } | null;
 }
 
 export interface FormGroup {
@@ -1071,6 +1075,11 @@ export interface FormExtractionResult {
     extractedAt: string;
 }
 
+/** The shape `cleanElementForAI()` assigns to a select's or a radio/checkbox's `options`, once cleaned for AI consumption. */
+export type CleanFormElementOptions =
+    | Array<{ value: string; text: string; selected: boolean; disabled: boolean }>
+    | Array<{ value: string; checked: boolean; label: string | null }>;
+
 export interface CleanFormElement {
     type: string;
     id: string | null;
@@ -1083,9 +1092,7 @@ export interface CleanFormElement {
     disabled: boolean;
     visible: boolean;
     interactable: boolean;
-    options?:
-        | Array<{ value: string; text: string; selected: boolean; disabled: boolean }>
-        | Array<{ value: string; checked: boolean; label: string | null }>;
+    options?: CleanFormElementOptions;
 }
 
 export interface AIFormExport {
@@ -1109,7 +1116,13 @@ export interface QuickExportField {
     label: string | null;
     value: FormElementValue;
     required: boolean;
-    options: FormElementOptionsInfo;
+    /**
+     * `quickExport()` builds this from `exportForAI()`'s already-cleaned
+     * elements (`CleanFormElement`), not from the raw `FormElementOptionsInfo`
+     * shape - so this is the cleaned options array, with a falsy value
+     * coerced to `null` rather than left `undefined`.
+     */
+    options: CleanFormElementOptions | null;
 }
 
 /** Value type accepted when filling a single form field. */

@@ -2,50 +2,96 @@
  * TableExtractor - Simplified table data extraction with optional Excel export
  * Basic functionality with optional pagination and Excel features
  */
+import type {
+    TableData,
+    TableAllPagesData,
+    TableExtractionOptions,
+    TableExtractAllOptions,
+    TableDownloadOptions,
+    TableDownloadResult,
+    TableExtractAndDownloadOptions,
+    TableExtractorAPI,
+    TablesAPI,
+    LibrarySetupAPI
+} from '../../types/public-api';
 
-class TableExtractor {
-    constructor(librarySetup = null) {
+/**
+ * Minimal shape of the SheetJS (`xlsx`) global this file reads - only the
+ * members actually called, not the full `@types/...`-style surface.
+ * SheetJS is never imported; `LibrarySetup.setupXLSX()` (see
+ * `src/libraries/LibrarySetup.js`) assigns it onto `window.XLSX` at
+ * runtime, so it is read through `getXLSXGlobal()` (via `globalThis`)
+ * rather than a `window.XLSX` typed as part of the global `Window`
+ * interface - the same approach `ScriptInjector.ts` uses for the `chrome`
+ * global.
+ */
+interface XLSXWorkbook {
+    SheetNames: string[];
+    Sheets: Record<string, unknown>;
+}
+
+interface XLSXLibrary {
+    utils: {
+        book_new(): XLSXWorkbook;
+        aoa_to_sheet(data: unknown[][]): unknown;
+        book_append_sheet(workbook: XLSXWorkbook, worksheet: unknown, sheetName: string): void;
+    };
+    writeFile(workbook: XLSXWorkbook, filename: string): void;
+}
+
+function getXLSXGlobal(): XLSXLibrary | undefined {
+    return (globalThis as unknown as { XLSX?: XLSXLibrary }).XLSX;
+}
+
+/** The element clicked to advance to the next page; matches whatever `nextButtonSelector` resolves to, not necessarily a `<button>`. */
+interface PaginationTriggerElement extends Element {
+    disabled?: boolean;
+    click(): void;
+}
+
+class TableExtractor implements TableExtractorAPI {
+    librarySetup: LibrarySetupAPI | null;
+
+    constructor(librarySetup: LibrarySetupAPI | null = null) {
         this.librarySetup = librarySetup;
     }
-    
+
     /**
      * Check if Excel export is available
-     * @returns {boolean}
      */
-    isExcelExportAvailable() {
-        return typeof window.XLSX !== 'undefined';
+    isExcelExportAvailable(): boolean {
+        return typeof getXLSXGlobal() !== 'undefined';
     }
-    
+
     /**
      * Ensure XLSX library is loaded
-     * @returns {Promise<boolean>}
      */
-    async ensureXLSX() {
+    async ensureXLSX(): Promise<boolean> {
         if (this.isExcelExportAvailable()) {
             return true;
         }
-        
+
         if (this.librarySetup) {
             try {
                 console.log('📊 Loading XLSX library for Excel export...');
                 return await this.librarySetup.ensureLibrary('xlsx');
             } catch (error) {
-                console.warn('📊 Failed to load XLSX library:', error.message);
+                console.warn('📊 Failed to load XLSX library:', (error as Error).message);
                 return false;
             }
         }
-        
+
         return false;
     }
 
     /**
      * Extract data from a table element
-     * @param {HTMLElement} tableElement - The table element to extract from
-     * @param {Object} options - Extraction options
-     * @returns {Object} Extracted table data with headers and rows
+     * @param tableElement - The table element to extract from
+     * @param options - Extraction options
+     * @returns Extracted table data with headers and rows
      */
-    extractTableData(tableElement, options = {}) {
-        const config = {
+    extractTableData(tableElement: HTMLTableElement, options: TableExtractionOptions = {}): TableData {
+        const config: TableExtractionOptions = {
             includeHeaderRow: true,
             trimWhitespace: true,
             ...options
@@ -55,7 +101,7 @@ class TableExtractor {
             throw new Error('Invalid table element provided');
         }
 
-        const data = {
+        const data: TableData = {
             headers: [],
             rows: [],
             metadata: {
@@ -67,10 +113,10 @@ class TableExtractor {
         };
 
         // Extract headers
-        const headerRows = tableElement.querySelectorAll('thead tr, tr:first-child');
+        const headerRows = tableElement.querySelectorAll<HTMLTableRowElement>('thead tr, tr:first-child');
         if (headerRows.length > 0 && config.includeHeaderRow) {
             const headerRow = headerRows[0];
-            data.headers = Array.from(headerRow.querySelectorAll('th, td')).map(cell => {
+            data.headers = Array.from(headerRow.querySelectorAll<HTMLTableCellElement>('th, td')).map(cell => {
                 let text = cell.textContent || cell.innerText || '';
                 if (config.trimWhitespace) {
                     text = text.trim().replace(/\s+/g, ' ');
@@ -80,22 +126,22 @@ class TableExtractor {
         }
 
         // Extract data rows
-        let bodyRows = tableElement.querySelectorAll('tbody tr');
+        let bodyRows: HTMLTableRowElement[] | NodeListOf<HTMLTableRowElement> = tableElement.querySelectorAll<HTMLTableRowElement>('tbody tr');
         if (bodyRows.length === 0) {
             // If no tbody, get all rows except first (header)
-            const allRows = tableElement.querySelectorAll('tr');
+            const allRows = tableElement.querySelectorAll<HTMLTableRowElement>('tr');
             bodyRows = Array.from(allRows).slice(config.includeHeaderRow ? 1 : 0);
         }
 
-        data.rows = Array.from(bodyRows).map((row, _rowIndex) => {
-            const cells = Array.from(row.querySelectorAll('td, th')).map(cell => {
+        data.rows = Array.from(bodyRows).map((row) => {
+            const cells = Array.from(row.querySelectorAll<HTMLTableCellElement>('td, th')).map(cell => {
                 let text = cell.textContent || cell.innerText || '';
                 if (config.trimWhitespace) {
                     text = text.trim().replace(/\s+/g, ' ');
                 }
                 return text;
             });
-            
+
             return cells;
         });
 
@@ -110,19 +156,19 @@ class TableExtractor {
 
     /**
      * Extract all data from a paginated table (basic implementation)
-     * @param {HTMLElement} tableElement - The table element
-     * @param {Object} options - Extraction options
-     * @returns {Promise<Object>} Complete table data from all pages
+     * @param tableElement - The table element
+     * @param options - Extraction options
+     * @returns Complete table data from all pages
      */
-    async extractAllPages(tableElement, options = {}) {
-        const config = {
+    async extractAllPages(tableElement: HTMLTableElement, options: TableExtractAllOptions = {}): Promise<TableAllPagesData> {
+        const config: TableExtractAllOptions = {
             maxPages: 10,
             delay: 1000,
             nextButtonSelector: null, // User must provide if pagination is needed
             ...options
         };
 
-        const allData = {
+        const allData: TableAllPagesData = {
             headers: [],
             rows: [],
             metadata: {
@@ -142,12 +188,12 @@ class TableExtractor {
         // Only handle pagination if nextButtonSelector is provided
         if (config.nextButtonSelector) {
             let currentPage = 1;
-            
+
             console.log(`📊 Extracted page ${currentPage} (${firstPageData.rows.length} rows)`);
 
-            while (currentPage < config.maxPages) {
-                const nextButton = document.querySelector(config.nextButtonSelector);
-                
+            while (currentPage < (config.maxPages as number)) {
+                const nextButton = document.querySelector<PaginationTriggerElement>(config.nextButtonSelector);
+
                 if (!nextButton || nextButton.disabled || nextButton.classList.contains('disabled')) {
                     break;
                 }
@@ -156,18 +202,18 @@ class TableExtractor {
                     // Click next button
                     console.log(`📊 Going to page ${currentPage + 1}...`);
                     nextButton.click();
-                    
+
                     // Wait for page to load
                     await new Promise(resolve => setTimeout(resolve, config.delay));
-                    
+
                     currentPage++;
-                    
+
                     // Extract data from new page
                     const pageData = this.extractTableData(tableElement, config);
                     allData.rows = [...allData.rows, ...pageData.rows];
-                    
+
                     console.log(`📊 Extracted page ${currentPage} (${pageData.rows.length} rows)`);
-                    
+
                 } catch (error) {
                     console.warn(`📊 Error on page ${currentPage}:`, error);
                     break;
@@ -189,12 +235,12 @@ class TableExtractor {
 
     /**
      * Convert table data to Excel workbook
-     * @param {Object} tableData - Data from extractTableData/extractAllPages
-     * @param {Object} options - Export options
-     * @returns {Object} Excel workbook object
+     * @param tableData - Data from extractTableData/extractAllPages
+     * @param options - Export options
+     * @returns Excel workbook object
      */
-    createExcelWorkbook(tableData, options = {}) {
-        const config = {
+    createExcelWorkbook(tableData: TableData | TableAllPagesData, options: TableDownloadOptions = {}): XLSXWorkbook {
+        const config: TableDownloadOptions = {
             sheetName: 'Table Data',
             includeMetadata: false,
             ...options
@@ -204,47 +250,49 @@ class TableExtractor {
             throw new Error('XLSX library not loaded. Please include SheetJS in your page.');
         }
 
-        const workbook = window.XLSX.utils.book_new();
-        const excelData = [];
-        
+        const xlsx = getXLSXGlobal() as XLSXLibrary;
+        const workbook = xlsx.utils.book_new();
+        const excelData: unknown[][] = [];
+
         // Add headers if they exist
         if (tableData.headers && tableData.headers.length > 0) {
             excelData.push(tableData.headers);
         }
-        
+
         // Add data rows
         if (tableData.rows && tableData.rows.length > 0) {
             excelData.push(...tableData.rows);
         }
 
         // Create worksheet
-        const worksheet = window.XLSX.utils.aoa_to_sheet(excelData);
-        window.XLSX.utils.book_append_sheet(workbook, worksheet, config.sheetName);
-        
+        const worksheet = xlsx.utils.aoa_to_sheet(excelData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, config.sheetName as string);
+
         // Add simple metadata sheet if requested
         if (config.includeMetadata && tableData.metadata) {
-            const metadataData = [
+            const metadataData: unknown[][] = [
                 ['Property', 'Value'],
                 ['Extracted At', tableData.metadata.extractedAt],
                 ['Total Rows', tableData.metadata.totalRows],
                 ['Total Columns', tableData.metadata.totalColumns],
-                ['Total Pages', tableData.metadata.totalPages || 1]
+                // Only TableAllPagesData's metadata carries totalPages; TableData's does not.
+                ['Total Pages', (tableData.metadata as Partial<TableAllPagesData['metadata']>).totalPages || 1]
             ];
-            
-            const metadataSheet = window.XLSX.utils.aoa_to_sheet(metadataData);
-            window.XLSX.utils.book_append_sheet(workbook, metadataSheet, 'Metadata');
+
+            const metadataSheet = xlsx.utils.aoa_to_sheet(metadataData);
+            xlsx.utils.book_append_sheet(workbook, metadataSheet, 'Metadata');
         }
-        
+
         return workbook;
     }
 
     /**
      * Download table data as Excel file
-     * @param {Object} tableData - Data from extractTableData/extractAllPages
-     * @param {Object} options - Download options
+     * @param tableData - Data from extractTableData/extractAllPages
+     * @param options - Download options
      */
-    async downloadAsExcel(tableData, options = {}) {
-        const config = {
+    async downloadAsExcel(tableData: TableData | TableAllPagesData, options: TableDownloadOptions = {}): Promise<TableDownloadResult> {
+        const config: TableDownloadOptions = {
             filename: `table-data-${new Date().toISOString().split('T')[0]}.xlsx`,
             sheetName: 'Table Data',
             includeMetadata: false,
@@ -257,13 +305,13 @@ class TableExtractor {
             if (!xlsxAvailable) {
                 throw new Error('Excel export not available. XLSX library could not be loaded.');
             }
-            
+
             const workbook = this.createExcelWorkbook(tableData, config);
-            window.XLSX.writeFile(workbook, config.filename);
-            
+            (getXLSXGlobal() as XLSXLibrary).writeFile(workbook, config.filename as string);
+
             return {
                 success: true,
-                filename: config.filename,
+                filename: config.filename as string,
                 rowCount: tableData.rows?.length || 0,
                 columnCount: tableData.metadata?.totalColumns || 0
             };
@@ -271,17 +319,17 @@ class TableExtractor {
             console.error('Error creating Excel file:', error);
             return {
                 success: false,
-                error: error.message
+                error: (error as Error).message
             };
         }
     }
 
     /**
      * Extract table and download as Excel in one step
-     * @param {HTMLElement} tableElement - The table element
-     * @param {Object} options - Combined extraction and download options
+     * @param tableElement - The table element
+     * @param options - Combined extraction and download options
      */
-    async extractAndDownload(tableElement, options = {}) {
+    async extractAndDownload(tableElement: HTMLTableElement, options: TableExtractAndDownloadOptions = {}): Promise<TableDownloadResult> {
         const {
             includePagination = false,
             filename,
@@ -290,22 +338,22 @@ class TableExtractor {
         } = options;
 
         try {
-            let tableData;
-            
+            let tableData: TableData | TableAllPagesData;
+
             if (includePagination && nextButtonSelector) {
                 tableData = await this.extractAllPages(tableElement, { ...extractOptions, nextButtonSelector });
             } else {
                 tableData = this.extractTableData(tableElement, extractOptions);
             }
-            
-            const downloadOptions = { filename, ...options };
+
+            const downloadOptions: TableDownloadOptions = { filename, ...options };
             return await this.downloadAsExcel(tableData, downloadOptions);
-            
+
         } catch (error) {
             console.error('Error in extractAndDownload:', error);
             return {
                 success: false,
-                error: error.message
+                error: (error as Error).message
             };
         }
     }
@@ -313,13 +361,13 @@ class TableExtractor {
     /**
      * Create a proxy object for global access
      */
-    createProxy() {
+    createProxy(): TablesAPI {
         return {
             extract: (element, options) => this.extractTableData(element, options),
             extractAll: (element, options) => this.extractAllPages(element, options),
             download: (tableData, options) => this.downloadAsExcel(tableData, options),
             extractAndDownload: (element, options) => this.extractAndDownload(element, options),
-            
+
             // Direct access to utility
             extractor: this
         };
