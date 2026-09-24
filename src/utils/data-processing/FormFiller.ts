@@ -2,21 +2,66 @@
  * FormFiller - Simplified form filling utility
  * Fills form elements within a specific parent context to avoid collisions
  */
+import type {
+    FormFillValue,
+    FormFillSelectorValues,
+    FormFillOptions,
+    FormFillElementInfo,
+    FormFillDetail,
+    FormFillResult,
+    FormFillMultipleEntry,
+    AIFormExport,
+    FormFillerAPI
+} from '../../types/public-api';
 
-class FormFiller {
+/** One normalized `{selector, value, type}` entry, after `normalizeSelectorValues()` folds either input shape into this. */
+interface NormalizedFillItem {
+    selector: string;
+    value: FormFillValue;
+    type: string | null;
+}
+
+/**
+ * FormFiller reads/writes `<input>`/`<select>`/`<textarea>` members through
+ * runtime duck typing keyed off `elementType` (itself derived from the
+ * element's own tag/type), the same approach as `FormExtractor.ts`'s
+ * `FormControlElement`. Every member here is optional because the element
+ * matched by an arbitrary CSS selector could structurally be any `Element`
+ * at the type level, even though in practice `elementType` gates each
+ * runtime read to a compatible member.
+ */
+interface FormFillElement extends HTMLElement {
+    type?: string;
+    name?: string;
+    value?: string;
+    checked?: boolean;
+    disabled?: boolean;
+    readOnly?: boolean;
+    min?: string;
+    max?: string;
+}
+
+/** The internal (pre-validation-error) outcome of `performFill()`. */
+type PerformFillResult =
+    | { success: true; finalValue: unknown }
+    | { success: false; error: string };
+
+class FormFiller implements FormFillerAPI {
+    debugMode: boolean;
+
     constructor() {
         this.debugMode = false;
     }
 
     /**
      * Fill form elements within a parent context
-     * @param {Element} parentElement - Parent element to limit scope
-     * @param {Object|Array} selectorValues - Selectors and their values
-     * @param {Object} options - Filling options
-     * @returns {Object} Filling results
+     * @param parentElement - Parent element to limit scope
+     * @param selectorValues - Selectors and their values
+     * @param options - Filling options
+     * @returns Filling results
      */
-    fillForm(parentElement, selectorValues, options = {}) {
-        const config = {
+    fillForm(parentElement: Element, selectorValues: FormFillSelectorValues, options: FormFillOptions = {}): FormFillResult {
+        const config: FormFillOptions = {
             triggerEvents: options.triggerEvents !== false,
             skipDisabled: options.skipDisabled !== false,
             skipReadonly: options.skipReadonly !== false,
@@ -26,24 +71,24 @@ class FormFiller {
             ...options
         };
 
-        this.debugMode = config.debugMode;
+        this.debugMode = config.debugMode as boolean;
 
         if (this.debugMode) {
             console.log('🔧 FormFiller: Starting fill operation', {
-                parentElement: parentElement.tagName + (parentElement.id ? `#${parentElement.id}` : ''),
+                parentElement: parentElement.tagName + ((parentElement as HTMLElement).id ? `#${(parentElement as HTMLElement).id}` : ''),
                 selectorCount: Array.isArray(selectorValues) ? selectorValues.length : Object.keys(selectorValues).length
             });
         }
 
         // Normalize input to consistent format
         const normalizedValues = this.normalizeSelectorValues(selectorValues);
-        
+
         // Validate parent element
         if (!parentElement || !parentElement.querySelector) {
             throw new Error('Invalid parent element provided');
         }
 
-        const results = {
+        const results: FormFillResult = {
             total: normalizedValues.length,
             successful: 0,
             failed: 0,
@@ -57,7 +102,7 @@ class FormFiller {
             try {
                 const result = this.fillSingleElement(parentElement, item, config);
                 results.details.push(result);
-                
+
                 if (result.status === 'success') {
                     results.successful++;
                 } else if (result.status === 'skipped') {
@@ -66,14 +111,14 @@ class FormFiller {
                     results.failed++;
                 }
             } catch (error) {
-                const errorResult = {
+                const errorResult: FormFillDetail = {
                     selector: item.selector,
                     status: 'error',
-                    error: error.message,
+                    error: (error as Error).message,
                     element: null
                 };
                 results.details.push(errorResult);
-                results.errors.push(error.message);
+                results.errors.push((error as Error).message);
                 results.failed++;
             }
         }
@@ -88,7 +133,7 @@ class FormFiller {
     /**
      * Normalize selector values to consistent format
      */
-    normalizeSelectorValues(selectorValues) {
+    normalizeSelectorValues(selectorValues: FormFillSelectorValues): NormalizedFillItem[] {
         if (Array.isArray(selectorValues)) {
             return selectorValues.map(item => ({
                 selector: item.selector,
@@ -109,19 +154,19 @@ class FormFiller {
     /**
      * Fill a single element within the parent context
      */
-    fillSingleElement(parentElement, item, config) {
+    fillSingleElement(parentElement: Element, item: NormalizedFillItem, config: FormFillOptions): FormFillDetail {
         const { selector, value, type } = item;
-        
+
         if (this.debugMode) {
             console.log(`🎯 Attempting to fill: ${selector} = ${value}`);
         }
 
         // Find element within parent context
-        let element;
+        let element: FormFillElement | null;
         try {
-            element = parentElement.querySelector(selector);
+            element = parentElement.querySelector<FormFillElement>(selector);
         } catch (error) {
-            throw new Error(`Invalid selector: ${selector} - ${error.message}`);
+            throw new Error(`Invalid selector: ${selector} - ${(error as Error).message}`);
         }
 
         if (!element) {
@@ -129,7 +174,7 @@ class FormFiller {
         }
 
         // Verify element is within parent (extra safety check)
-        if (!parentElement.contains(element) && parentElement !== element) {
+        if (!parentElement.contains(element) && (parentElement as Element) !== element) {
             throw new Error(`Element found but not within parent context: ${selector}`);
         }
 
@@ -146,7 +191,7 @@ class FormFiller {
 
         // Determine element type if not provided
         const elementType = type || this.getElementType(element);
-        
+
         // Validate value if requested
         if (config.validateFields && !this.validateValue(element, value, elementType)) {
             throw new Error(`Invalid value for ${elementType} element: ${value}`);
@@ -154,7 +199,7 @@ class FormFiller {
 
         // Perform the fill
         const fillResult = this.performFill(element, value, elementType, config);
-        
+
         if (fillResult.success) {
             return {
                 selector,
@@ -170,26 +215,26 @@ class FormFiller {
     /**
      * Check if element should be skipped
      */
-    shouldSkipElement(element, config) {
+    shouldSkipElement(element: FormFillElement, config: FormFillOptions): string | null {
         if (config.skipDisabled && element.disabled) {
             return 'Element is disabled';
         }
-        
+
         if (config.skipReadonly && element.readOnly) {
             return 'Element is readonly';
         }
-        
+
         if (config.skipHidden && this.isHidden(element)) {
             return 'Element is hidden';
         }
-        
+
         return null;
     }
 
     /**
      * Check if element is hidden
      */
-    isHidden(element) {
+    isHidden(element: FormFillElement): boolean {
         return element.type === 'hidden' ||
                element.style.display === 'none' ||
                element.style.visibility === 'hidden' ||
@@ -201,33 +246,33 @@ class FormFiller {
     /**
      * Get element type for filling logic
      */
-    getElementType(element) {
+    getElementType(element: FormFillElement): string {
         const tagName = element.tagName.toLowerCase();
-        
+
         if (tagName === 'input') {
             return element.type || 'text';
         }
-        
+
         return tagName;
     }
 
     /**
      * Basic value validation for common types
      */
-    validateValue(element, value, elementType) {
+    validateValue(element: FormFillElement, value: FormFillValue, elementType: string): boolean {
         switch (elementType) {
         case 'email':
-            return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            return !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value as string);
         case 'number':
         case 'range': {
-            const num = parseFloat(value);
+            const num = parseFloat(value as string);
             if (isNaN(num)) return false;
             if (element.min && num < parseFloat(element.min)) return false;
             if (element.max && num > parseFloat(element.max)) return false;
             return true;
         }
         case 'select':
-            return !value || element.querySelector(`option[value="${value}"]`) !== null;
+            return !value || element.querySelector(`option[value="${value as string}"]`) !== null;
         default:
             return true; // Most types accept any string
         }
@@ -236,9 +281,9 @@ class FormFiller {
     /**
      * Perform the actual fill operation
      */
-    performFill(element, value, elementType, config) {
-        let finalValue = value;
-        
+    performFill(element: FormFillElement, value: FormFillValue, elementType: string, config: FormFillOptions): PerformFillResult {
+        let finalValue: unknown = value;
+
         try {
             switch (elementType) {
             case 'text':
@@ -257,7 +302,7 @@ class FormFiller {
             case 'month':
             case 'week':
             case 'color':
-                element.value = value;
+                element.value = value as string;
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'input');
@@ -266,7 +311,7 @@ class FormFiller {
                 break;
 
             case 'select':
-                element.value = value;
+                element.value = value as string;
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'change');
@@ -303,7 +348,7 @@ class FormFiller {
 
             default:
                 // Fallback for unknown types
-                element.value = value;
+                element.value = value as string;
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'change');
@@ -319,7 +364,7 @@ class FormFiller {
         } catch (error) {
             return {
                 success: false,
-                error: error.message
+                error: (error as Error).message
             };
         }
     }
@@ -327,7 +372,7 @@ class FormFiller {
     /**
      * Parse boolean values from various formats
      */
-    parseBoolean(value) {
+    parseBoolean(value: unknown): boolean {
         if (typeof value === 'boolean') return value;
         if (typeof value === 'string') {
             const lower = value.toLowerCase();
@@ -340,7 +385,7 @@ class FormFiller {
     /**
      * Dispatch DOM events
      */
-    dispatchEvent(element, eventType) {
+    dispatchEvent(element: Element, eventType: string): void {
         try {
             const event = new Event(eventType, { bubbles: true, cancelable: true });
             element.dispatchEvent(event);
@@ -357,7 +402,7 @@ class FormFiller {
     /**
      * Get basic element information for results
      */
-    getElementInfo(element) {
+    getElementInfo(element: FormFillElement): FormFillElementInfo {
         return {
             tagName: element.tagName.toLowerCase(),
             type: this.getElementType(element),
@@ -371,14 +416,19 @@ class FormFiller {
     /**
      * Fill form using AI-exported data format
      */
-    fillFromAIData(parentElement, aiFormData, userValues, options = {}) {
-        const selectorValues = [];
-        
+    fillFromAIData(
+        parentElement: Element,
+        aiFormData: AIFormExport,
+        userValues: Record<string, FormFillValue>,
+        options: FormFillOptions = {}
+    ): FormFillResult {
+        const selectorValues: Array<{ selector: string; value: FormFillValue; type: string }> = [];
+
         // Process forms
         if (aiFormData.forms) {
             aiFormData.forms.forEach(form => {
                 form.elements.forEach(element => {
-                    const value = userValues[element.name] || userValues[element.id];
+                    const value = userValues[element.name as string] || userValues[element.id as string];
                     if (value !== undefined && element.interactable) {
                         selectorValues.push({
                             selector: element.selector,
@@ -389,11 +439,11 @@ class FormFiller {
                 });
             });
         }
-        
+
         // Process standalone elements
         if (aiFormData.standaloneElements) {
             aiFormData.standaloneElements.forEach(element => {
-                const value = userValues[element.name] || userValues[element.id];
+                const value = userValues[element.name as string] || userValues[element.id as string];
                 if (value !== undefined && element.interactable) {
                     selectorValues.push({
                         selector: element.selector,
@@ -403,24 +453,28 @@ class FormFiller {
                 }
             });
         }
-        
+
         return this.fillForm(parentElement, selectorValues, options);
     }
 
     /**
      * Fill multiple forms with basic retry logic
      */
-    async fillMultipleForms(parentElement, formDataArray, options = {}) {
-        const results = [];
-        
+    async fillMultipleForms(
+        parentElement: Element,
+        formDataArray: FormFillMultipleEntry[],
+        options: FormFillOptions = {}
+    ): Promise<FormFillResult[]> {
+        const results: FormFillResult[] = [];
+
         for (const formData of formDataArray) {
             const { selectors, retryAttempts = 1 } = formData;
-            let lastResult = null;
-            
+            let lastResult: FormFillResult | null = null;
+
             for (let attempt = 1; attempt <= retryAttempts; attempt++) {
                 try {
                     lastResult = this.fillForm(parentElement, selectors, options);
-                    
+
                     if (lastResult.failed === 0) {
                         break; // Success, no need to retry
                     }
@@ -431,19 +485,19 @@ class FormFiller {
                         failed: 1,
                         skipped: 0,
                         details: [],
-                        errors: [error.message]
+                        errors: [(error as Error).message]
                     };
                 }
-                
+
                 if (attempt < retryAttempts) {
                     // Wait before retry
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
-            
-            results.push(lastResult);
+
+            results.push(lastResult as FormFillResult);
         }
-        
+
         return results;
     }
 }

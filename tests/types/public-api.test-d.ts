@@ -37,6 +37,10 @@ import type {
     ElementSelectorAPI,
     ElementSelectorConstructor,
     ScreenCaptureAPI,
+    FormExtractorAPI,
+    FormFillerAPI,
+    TableExtractorAPI,
+    TablesAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -53,6 +57,9 @@ import Dialog from '../../src/utils/ui/Dialog';
 import { PanelManager } from '../../src/ui/PanelManager';
 import ElementSelector from '../../src/utils/ui/ElementSelector';
 import ScreenCapture from '../../src/utils/ui/ScreenCapture';
+import FormExtractor from '../../src/utils/data-processing/FormExtractor';
+import FormFiller from '../../src/utils/data-processing/FormFiller';
+import TableExtractor from '../../src/utils/data-processing/TableExtractor';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -270,6 +277,10 @@ const elementSelectorCtorCheck: ElementSelectorConstructor = ElementSelector;
 const elementSelectorInstanceCheck: ElementSelectorAPI = new ElementSelector();
 declare const librarySetupStub: { ensureLibrary(name: string): Promise<boolean> };
 const screenCaptureCheck: ScreenCaptureAPI = new ScreenCapture(librarySetupStub);
+const formExtractorCheck: FormExtractorAPI = new FormExtractor();
+const formFillerCheck: FormFillerAPI = new FormFiller();
+const tableExtractorCheck: TableExtractorAPI = new TableExtractor();
+const tablesApiCheck: TablesAPI = new TableExtractor().createProxy();
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -288,6 +299,10 @@ void authApiCheck;
 void elementSelectorCtorCheck;
 void elementSelectorInstanceCheck;
 void screenCaptureCheck;
+void formExtractorCheck;
+void formFillerCheck;
+void tableExtractorCheck;
+void tablesApiCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -370,6 +385,21 @@ void elementSelectorBackToReal;
 declare const declaredScreenCapture: ScreenCaptureAPI;
 const screenCaptureBackToReal: Pick<InstanceType<typeof ScreenCapture>, keyof ScreenCaptureAPI> = declaredScreenCapture;
 void screenCaptureBackToReal;
+declare const declaredFormExtractor: FormExtractorAPI;
+const formExtractorBackToReal: Pick<InstanceType<typeof FormExtractor>, keyof FormExtractorAPI> = declaredFormExtractor;
+void formExtractorBackToReal;
+
+declare const declaredFormFiller: FormFillerAPI;
+const formFillerBackToReal: Pick<InstanceType<typeof FormFiller>, keyof FormFillerAPI> = declaredFormFiller;
+void formFillerBackToReal;
+
+declare const declaredTableExtractor: TableExtractorAPI;
+const tableExtractorBackToReal: Pick<InstanceType<typeof TableExtractor>, keyof TableExtractorAPI> = declaredTableExtractor;
+void tableExtractorBackToReal;
+
+declare const declaredTablesApi: TablesAPI;
+const tablesApiBackToReal: Pick<ReturnType<InstanceType<typeof TableExtractor>['createProxy']>, keyof TablesAPI> = declaredTablesApi;
+void tablesApiBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
