@@ -73,9 +73,6 @@ export function buildInputDialog(theme: DialogTheme, config: ResolvedInputConfig
     if (config.inputType === 'textarea') {
         const textarea = document.createElement('textarea');
         textarea.rows = config.rows;
-        if (!config.resizable) {
-            textarea.style.resize = 'none';
-        }
         input = textarea;
     } else {
         const textInput = document.createElement('input');
@@ -95,6 +92,12 @@ export function buildInputDialog(theme: DialogTheme, config: ResolvedInputConfig
         font-family: inherit;
         box-sizing: border-box;
     `;
+
+    // Must be applied after the cssText assignment above, which replaces
+    // the whole style attribute and would otherwise wipe this out.
+    if (input.tagName === 'TEXTAREA' && !config.resizable) {
+        input.style.resize = 'none';
+    }
 
     content.appendChild(input);
 

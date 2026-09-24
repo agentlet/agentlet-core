@@ -91,10 +91,9 @@ export interface DialogProgressOptions extends DialogProgressCallbacks {
     animated?: boolean;
     closable?: boolean;
     /**
-     * Known quirk: `completeProgress()` always auto-closes the dialog after
-     * 2000ms regardless of this option's value (the running code never
-     * actually reads it back). Documented here rather than "fixed" in the
-     * types, since the runtime behaviour is what it is.
+     * Whether `completeProgress()` auto-closes the dialog after 2000ms.
+     * Defaults to `true`; set `false` to keep the dialog open until it is
+     * closed explicitly (e.g. via `hide()` or a closable header button).
      */
     autoClose?: boolean;
     initialProgress?: number;

@@ -316,12 +316,12 @@ describe('Dialog', () => {
             expect(dialog.isActive).toBe(false);
         });
 
-        it('known quirk: Enter never activates the primary button, because browsers/jsdom normalize the inline "background: #007bff" style used to find it', () => {
+        it('Enter activates the primary button, found via its data-primary marker rather than the (browser-normalized) inline background style', () => {
             const cb = jest.fn();
             dialog.confirm('Sure?', 'Confirm', cb);
             pressKey(dialog, 'Enter');
-            expect(cb).not.toHaveBeenCalled();
-            expect(dialog.isActive).toBe(true);
+            expect(cb).toHaveBeenCalledWith('confirm');
+            expect(dialog.isActive).toBe(false);
         });
     });
 
@@ -369,10 +369,10 @@ describe('Dialog', () => {
             expect(textarea.rows).toBe(6);
         });
 
-        it('known quirk: resizable:false has no visible effect, because the later `input.style.cssText = ...` assignment overwrites the `resize: none` set just before it', () => {
+        it('resizable:false disables manual resize on the textarea', () => {
             dialog.showInput({ inputType: 'textarea', resizable: false }, jest.fn());
             const textarea = must(dialogEl(dialog).querySelector<HTMLTextAreaElement>('.agentlet-input-field'));
-            expect(textarea.style.resize).toBe('');
+            expect(textarea.style.resize).toBe('none');
         });
 
         it('Submit resolves with the input value, Cancel resolves with null', () => {
@@ -637,11 +637,19 @@ describe('Dialog', () => {
             expect(cb).toHaveBeenCalledWith(null);
         });
 
-        it('known quirk: clicking the overlay always closes the command dialog, even with closeOnOverlay:false, because dialog.dataset.closeOnOverlay is never actually set by the code', () => {
+        it('clicking the overlay closes the command dialog by default', () => {
+            const cb = jest.fn();
+            dialog.showCommandPrompt({}, cb);
+            clickOverlay(dialog);
+            expect(cb).toHaveBeenCalledWith(null);
+        });
+
+        it('closeOnOverlay:false keeps the command dialog open when the overlay is clicked', () => {
             const cb = jest.fn();
             dialog.showCommandPrompt({ closeOnOverlay: false }, cb);
             clickOverlay(dialog);
-            expect(cb).toHaveBeenCalledWith(null);
+            expect(cb).not.toHaveBeenCalled();
+            expect(dialog.isActive).toBe(true);
         });
 
         it('focuses the input synchronously after showing', () => {
@@ -737,12 +745,12 @@ describe('Dialog', () => {
             expect(dialog.isActive).toBe(false);
         });
 
-        it('known quirk: completeProgress() auto-closes even with autoClose:false, because dialog.dataset.autoClose is never actually set by the code', () => {
+        it('autoClose:false keeps the progress dialog open after completeProgress(), even once the 2000ms timer would have fired', () => {
             jest.useFakeTimers();
             dialog.showProgress({ autoClose: false });
             dialog.completeProgress();
             jest.advanceTimersByTime(2000);
-            expect(dialog.isActive).toBe(false);
+            expect(dialog.isActive).toBe(true);
         });
 
         it('closable close button cancels and hides with "cancel"', () => {
@@ -842,11 +850,19 @@ describe('Dialog', () => {
             expect(cb).toHaveBeenCalledWith('discard');
         });
 
-        it('known quirk: clicking the overlay always closes the fullscreen dialog, even with closeOnOverlay:false, because dialog.dataset.closeOnOverlay is never actually set by the code', () => {
+        it('clicking the overlay closes the fullscreen dialog by default', () => {
+            const cb = jest.fn();
+            dialog.showFullscreen({}, cb);
+            clickOverlay(dialog);
+            expect(cb).toHaveBeenCalledWith('cancel');
+        });
+
+        it('closeOnOverlay:false keeps the fullscreen dialog open when the overlay is clicked', () => {
             const cb = jest.fn();
             dialog.showFullscreen({ closeOnOverlay: false }, cb);
             clickOverlay(dialog);
-            expect(cb).toHaveBeenCalledWith('cancel');
+            expect(cb).not.toHaveBeenCalled();
+            expect(dialog.isActive).toBe(true);
         });
 
         it('Escape hides with "cancel"', () => {
