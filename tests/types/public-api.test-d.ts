@@ -41,6 +41,8 @@ import type {
     FormFillerAPI,
     TableExtractorAPI,
     TablesAPI,
+    PDFProcessorAPI,
+    AIManagerAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -60,6 +62,8 @@ import ScreenCapture from '../../src/utils/ui/ScreenCapture';
 import FormExtractor from '../../src/utils/data-processing/FormExtractor';
 import FormFiller from '../../src/utils/data-processing/FormFiller';
 import TableExtractor from '../../src/utils/data-processing/TableExtractor';
+import PDFProcessor from '../../src/utils/ai/PDFProcessor';
+import { AIManager } from '../../src/utils/ai/AIProvider';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -281,6 +285,9 @@ const formExtractorCheck: FormExtractorAPI = new FormExtractor();
 const formFillerCheck: FormFillerAPI = new FormFiller();
 const tableExtractorCheck: TableExtractorAPI = new TableExtractor();
 const tablesApiCheck: TablesAPI = new TableExtractor().createProxy();
+const pdfProcessorCheck: PDFProcessorAPI = new PDFProcessor();
+declare const envStub: EnvAPI;
+const aiManagerCheck: AIManagerAPI = new AIManager(envStub);
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -303,6 +310,8 @@ void formExtractorCheck;
 void formFillerCheck;
 void tableExtractorCheck;
 void tablesApiCheck;
+void pdfProcessorCheck;
+void aiManagerCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -400,6 +409,14 @@ void tableExtractorBackToReal;
 declare const declaredTablesApi: TablesAPI;
 const tablesApiBackToReal: Pick<ReturnType<InstanceType<typeof TableExtractor>['createProxy']>, keyof TablesAPI> = declaredTablesApi;
 void tablesApiBackToReal;
+
+declare const declaredPdfProcessor: PDFProcessorAPI;
+const pdfProcessorBackToReal: Pick<InstanceType<typeof PDFProcessor>, keyof PDFProcessorAPI> = declaredPdfProcessor;
+void pdfProcessorBackToReal;
+
+declare const declaredAiManager: AIManagerAPI;
+const aiManagerBackToReal: Pick<InstanceType<typeof AIManager>, keyof AIManagerAPI> = declaredAiManager;
+void aiManagerBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
