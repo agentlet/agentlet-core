@@ -34,6 +34,9 @@ import type {
     BoundStorageAPI,
     AuthManagerAPI,
     AuthAPI,
+    ElementSelectorAPI,
+    ElementSelectorConstructor,
+    ScreenCaptureAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -48,6 +51,8 @@ import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
 import { PanelManager } from '../../src/ui/PanelManager';
+import ElementSelector from '../../src/utils/ui/ElementSelector';
+import ScreenCapture from '../../src/utils/ui/ScreenCapture';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -261,6 +266,10 @@ const storageManagerCheck: StorageManagerAPI = new StorageManager();
 const boundStorageCheck: BoundStorageAPI = new StorageManager().createProxy('localStorage');
 const authManagerCheck: AuthManagerAPI = new AuthManager();
 const authApiCheck: AuthAPI = new AuthManager().createProxy();
+const elementSelectorCtorCheck: ElementSelectorConstructor = ElementSelector;
+const elementSelectorInstanceCheck: ElementSelectorAPI = new ElementSelector();
+declare const librarySetupStub: { ensureLibrary(name: string): Promise<boolean> };
+const screenCaptureCheck: ScreenCaptureAPI = new ScreenCapture(librarySetupStub);
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -276,6 +285,9 @@ void storageManagerCheck;
 void boundStorageCheck;
 void authManagerCheck;
 void authApiCheck;
+void elementSelectorCtorCheck;
+void elementSelectorInstanceCheck;
+void screenCaptureCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -350,6 +362,14 @@ void authManagerBackToReal;
 declare const declaredAuthApi: AuthAPI;
 const authApiBackToReal: Pick<ReturnType<InstanceType<typeof AuthManager>['createProxy']>, keyof AuthAPI> = declaredAuthApi;
 void authApiBackToReal;
+
+declare const declaredElementSelector: ElementSelectorAPI;
+const elementSelectorBackToReal: Pick<InstanceType<typeof ElementSelector>, keyof ElementSelectorAPI> = declaredElementSelector;
+void elementSelectorBackToReal;
+
+declare const declaredScreenCapture: ScreenCaptureAPI;
+const screenCaptureBackToReal: Pick<InstanceType<typeof ScreenCapture>, keyof ScreenCaptureAPI> = declaredScreenCapture;
+void screenCaptureBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */

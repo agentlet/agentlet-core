@@ -2,9 +2,50 @@
  * Screen Capture Utility for Agentlet Core
  * Provides DOM screenshot functionality using html2canvas
  */
+import type {
+    ScreenCaptureAPI,
+    Html2CanvasOptions,
+    ScreenCaptureAsDataURLOptions,
+    ScreenCaptureAsBlobOptions,
+    ScreenCaptureDownloadOptions,
+    ScreenCaptureRegion
+} from '../../types/public-api';
 
-export default class ScreenCapture {
-    constructor(librarySetup = null) {
+/**
+ * Minimal shape of `src/libraries/LibrarySetup.js` this file actually uses -
+ * deliberately not the whole class, just the one method `ensureHTML2Canvas()`
+ * calls. `LibrarySetup.js` is untyped plain JS, so callers (GlobalAPI.js)
+ * pass a real `LibrarySetup` instance duck-typed against this interface.
+ */
+interface LibrarySetupLike {
+    ensureLibrary(name: string): Promise<boolean>;
+}
+
+/** Signature of the global `html2canvas` function once the library is loaded. */
+type Html2CanvasFn = (element: Element, options: Html2CanvasOptions) => Promise<HTMLCanvasElement>;
+
+/**
+ * Accessed through this helper (via `window`) rather than a bare
+ * `html2canvas` identifier, since there is no ambient type declaration for
+ * it under strict tsc.
+ */
+function getHtml2Canvas(): Html2CanvasFn | undefined {
+    return (window as unknown as { html2canvas?: Html2CanvasFn }).html2canvas;
+}
+
+/** Best-effort extraction of a `.message` string from an unknown error-like value. */
+function extractMessage(error: unknown): unknown {
+    return (error && typeof error === 'object' && 'message' in error)
+        ? (error as { message?: unknown }).message
+        : undefined;
+}
+
+class ScreenCapture implements ScreenCaptureAPI {
+    librarySetup: LibrarySetupLike | null;
+    isCapturing: boolean;
+    defaultOptions: Html2CanvasOptions;
+
+    constructor(librarySetup: LibrarySetupLike | null = null) {
         this.librarySetup = librarySetup;
         this.isCapturing = false;
         this.defaultOptions = {
@@ -21,55 +62,53 @@ export default class ScreenCapture {
 
     /**
      * Check if screenshot capture is available
-     * @returns {boolean}
      */
-    isScreenCaptureAvailable() {
-        return typeof window.html2canvas !== 'undefined';
+    isScreenCaptureAvailable(): boolean {
+        return typeof getHtml2Canvas() !== 'undefined';
     }
-    
+
     /**
      * Ensure html2canvas library is loaded
-     * @returns {Promise<boolean>}
      */
-    async ensureHTML2Canvas() {
+    async ensureHTML2Canvas(): Promise<boolean> {
         if (this.isScreenCaptureAvailable()) {
             return true;
         }
-        
+
         if (this.librarySetup) {
             try {
                 console.log('📸 Loading html2canvas library for screenshot functionality...');
                 return await this.librarySetup.ensureLibrary('html2canvas');
             } catch (error) {
-                console.warn('📸 Failed to load html2canvas library:', error.message);
+                console.warn('📸 Failed to load html2canvas library:', extractMessage(error));
                 return false;
             }
         }
-        
+
         return false;
     }
 
     /**
      * Capture entire page as image
-     * @param {Object} options - html2canvas options
-     * @returns {Promise<HTMLCanvasElement>} Canvas element with screenshot
+     * @param options - html2canvas options
+     * @returns Canvas element with screenshot
      */
-    async capturePage(options = {}) {
+    async capturePage(options: Html2CanvasOptions = {}): Promise<HTMLCanvasElement> {
         const mergedOptions = { ...this.defaultOptions, ...options };
-        
+
         try {
             this.isCapturing = true;
             console.log('📸 Capturing full page...');
-            
+
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
             if (!html2canvasAvailable) {
                 throw new Error('html2canvas library not available. Screenshots are disabled.');
             }
-            
-            const canvas = await window.html2canvas(document.body, mergedOptions);
+
+            const canvas = await getHtml2Canvas()!(document.body, mergedOptions);
             console.log('📸 Page capture completed');
-            
+
             return canvas;
         } catch (error) {
             console.error('📸 Page capture failed:', error);
@@ -81,30 +120,30 @@ export default class ScreenCapture {
 
     /**
      * Capture specific element as image
-     * @param {HTMLElement} element - Element to capture
-     * @param {Object} options - html2canvas options
-     * @returns {Promise<HTMLCanvasElement>} Canvas element with screenshot
+     * @param element - Element to capture
+     * @param options - html2canvas options
+     * @returns Canvas element with screenshot
      */
-    async captureElement(element, options = {}) {
+    async captureElement(element: HTMLElement, options: Html2CanvasOptions = {}): Promise<HTMLCanvasElement> {
         if (!element || !(element instanceof HTMLElement)) {
             throw new Error('Invalid element provided for capture');
         }
 
         const mergedOptions = { ...this.defaultOptions, ...options };
-        
+
         try {
             this.isCapturing = true;
             console.log('📸 Capturing element:', element.tagName, element.id || element.className);
-            
+
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
             if (!html2canvasAvailable) {
                 throw new Error('html2canvas library not available. Screenshots are disabled.');
             }
-            
-            const canvas = await window.html2canvas(element, mergedOptions);
+
+            const canvas = await getHtml2Canvas()!(element, mergedOptions);
             console.log('📸 Element capture completed');
-            
+
             return canvas;
         } catch (error) {
             console.error('📸 Element capture failed:', error);
@@ -116,29 +155,29 @@ export default class ScreenCapture {
 
     /**
      * Capture element by selector
-     * @param {string} selector - CSS selector for element to capture
-     * @param {Object} options - html2canvas options
-     * @returns {Promise<HTMLCanvasElement>} Canvas element with screenshot
+     * @param selector - CSS selector for element to capture
+     * @param options - html2canvas options
+     * @returns Canvas element with screenshot
      */
     // eslint-disable-next-line require-await
-    async captureBySelector(selector, options = {}) {
+    async captureBySelector(selector: string, options: Html2CanvasOptions = {}): Promise<HTMLCanvasElement> {
         const element = document.querySelector(selector);
-        
+
         if (!element) {
             throw new Error(`Element not found with selector: ${selector}`);
         }
 
-        return this.captureElement(element, options);
+        return this.captureElement(element as HTMLElement, options);
     }
 
     /**
      * Convert canvas to data URL (base64)
-     * @param {HTMLCanvasElement} canvas - Canvas to convert
-     * @param {string} format - Image format ('image/png', 'image/jpeg', 'image/webp')
-     * @param {number} quality - Image quality (0-1, for JPEG/WebP)
-     * @returns {string} Data URL
+     * @param canvas - Canvas to convert
+     * @param format - Image format ('image/png', 'image/jpeg', 'image/webp')
+     * @param quality - Image quality (0-1, for JPEG/WebP)
+     * @returns Data URL
      */
-    canvasToDataURL(canvas, format = 'image/png', quality = 0.9) {
+    canvasToDataURL(canvas: HTMLCanvasElement, format: string = 'image/png', quality: number = 0.9): string {
         if (!canvas || !canvas.toDataURL) {
             throw new Error('Invalid canvas provided');
         }
@@ -153,13 +192,13 @@ export default class ScreenCapture {
 
     /**
      * Convert canvas to blob
-     * @param {HTMLCanvasElement} canvas - Canvas to convert
-     * @param {string} format - Image format ('image/png', 'image/jpeg', 'image/webp')
-     * @param {number} quality - Image quality (0-1, for JPEG/WebP)
-     * @returns {Promise<Blob>} Image blob
+     * @param canvas - Canvas to convert
+     * @param format - Image format ('image/png', 'image/jpeg', 'image/webp')
+     * @param quality - Image quality (0-1, for JPEG/WebP)
+     * @returns Image blob
      */
     // eslint-disable-next-line require-await
-    async canvasToBlob(canvas, format = 'image/png', quality = 0.9) {
+    async canvasToBlob(canvas: HTMLCanvasElement, format: string = 'image/png', quality: number = 0.9): Promise<Blob> {
         if (!canvas || !canvas.toBlob) {
             throw new Error('Invalid canvas provided');
         }
@@ -177,16 +216,16 @@ export default class ScreenCapture {
 
     /**
      * Capture and return as data URL (base64)
-     * @param {HTMLElement|string} target - Element or selector to capture
-     * @param {Object} options - Capture options
-     * @returns {Promise<string>} Data URL
+     * @param target - Element or selector to capture
+     * @param options - Capture options
+     * @returns Data URL
      */
-    async captureAsDataURL(target, options = {}) {
+    async captureAsDataURL(target?: HTMLElement | string, options: ScreenCaptureAsDataURLOptions = {}): Promise<string> {
         const { format = 'image/png', quality = 0.9, showInConsole = true, ...captureOptions } = options;
-        
-        let canvas;
+
+        let canvas: HTMLCanvasElement;
         let captureType = 'page';
-        
+
         if (typeof target === 'string') {
             canvas = await this.captureBySelector(target, captureOptions);
             captureType = 'element';
@@ -200,25 +239,25 @@ export default class ScreenCapture {
         }
 
         const dataURL = this.canvasToDataURL(canvas, format, quality);
-        
+
         // Display image in console for debugging (if enabled)
         if (showInConsole) {
             this.displayImageInConsole(dataURL, captureType);
         }
-        
+
         return dataURL;
     }
 
     /**
      * Capture and return as blob
-     * @param {HTMLElement|string} target - Element or selector to capture
-     * @param {Object} options - Capture options
-     * @returns {Promise<Blob>} Image blob
+     * @param target - Element or selector to capture
+     * @param options - Capture options
+     * @returns Image blob
      */
-    async captureAsBlob(target, options = {}) {
+    async captureAsBlob(target?: HTMLElement | string, options: ScreenCaptureAsBlobOptions = {}): Promise<Blob> {
         const { format = 'image/png', quality = 0.9, ...captureOptions } = options;
-        
-        let canvas;
+
+        let canvas: HTMLCanvasElement;
         if (typeof target === 'string') {
             canvas = await this.captureBySelector(target, captureOptions);
         } else if (target instanceof HTMLElement) {
@@ -233,10 +272,10 @@ export default class ScreenCapture {
 
     /**
      * Download captured image
-     * @param {HTMLElement|string} target - Element or selector to capture
-     * @param {Object} options - Capture and download options
+     * @param target - Element or selector to capture
+     * @param options - Capture and download options
      */
-    async downloadCapture(target, options = {}) {
+    async downloadCapture(target?: HTMLElement | string, options: ScreenCaptureDownloadOptions = {}): Promise<void> {
         const {
             filename = 'screenshot.png',
             format = 'image/png',
@@ -246,17 +285,17 @@ export default class ScreenCapture {
 
         try {
             const dataURL = await this.captureAsDataURL(target, { format, quality, ...captureOptions });
-            
+
             // Create download link
             const link = document.createElement('a');
             link.href = dataURL;
             link.download = filename;
             link.style.display = 'none';
-            
+
             document.body.appendChild(link);
             link.click();
             link.remove();
-            
+
             console.log('📸 Download initiated:', filename);
         } catch (error) {
             console.error('📸 Download failed:', error);
@@ -266,10 +305,10 @@ export default class ScreenCapture {
 
     /**
      * Copy captured image to clipboard (if supported)
-     * @param {HTMLElement|string} target - Element or selector to capture
-     * @param {Object} options - Capture options
+     * @param target - Element or selector to capture
+     * @param options - Capture options
      */
-    async copyToClipboard(target, options = {}) {
+    async copyToClipboard(target?: HTMLElement | string, options: ScreenCaptureAsBlobOptions = {}): Promise<void> {
         if (!navigator.clipboard || !navigator.clipboard.write) {
             throw new Error('Clipboard API not supported in this browser');
         }
@@ -277,7 +316,7 @@ export default class ScreenCapture {
         try {
             const blob = await this.captureAsBlob(target, options);
             const clipboardItem = new ClipboardItem({ [blob.type]: blob });
-            
+
             await navigator.clipboard.write([clipboardItem]);
             console.log('📸 Image copied to clipboard');
         } catch (error) {
@@ -288,14 +327,14 @@ export default class ScreenCapture {
 
     /**
      * Interactive element selector for capture
-     * @param {Object} options - Capture options
-     * @returns {Promise<string>} Data URL of captured element
+     * @param options - Capture options
+     * @returns Data URL of captured element
      */
     // eslint-disable-next-line require-await
-    async interactiveCapture(options = {}) {
+    async interactiveCapture(options: Html2CanvasOptions = {}): Promise<string> {
         const ElementSelector = window.agentlet.utils.ElementSelector;
         const MessageBubble = window.agentlet.utils.MessageBubble;
-        
+
         return new Promise((resolve, reject) => {
             const bubbleId = MessageBubble.loading('Click on an element to capture...', {
                 duration: 0,
@@ -307,18 +346,18 @@ export default class ScreenCapture {
                 try {
                     MessageBubble.hide(bubbleId);
                     MessageBubble.loading('Capturing element...');
-                    
-                    const dataURL = await this.captureAsDataURL(element, options);
-                    
+
+                    const dataURL = await this.captureAsDataURL(element as HTMLElement, options);
+
                     MessageBubble.hideAll();
-                    MessageBubble.success(`Element captured: ${info.tagName}${info.id ? `#${  info.id}` : ''}`, {
+                    MessageBubble.success(`Element captured: ${info.tagName}${info.id ? `#${info.id}` : ''}`, {
                         duration: 3000
                     });
-                    
+
                     resolve(dataURL);
                 } catch (error) {
                     MessageBubble.hideAll();
-                    MessageBubble.error(`Capture failed: ${  error.message}`);
+                    MessageBubble.error(`Capture failed: ${(error as Error).message}`);
                     reject(error);
                 }
             });
@@ -327,11 +366,11 @@ export default class ScreenCapture {
 
     /**
      * Capture visible viewport area
-     * @param {Object} options - Capture options
-     * @returns {Promise<HTMLCanvasElement>} Canvas with viewport screenshot
+     * @param options - Capture options
+     * @returns Canvas with viewport screenshot
      */
     // eslint-disable-next-line require-await
-    async captureViewport(options = {}) {
+    async captureViewport(options: Html2CanvasOptions = {}): Promise<HTMLCanvasElement> {
         const viewportOptions = {
             ...this.defaultOptions,
             ...options,
@@ -346,14 +385,14 @@ export default class ScreenCapture {
 
     /**
      * Capture specific region by coordinates
-     * @param {Object} region - Region coordinates {x, y, width, height}
-     * @param {Object} options - Capture options
-     * @returns {Promise<HTMLCanvasElement>} Canvas with region screenshot
+     * @param region - Region coordinates {x, y, width, height}
+     * @param options - Capture options
+     * @returns Canvas with region screenshot
      */
     // eslint-disable-next-line require-await
-    async captureRegion(region, options = {}) {
+    async captureRegion(region: ScreenCaptureRegion, options: Html2CanvasOptions = {}): Promise<HTMLCanvasElement> {
         const { x = 0, y = 0, width, height } = region;
-        
+
         if (!width || !height) {
             throw new Error('Width and height must be specified for region capture');
         }
@@ -372,28 +411,28 @@ export default class ScreenCapture {
 
     /**
      * Get capture status
-     * @returns {boolean} Whether capture is in progress
+     * @returns Whether capture is in progress
      */
-    isCapturingInProgress() {
+    isCapturingInProgress(): boolean {
         return this.isCapturing;
     }
 
     /**
      * Utility method to get image dimensions from data URL
-     * @param {string} dataURL - Image data URL
-     * @returns {Promise<{width: number, height: number}>} Image dimensions
+     * @param dataURL - Image data URL
+     * @returns Image dimensions
      */
     // eslint-disable-next-line require-await
-    async getImageDimensions(dataURL) {
+    async getImageDimensions(dataURL: string): Promise<{ width: number; height: number }> {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            img.onload = () => {
+            img.onload = (): void => {
                 resolve({
                     width: img.width,
                     height: img.height
                 });
             };
-            img.onerror = () => {
+            img.onerror = (): void => {
                 reject(new Error('Failed to load image'));
             };
             img.src = dataURL;
@@ -402,17 +441,17 @@ export default class ScreenCapture {
 
     /**
      * Display image in browser console for debugging
-     * @param {string} dataURL - Image data URL
-     * @param {string} captureType - Type of capture ('page' or 'element')
+     * @param dataURL - Image data URL
+     * @param captureType - Type of capture ('page' or 'element')
      */
-    displayImageInConsole(dataURL, captureType = 'image') {
+    displayImageInConsole(dataURL: string, captureType: string = 'image'): void {
         const emoji = captureType === 'page' ? '📄' : '📸';
         const title = captureType === 'page' ? 'Full page screenshot' : 'Captured image';
-        
+
         console.log(`${emoji} ${title} preview:`);
         console.log('%c ', `
-            font-size: 200px; 
-            background: url(${dataURL}) no-repeat center; 
+            font-size: 200px;
+            background: url(${dataURL}) no-repeat center;
             background-size: contain;
             padding: 50px 100px;
             border: 1px solid #ccc;
@@ -421,11 +460,14 @@ export default class ScreenCapture {
 
     /**
      * Create preview of captured image
-     * @param {string} dataURL - Image data URL
-     * @param {Object} options - Preview options
-     * @returns {HTMLElement} Preview element
+     * @param dataURL - Image data URL
+     * @param options - Preview options
+     * @returns Preview element
      */
-    createPreview(dataURL, options = {}) {
+    createPreview(
+        dataURL: string,
+        options: { maxWidth?: number; maxHeight?: number; border?: string; borderRadius?: string } = {}
+    ): HTMLElement {
         const {
             maxWidth = 300,
             maxHeight = 200,
@@ -447,3 +489,5 @@ export default class ScreenCapture {
         return preview;
     }
 }
+
+export default ScreenCapture;
