@@ -364,7 +364,7 @@ class ShortcutManager implements ShortcutManagerAPI {
      */
     async registerDefaultShortcuts(config: {
         quickCommandDialogShortcut?: boolean;
-        quickCommandCallback?: (result: unknown) => void;
+        quickCommandCallback?: ((result: unknown) => void) | null;
     } = {}): Promise<void> {
         if (!window.agentlet?.utils?.Dialog) {
             console.warn('⌨️ Dialog not available, skipping default shortcuts');

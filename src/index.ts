@@ -37,13 +37,137 @@ import html2canvas from 'html2canvas';
 import * as pdfjsLib from 'pdfjs-dist';
 import hotkeys from 'hotkeys-js';
 
+import type {
+    AgentletAPI,
+    AgentletCoreConfig,
+    AgentletModule,
+    AgentletPerformanceReport,
+    AIManagerAPI,
+    AuthManagerAPI,
+    CookiesAPI,
+    EnvAPI,
+    EventBusAPI,
+    FormExtractorAPI,
+    FormFillerAPI,
+    ModuleActivationContext,
+    ModuleManagerAPI,
+    ModuleMountContext,
+    ModuleMountTrigger,
+    ShortcutManagerAPI,
+    StorageManagerAPI,
+    TableExtractorAPI,
+    ThemeManagerAPI,
+    UIAPI
+} from './types/public-api';
+
+/**
+ * `_beforeMount()`/`_afterUnmount()` are internal `Module` lifecycle hooks
+ * (see `src/core/Module.ts`) intentionally left off the public
+ * `AgentletModule` type in `src/types/public-api.d.ts` - duck-typed modules
+ * that don't extend `Module` never have them either, hence the
+ * `typeof x === 'function'` guards below (unchanged from the original JS).
+ */
+type ModuleWithInternalMountHooks = AgentletModule & {
+    _beforeMount?(container: HTMLElement, context: ModuleMountContext): void;
+    _afterUnmount?(): void;
+};
+
+/**
+ * `showEnvVarsDialog()` below stashes two short-lived callbacks on `window`
+ * for the inline `onclick="addEnvVar()"`/`onclick="removeEnvVar('key')"`
+ * handlers in the dialog's HTML (see `generateEnvVarsListHTML()`), then
+ * removes them again once the dialog closes. These are internal
+ * implementation details of that one dialog, not part of the public
+ * `window.agentlet` surface documented in `AgentletAPI`, so they are
+ * declared here instead of in `src/types/public-api.d.ts`.
+ */
+declare global {
+    interface Window {
+        removeEnvVar?: (key: string) => void;
+        addEnvVar?: () => void;
+    }
+}
+
 /**
  * Main Agentlet Core application class
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- merged below with fields populated by GlobalAPI.setupGlobalAccess(); see the comment on that interface declaration.
 class AgentletCore {
-    constructor(config = {}) {
+    initialized: boolean;
+    /**
+     * Note: deliberately `AgentletCoreConfig & {...}` here, not
+     * `Omit<AgentletCoreConfig, 'minimumPanelWidth'> & {...}` as
+     * `UIManagerCore`/`PanelManagerCore` spell it. `AgentletCoreConfig` has a
+     * `[key: string]: unknown` index signature, and `Omit`/`Pick` against a
+     * type with an index signature re-indexes every picked property through
+     * that signature, widening properties like `debugMode` to `unknown`
+     * instead of `boolean | undefined` (a known TypeScript limitation) - only
+     * unobservable in `UIManagerCore`/`PanelManagerCore` because they only
+     * ever use those properties in truthy/typeof checks, never pass them to a
+     * strictly-typed parameter. Plain intersection avoids the re-indexing and
+     * keeps each property's real type, while still being assignable to
+     * `UIManagerCore`/`PanelManagerCore`'s `config` (a supertype here).
+     */
+    config: AgentletCoreConfig & {
+        /** Always populated by the constructor's `config.minimumPanelWidth || 320` default. */
+        minimumPanelWidth: number;
+    };
+    eventBus: EventBusAPI;
+    envManager: EnvAPI | null;
+    cookieManager: CookiesAPI;
+    storageManager: StorageManagerAPI;
+    authManager: AuthManagerAPI;
+    formExtractor: FormExtractorAPI;
+    formFiller: FormFillerAPI;
+    tableExtractor: TableExtractorAPI;
+    aiManager: AIManagerAPI;
+    shortcutManager: ShortcutManagerAPI | null;
+    /**
+     * Definite assignment assertion (`!`): preserves a pre-existing
+     * evaluation-order quirk. `librarySetup` is assigned further down the
+     * constructor than `tableExtractor`/`aiManager`/`shortcutManager`, all
+     * three of which receive it as a constructor argument - so at that point
+     * `this.librarySetup` is actually still `undefined`, and each of those
+     * constructors' own `= null` default parameter kicks in instead (passing
+     * `undefined` explicitly triggers a default parameter the same as
+     * omitting the argument). TypeScript's "used before being assigned"
+     * check (correctly) flags this ordering; the assertion preserves the
+     * exact original statement order rather than the object it warns about.
+     *
+     * Typed as the concrete class (not the narrower, agentlet-author-facing
+     * `LibrarySetupAPI` from public-api.d.ts) because `init()` calls
+     * `initializeAll()`, framework-internal wiring `LibrarySetupAPI`
+     * intentionally omits.
+     */
+    librarySetup!: LibrarySetup;
+    isMinimized: boolean;
+    themeManager: ThemeManagerAPI;
+    /**
+     * Typed as the concrete class (not the narrower, `@internal`-documented
+     * `StyleInjectorAPI` from public-api.d.ts) because `UIManagerCore`
+     * requires a `setRoot()` method that `StyleInjectorAPI` intentionally
+     * omits from the public surface.
+     */
+    styleInjector: StyleInjector;
+    uiManager: UIManager;
+    panelManager: PanelManager;
+    globalAPI: GlobalAPI;
+    moduleRegistry: ModuleRegistry;
+    moduleManager: ModuleManagerAPI;
+    /**
+     * The module currently mounted in the content area (via the mount/unmount
+     * API), or null. Tracked here so updateModuleContent() can unmount it
+     * before mounting a different module, and cleanup() can unmount it on
+     * teardown.
+     */
+    mountedModule: AgentletModule | null;
+    performanceMetrics: { initTime: number; moduleLoadTime: number; uiRenderTime: number };
+    /** Only set while the environment-variables dialog is open. */
+    currentEnvVarsDialog?: { close: () => void } | null;
+
+    constructor(config: AgentletCoreConfig = {}) {
         this.initialized = false;
-        
+
         // Configuration
         this.config = {
             enablePlugins: config.enablePlugins !== false,
@@ -64,10 +188,10 @@ class AgentletCore {
             shadowDom: config.shadowDom !== false, // Mount the panel UI inside an open shadow root (isolates host page/agentlet CSS)
             ...config
         };
-        
+
         // Event system
         this.eventBus = new EventBus(this.config.debugMode);
-        
+
         // Initialize environment manager
         this.envManager = this.initializeEnvManager();
 
@@ -88,13 +212,21 @@ class AgentletCore {
         // Initialize form extractor and filler
         this.formExtractor = new FormExtractor();
         this.formFiller = new FormFiller(); // Uses native DOM methods
-        
+
         // Initialize table extractor
         this.tableExtractor = new TableExtractor(this.librarySetup);
-        
+
         // Initialize AI manager
-        this.aiManager = new AIManager(this.envManager, this.librarySetup);
-        
+        //
+        // AIManager's constructor requires a non-null EnvAPI, but
+        // this.envManager can be null (envManager: null in config disables
+        // it) - AIManager never actually guards against that internally
+        // (see src/utils/ai/AIProvider.ts's initializeProviders(), which
+        // unconditionally calls envManager.get(...)), so constructing with
+        // envManager: null already throws today. This cast preserves the
+        // exact existing call/crash rather than papering over it.
+        this.aiManager = new AIManager(this.envManager as EnvAPI, this.librarySetup);
+
         // Initialize shortcut manager
         this.shortcutManager = new ShortcutManager(this.librarySetup);
 
@@ -112,16 +244,21 @@ class AgentletCore {
             host: null, // #agentlet-host element (shadowDom: true only)
             // Query helpers that work whether the UI lives in a shadow root or directly in the page,
             // so callers never need to know which mode is active.
-            query: (selector) => {
+            query: (selector: string): Element | null => {
                 const root = this.ui.root || document;
                 return typeof root.querySelector === 'function' ? root.querySelector(selector) : null;
             },
-            queryAll: (selector) => {
+            queryAll: (selector: string): NodeListOf<Element> => {
                 const root = this.ui.root || document;
-                return typeof root.querySelectorAll === 'function' ? root.querySelectorAll(selector) : [];
+                return typeof root.querySelectorAll === 'function' ? root.querySelectorAll(selector) : ([] as unknown as NodeListOf<Element>);
             }
-        };
-        
+            // The full UIAPI shape (show/hide/minimize/maximize/regenerateStyles/
+            // resizePanel/getPanelWidth/setPanelWidth/refreshContent) is completed
+            // synchronously a few lines down by globalAPI.setupGlobalAccess() via
+            // Object.assign(window.agentlet.ui, {...}) - see the `ui` merged
+            // interface declaration below this class.
+        } as UIAPI;
+
         // UI state (synchronized with UIManager)
         this.isMinimized = false;
 
@@ -158,37 +295,37 @@ class AgentletCore {
         this.mountedModule = null;
 
         // UI management (delegated to UIManager)
-        
+
         // Performance tracking
         this.performanceMetrics = {
             initTime: 0,
             moduleLoadTime: 0,
             uiRenderTime: 0
         };
-        
+
         // Set up global access - will be finalized after UI is created
         this.globalAPI.setupGlobalAccess();
-        
+
         console.log('AgentletCore 📎 initialized with config:', this.config);
     }
 
     /**
      * Initialize environment manager based on configuration
-     * @returns {BaseEnvironmentVariablesManager|null} Environment manager instance or null if disabled
+     * @returns Environment manager instance or null if disabled
      */
-    initializeEnvManager() {
+    initializeEnvManager(): EnvAPI | null {
         // If explicitly set to null, disable environment variables
         if (this.config.envManager === null) {
             console.log('🔧 Environment variables disabled');
             return null;
         }
-        
+
         // If a custom instance is provided, use it
         if (this.config.envManager && typeof this.config.envManager === 'object') {
             console.log('🔧 Using custom EnvironmentVariablesManager instance');
             return this.config.envManager;
         }
-        
+
         // Use default LocalStorageEnvironmentVariablesManager
         console.log('🔧 Using default LocalStorageEnvironmentVariablesManager');
         return new LocalStorageEnvironmentVariablesManager();
@@ -198,14 +335,14 @@ class AgentletCore {
     /**
      * Main initialization method
      */
-    async init() {
+    async init(): Promise<void> {
         if (this.initialized) {
             console.warn('AgentletCore already initialized');
             return;
         }
-        
+
         const startTime = performance.now();
-        
+
         try {
             console.log('🚀 Initializing Agentlet Core 📎...');
 
@@ -265,32 +402,43 @@ class AgentletCore {
 
             // Load environment variables from storage
             if (this.envManager) {
-                this.envManager.loadFromStorage();
+                // loadFromStorage() belongs to LocalStorageEnvironmentVariablesManager
+                // (src/utils/config-persistence/EnvManager.ts), not the public EnvAPI
+                // a custom envManager only needs to implement - calling it
+                // unconditionally here is pre-existing behavior (it throws for a
+                // custom envManager that doesn't define it), preserved as-is.
+                (this.envManager as EnvAPI & { loadFromStorage(): void }).loadFromStorage();
             }
 
             // Manual refresh to catch modules that were registered early
             this.updateApplicationDisplay();
             await this.updateModuleContent('init');
-            
+
             // Register default keyboard shortcuts
             if (this.shortcutManager) {
-                await this.shortcutManager.registerDefaultShortcuts(this.config);
+                await this.shortcutManager.registerDefaultShortcuts(
+                    this.config
+                );
             }
-            
+
             this.performanceMetrics.initTime = performance.now() - startTime;
             this.initialized = true;
-            
+
             this.eventBus.emit('core:initialized', {
                 metrics: this.performanceMetrics,
                 config: this.config
             });
-            
+
             console.log(`✅ Agentlet Core 📎 initialized successfully in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
             console.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
-            
+
         } catch (error) {
             console.error('❌ Failed to initialize Agentlet Core:', error);
-            this.eventBus.emit('core:initializationFailed', { error: error.message });
+            // Preserves the original unguarded `error.message` access (TS types a
+            // catch binding as `unknown`, requiring this cast): if something
+            // other than an `Error` is thrown, `.message` is `undefined` and
+            // that is what gets emitted - a pre-existing quirk, not "fixed" here.
+            this.eventBus.emit('core:initializationFailed', { error: (error as Error).message });
             throw error;
         }
     }
@@ -298,7 +446,7 @@ class AgentletCore {
     /**
      * Set up event listeners for core events
      */
-    setupEventListeners() {
+    setupEventListeners(): void {
         // Module events
         this.eventBus.on('module:registered', (_data) => {
             // Update display without duplicate logging (ModuleRegistry already logs)
@@ -314,34 +462,38 @@ class AgentletCore {
             // Update display without duplicate logging (ModuleRegistry already logs)
             this.updateApplicationDisplay();
         });
-        
+
         this.eventBus.on('application:detected', (data) => {
-            console.log(`🎯 Application detected: ${data.module} for ${data.url}`);
+            const detected = data as { module: string; url: string };
+            console.log(`🎯 Application detected: ${detected.module} for ${detected.url}`);
         });
-        
+
         this.eventBus.on('application:notDetected', (data) => {
-            console.log(`❓ No application detected for: ${data.url}`);
+            const notDetected = data as { url: string };
+            console.log(`❓ No application detected for: ${notDetected.url}`);
         });
-        
+
         // Error handling
         this.eventBus.on('module:registrationFailed', (data) => {
-            console.error(`❌ Module registration failed: ${data.module} - ${data.error}`);
-            this.showError(`Failed to load module: ${data.module}`);
+            const failure = data as { module: string; error: string };
+            console.error(`❌ Module registration failed: ${failure.module} - ${failure.error}`);
+            this.showError(`Failed to load module: ${failure.module}`);
         });
-        
+
         // URL change events
         this.eventBus.on('url:changed', (data) => {
-            console.log(`🔄 URL changed: ${data.oldUrl} → ${data.newUrl}`);
+            const urlChange = data as { oldUrl: string; newUrl: string };
+            console.log(`🔄 URL changed: ${urlChange.oldUrl} → ${urlChange.newUrl}`);
             this.updateApplicationDisplay();
         });
     }
 
     /**
      * Handle module change
-     * @param {import('./core/Module.js').default | null} activeModule
-     * @param {import('./types/public-api').ModuleActivationContext} [context] - Forwarded by ModuleRegistry; used to tell a urlChange-driven change (same module, new URL) from an actual module switch
+     * @param activeModule
+     * @param context - Forwarded by ModuleRegistry; used to tell a urlChange-driven change (same module, new URL) from an actual module switch
      */
-    async onModuleChange(activeModule, context = {}) {
+    async onModuleChange(activeModule: AgentletModule | null, context: ModuleActivationContext = {}): Promise<void> {
         console.log('onModuleChange', activeModule);
         // TODO: check if issue with activeModule not being yet the moduleLoader.activeModule
         this.updateApplicationDisplay();
@@ -377,18 +529,18 @@ class AgentletCore {
     /**
      * Create discrete close button for actions area
      */
-    createDiscreteCloseButton() {
+    createDiscreteCloseButton(): HTMLButtonElement {
         const closeButton = document.createElement('button');
         closeButton.className = 'agentlet-action-btn';
         closeButton.id = 'agentlet-close-btn';
         closeButton.innerHTML = '╳';
         closeButton.title = 'Close Agentlet';
-        
+
         // Click handler to cleanup and close
         closeButton.addEventListener('click', () => {
             this.cleanup();
         });
-        
+
         return closeButton;
     }
 
@@ -400,13 +552,13 @@ class AgentletCore {
     /**
      * Create action button
      */
-    createActionButton(icon, title, onClick) {
+    createActionButton(icon: string, title: string, onClick: (event: MouseEvent) => void): HTMLButtonElement {
         const button = document.createElement('button');
         button.className = 'agentlet-action-btn';
         button.title = title;
         button.innerHTML = icon;
         button.onclick = onClick;
-        
+
         return button;
     }
 
@@ -430,13 +582,13 @@ class AgentletCore {
     /**
      * Update application display
      */
-    updateApplicationDisplay() {
+    updateApplicationDisplay(): void {
         const appNameElement = this.ui.query('#agentlet-app-display');
         const _moduleCountElement = this.ui.query('#agentlet-module-count');
-        
+
         // Use provided activeModule parameter, fallback to moduleLoader's activeModule
         const activeModule = this.moduleRegistry.activeModule;
-        
+
         if (appNameElement && activeModule) {
             // Check if module has a custom title
             if (activeModule.getPanelTitle && typeof activeModule.getPanelTitle === 'function') {
@@ -446,28 +598,28 @@ class AgentletCore {
                 } else {
                     // Fallback to default behavior
                     const appName = activeModule.name;
-                    const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);            
+                    const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);
                     appNameElement.innerHTML = `<strong>Agentlet:</strong> <span id="agentlet-app-name">${displayText}</span>`;
                 }
             } else {
                 // Default behavior
                 const appName = activeModule.name;
-                const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);            
+                const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);
                 appNameElement.innerHTML = `<strong>Agentlet:</strong> <span id="agentlet-app-name">${displayText}</span>`;
             }
         } else if (appNameElement) {
             appNameElement.innerHTML = '<strong>Agentlet:</strong> <span id="agentlet-app-name">No application detected</span>';
         }
-        
+
         // Status indicator removed for cleaner interface
     }
 
     /**
      * Update module content: unmounts the previously mounted module (if any),
      * then mounts (or renders) the active module's content into the panel.
-     * @param {import('./types/public-api').ModuleMountTrigger} [trigger] - Why this update is happening ('init', 'moduleChange', 'urlChange', 'refresh', ...), forwarded to `Module.mount()`/`unmount()` via the mount context
+     * @param trigger - Why this update is happening ('init', 'moduleChange', 'urlChange', 'refresh', ...), forwarded to `Module.mount()`/`unmount()` via the mount context
      */
-    async updateModuleContent(trigger = 'refresh') {
+    async updateModuleContent(trigger: ModuleMountTrigger = 'refresh'): Promise<void> {
         const content = this.ui.content;
         if (!content) {
             console.warn('⚠️ updateModuleContent called but UI content element not ready');
@@ -477,7 +629,7 @@ class AgentletCore {
         // Unmount the previously mounted module, guarded so a module that was
         // already unmounted elsewhere (e.g. via its own cleanup(), triggered by
         // ModuleRegistry.deactivateModule()) is never unmounted twice.
-        const previouslyMounted = this.mountedModule;
+        const previouslyMounted: ModuleWithInternalMountHooks | null = this.mountedModule;
         this.mountedModule = null;
         if (previouslyMounted && previouslyMounted.mounted) {
             try {
@@ -501,15 +653,16 @@ class AgentletCore {
                     // Full mount/unmount API (every module extending the Module
                     // base class has this, including modules that only override
                     // getContent() - they go through the default mount()).
-                    const context = {
-                        root: this.ui.root,
+                    const context: ModuleMountContext = {
+                        root: this.ui.root as ShadowRoot | HTMLElement,
                         theme: this.themeManager.getTheme(),
                         eventBus: this.eventBus,
                         api: window.agentlet,
                         trigger
                     };
-                    if (typeof activeModule._beforeMount === 'function') {
-                        activeModule._beforeMount(content, context);
+                    const moduleWithHooks = activeModule as ModuleWithInternalMountHooks;
+                    if (typeof moduleWithHooks._beforeMount === 'function') {
+                        moduleWithHooks._beforeMount(content, context);
                     }
                     await activeModule.mount(content, context);
                     this.mountedModule = activeModule;
@@ -554,41 +707,41 @@ class AgentletCore {
     /**
      * Enhanced localStorage monitoring
      */
-    setupLocalStorageListener() {
+    setupLocalStorageListener(): void {
         // Listen for storage events (changes from other tabs/windows)
         window.addEventListener('storage', (event) => {
             this.handleLocalStorageChange(event.key, event.newValue);
         });
-        
+
         // Override localStorage methods for same-tab detection
         const originalSetItem = localStorage.setItem;
         const originalRemoveItem = localStorage.removeItem;
         const originalClear = localStorage.clear;
-        
+
         localStorage.setItem = (key, value) => {
             originalSetItem.call(localStorage, key, value);
             this.handleLocalStorageChange(key, value);
         };
-        
+
         localStorage.removeItem = (key) => {
             originalRemoveItem.call(localStorage, key);
             this.handleLocalStorageChange(key, null);
         };
-        
+
         localStorage.clear = () => {
             originalClear.call(localStorage);
             this.handleLocalStorageChange(null, null);
         };
-        
+
         console.log('📦 localStorage monitoring enabled');
     }
 
     /**
      * Handle localStorage changes
      */
-    handleLocalStorageChange(key, newValue) {
+    handleLocalStorageChange(key: string | null, newValue: string | null): void {
         console.log(`📦 localStorage changed: ${key} = ${newValue}`);
-        
+
         this.eventBus.emit('localStorage:changed', { key, newValue });
 
         // Update application display and module content
@@ -599,7 +752,7 @@ class AgentletCore {
 
         // Notify active module if it requested notifications
         if (this.moduleRegistry.activeModule) {
-            if (this.moduleRegistry.activeModule.requiresLocalStorageChangeNotification 
+            if (this.moduleRegistry.activeModule.requiresLocalStorageChangeNotification
                 && typeof this.moduleRegistry.activeModule.onLocalStorageChange === 'function') {
                 console.log(`📦 Notifying module ${this.moduleRegistry.activeModule.name} about localStorage change`);
                 this.moduleRegistry.activeModule.onLocalStorageChange(key, newValue);
@@ -610,22 +763,22 @@ class AgentletCore {
     /**
      * Action handlers
      */
-    async refreshContent() {
+    async refreshContent(): Promise<void> {
         console.log('🔄 Refreshing content');
         this.updateApplicationDisplay();
         await this.updateModuleContent('refresh');
     }
 
-    showSettings() {
+    showSettings(): void {
         console.log('⚙️ Settings requested');
-        
+
         // Check if active module has custom settings handler
         if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showSettings === 'function') {
             console.log(`📦 Using module settings: ${this.moduleRegistry.activeModule.name}`);
             this.moduleRegistry.activeModule.showSettings();
             return;
         }
-        
+
         // Default settings implementation
         const Dialog = window.agentlet?.utils?.Dialog;
         if (Dialog) {
@@ -637,17 +790,17 @@ class AgentletCore {
                     <p><strong>Theme:</strong> ${this.themeManager.getTheme().primaryColor}</p>
                     <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
                     <p><strong>Debug mode:</strong> ${this.config.debugMode ? 'Enabled' : 'Disabled'}</p>
-                    
+
                     <h4>Performance</h4>
                     <p><strong>Init time:</strong> ${this.performanceMetrics.initTime.toFixed(2)}ms</p>
                     <p><strong>UI render time:</strong> ${this.performanceMetrics.uiRenderTime.toFixed(2)}ms</p>
                     <p><strong>Module load time:</strong> ${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms</p>
-                    
+
                     <h4>AI Configuration</h4>
                     <p><strong>Status:</strong> ${this.aiManager.isAvailable() ? '✅ Available' : '❌ Not configured'}</p>
                     <p><strong>Current provider:</strong> ${this.aiManager.getStatus().currentProvider || 'None'}</p>
                     <p><strong>Available providers:</strong> ${this.aiManager.getAvailableProviders().join(', ') || 'None'}</p>
-                    
+
                     <h4>Active Module</h4>
                     <p><strong>Current:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
                     <p><strong>URL:</strong> ${window.location.href}</p>
@@ -671,16 +824,16 @@ class AgentletCore {
         }
     }
 
-    showHelp() {
+    showHelp(): void {
         console.log('❓ Help requested');
-        
+
         // Check if active module has custom help handler
         if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showHelp === 'function') {
             console.log(`📦 Using module help: ${this.moduleRegistry.activeModule.name}`);
             this.moduleRegistry.activeModule.showHelp();
             return;
         }
-        
+
         // Default help implementation
         const Dialog = window.agentlet?.utils?.Dialog;
         if (Dialog) {
@@ -692,7 +845,7 @@ class AgentletCore {
                     <p><strong>Version:</strong> 1.0.0</p>
                     <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
                     <p><strong>Active module:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
-                    
+
                     <h4>Core Features</h4>
                     <ul>
                         <li>🎯 <strong>Module System:</strong> Dynamic loading and activation</li>
@@ -700,7 +853,7 @@ class AgentletCore {
                         <li>📊 <strong>Performance:</strong> Real-time metrics</li>
                         <li>🔧 <strong>Debugging:</strong> Developer tools</li>
                     </ul>
-                    
+
                     <h4>Debug Commands (Console)</h4>
                     <ul>
                         <li><code>agentlet.debug.getMetrics()</code> - Performance metrics</li>
@@ -708,7 +861,7 @@ class AgentletCore {
                         <li><code>agentlet.modules.getAll()</code> - List all modules</li>
                         <li><code>agentlet.ui.regenerateStyles()</code> - Update theme</li>
                     </ul>
-                    
+
                     <h4>Module Development</h4>
                     <p>Create modules that extend <code>BaseModule</code> and implement:</p>
                     <ul>
@@ -733,16 +886,16 @@ class AgentletCore {
                         config: this.config,
                         statistics: this.moduleRegistry.getStatistics()
                     };
-                    
+
                     Dialog.show('info', {
                         title: 'Debug Information',
                         message: `
                             <h4>Performance Metrics</h4>
                             <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.metrics, null, 2)}</pre>
-                            
+
                             <h4>Configuration</h4>
                             <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.config, null, 2)}</pre>
-                            
+
                             <h4>Module Statistics</h4>
                             <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.statistics, null, 2)}</pre>
                         `,
@@ -782,7 +935,7 @@ class AgentletCore {
     /**
      * Show modal dialog
      */
-    showModal(title, content) {
+    showModal(title: string, content: string): void {
         // Simple modal implementation
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -797,7 +950,7 @@ class AgentletCore {
             align-items: center;
             justify-content: center;
         `;
-        
+
         const dialog = document.createElement('div');
         dialog.style.cssText = `
             background: white;
@@ -808,7 +961,7 @@ class AgentletCore {
             overflow-y: auto;
             position: relative;
         `;
-        
+
         dialog.innerHTML = `
             <h3 style="margin-top: 0;">${title}</h3>
             <div>${content}</div>
@@ -831,7 +984,7 @@ class AgentletCore {
                 cursor: pointer;
             ">Close</button>
         `;
-        
+
         modal.className = 'modal';
         modal.appendChild(dialog);
         // Mount inside the UI root (shadow root in shadowDom mode, otherwise
@@ -839,7 +992,7 @@ class AgentletCore {
         // with the rest of the panel; falls back to document.body if called
         // before the root exists.
         (this.ui.root || document.body).appendChild(modal);
-        
+
         // Close on background click
         modal.onclick = (e) => {
             if (e.target === modal) {
@@ -851,7 +1004,7 @@ class AgentletCore {
     /**
      * Show error message
      */
-    showError(message) {
+    showError(message: string): void {
         console.error('❌', message);
         // Could show a toast notification or update UI
         this.eventBus.emit('ui:error', { message });
@@ -860,7 +1013,7 @@ class AgentletCore {
     /**
      * Regenerate styles with updated theme
      */
-    regenerateStyles() {
+    regenerateStyles(): void {
         this.styleInjector.regenerateStyles();
         this.eventBus.emit('ui:stylesRegenerated');
     }
@@ -868,7 +1021,7 @@ class AgentletCore {
     /**
      * Show the UI (delegate to UIManager)
      */
-    show() {
+    show(): void {
         if (this.uiManager) {
             this.uiManager.show();
         }
@@ -877,7 +1030,7 @@ class AgentletCore {
     /**
      * Hide the UI (delegate to UIManager)
      */
-    hide() {
+    hide(): void {
         if (this.uiManager) {
             this.uiManager.hide();
         }
@@ -886,7 +1039,7 @@ class AgentletCore {
     /**
      * Minimize the UI (delegate to UIManager)
      */
-    minimize() {
+    minimize(): void {
         if (this.uiManager) {
             this.uiManager.minimize();
         }
@@ -895,7 +1048,7 @@ class AgentletCore {
     /**
      * Maximize the UI (delegate to UIManager)
      */
-    maximize() {
+    maximize(): void {
         if (this.uiManager) {
             this.uiManager.maximize();
         }
@@ -904,7 +1057,7 @@ class AgentletCore {
     /**
      * Setup base UI (delegate to UIManager) - kept for compatibility
      */
-    setupBaseUI() {
+    setupBaseUI(): void {
         if (this.uiManager) {
             return this.uiManager.setupBaseUI();
         }
@@ -913,7 +1066,7 @@ class AgentletCore {
     /**
      * Finalize global access with actual UI references after UI creation
      */
-    finalizeGlobalAccess() {
+    finalizeGlobalAccess(): void {
         // Ensure window.agentlet.ui exists and merge with actual DOM references
         if (window.agentlet && window.agentlet.ui) {
             // Merge the actual DOM references created by UIManager
@@ -924,7 +1077,7 @@ class AgentletCore {
     /**
      * Get performance metrics
      */
-    getPerformanceMetrics() {
+    getPerformanceMetrics(): AgentletPerformanceReport {
         return {
             core: this.performanceMetrics,
             moduleRegistry: this.moduleRegistry.getStatistics(),
@@ -941,7 +1094,7 @@ class AgentletCore {
     /**
      * Cleanup method
      */
-    async cleanup() {
+    async cleanup(): Promise<void> {
         try {
             // Cleanup module registry (deactivates the active module, which
             // unmounts it via Module.cleanup() if it was still mounted)
@@ -957,21 +1110,21 @@ class AgentletCore {
             if (this.cookieManager) {
                 this.cookieManager.cleanup();
             }
-            
+
             if (this.storageManager) {
                 this.storageManager.cleanup();
             }
-            
+
             // Cleanup authentication manager
             if (this.authManager) {
                 this.authManager.cleanup();
             }
-            
+
             // Cleanup shortcut manager
             if (this.shortcutManager) {
                 this.shortcutManager.clear();
             }
-            
+
             // Remove UI
             const container = this.ui.container;
 
@@ -1004,16 +1157,25 @@ class AgentletCore {
 
             // Reset initialization flag
             this.initialized = false;
-            
+
             // Clear module loading flags to allow re-registration
-            delete window.AgentletDesignerLoaded;
-            
+            //
+            // `Reflect.deleteProperty()` is used instead of the `delete`
+            // operator for these three: TypeScript only allows `delete` on an
+            // operand typed as optional, but `window.agentlet` is declared
+            // non-optional (nearly everything in the codebase reads it
+            // without a null check) and `window.AgentletDesignerLoaded` isn't
+            // declared on `Window` at all (set by an external
+            // agentlet-designer script, never read here). Both have the exact
+            // same runtime effect as `delete`.
+            Reflect.deleteProperty(window, 'AgentletDesignerLoaded');
+
             // Clear global access
-            delete window.agentlet;
-            
+            Reflect.deleteProperty(window, 'agentlet');
+
             this.eventBus.emit('core:cleanup');
             console.log('🧹 Agentlet Core 📎 cleaned up');
-            
+
         } catch (error) {
             console.error('Error during cleanup:', error);
         }
@@ -1022,26 +1184,34 @@ class AgentletCore {
     /**
      * Show environment variables dialog
      */
-    showEnvVarsDialog() {
+    showEnvVarsDialog(): void {
         console.log('🔧 Environment variables dialog requested');
-        
+
         if (!this.envManager) {
             console.warn('Environment variables manager not available');
             this.showModal('Environment Variables', 'Environment variables are disabled');
             return;
         }
-        
+
         const Dialog = window.agentlet?.utils?.Dialog;
         if (!Dialog) {
             this.showModal('Environment Variables', 'Environment variables UI not available');
             return;
         }
-        
+
         const varsList = this.generateEnvVarsListHTML();
-        
+
         // Get storage type for header using the mandatory name() method
-        const storageType = this.envManager.name();
-        
+        //
+        // this.envManager is read fresh at each of the three sites below
+        // (here, and inside window.removeEnvVar/addEnvVar further down),
+        // exactly as the original did, rather than being captured once into
+        // a local - the cast is only to satisfy TypeScript's non-null
+        // narrowing, which (correctly) does not persist through the
+        // window.removeEnvVar/addEnvVar closures defined later in this
+        // method.
+        const storageType = (this.envManager as EnvAPI).name();
+
         const content = `
             <div class="env-vars-container">
                 <div class="env-vars-list">
@@ -1051,9 +1221,9 @@ class AgentletCore {
                     stored in ${storageType}
                 </div>
             </div>
-            
+
             <style>
-                .env-vars-container { 
+                .env-vars-container {
                     width: 100%;
                     max-width: none;
                     margin: 0;
@@ -1062,21 +1232,21 @@ class AgentletCore {
                     display: flex;
                     flex-direction: column;
                 }
-                .env-vars-list { 
-                    max-height: 50vh; 
-                    overflow-y: auto; 
-                    margin: 0px; 
+                .env-vars-list {
+                    max-height: 50vh;
+                    overflow-y: auto;
+                    margin: 0px;
                     flex: 1;
                 }
-                .env-var-item { 
+                .env-var-item {
                     display: grid;
                     grid-template-columns: 1fr 2fr auto;
                     gap: 15px;
-                    align-items: center; 
-                    padding: 12px 16px; 
-                    border: 1px solid #e0e0e0; 
-                    margin: 8px 0; 
-                    border-radius: 8px; 
+                    align-items: center;
+                    padding: 12px 16px;
+                    border: 1px solid #e0e0e0;
+                    margin: 8px 0;
+                    border-radius: 8px;
                     background: white;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     transition: box-shadow 0.2s, transform 0.2s;
@@ -1091,13 +1261,13 @@ class AgentletCore {
                     color: #2563eb;
                     font-size: 12px;
                 }
-                .env-var-remove { 
-                    background: #dc3545; 
-                    color: white; 
-                    border: none; 
-                    border-radius: 8px; 
-                    width: 32px; 
-                    height: 32px; 
+                .env-var-remove {
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    width: 32px;
+                    height: 32px;
                     cursor: pointer;
                     display: flex;
                     align-items: center;
@@ -1112,21 +1282,21 @@ class AgentletCore {
                     transform: scale(1.1);
                     box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
                 }
-                .env-var-form { 
+                .env-var-form {
                     display: grid;
                     grid-template-columns: 1fr 1fr auto;
-                    gap: 20px; 
-                    margin: 25px 0; 
+                    gap: 20px;
+                    margin: 25px 0;
                     padding: 25px;
                     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
                     border-radius: 12px;
                     border: 1px solid #dee2e6;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 }
-                .env-var-input { 
-                    padding: 12px 16px; 
-                    border: 2px solid #ddd; 
-                    border-radius: 8px; 
+                .env-var-input {
+                    padding: 12px 16px;
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
                     font-size: 13px;
                     font-family: inherit;
                     transition: all 0.2s;
@@ -1142,11 +1312,11 @@ class AgentletCore {
                     color: #999;
                     font-style: italic;
                 }
-                .env-var-add { 
-                    background: linear-gradient(135deg, #0066cc 0%, #004999 100%); 
-                    color: white; 
-                    border: none; 
-                    padding: 12px 24px; 
+                .env-var-add {
+                    background: linear-gradient(135deg, #0066cc 0%, #004999 100%);
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
                     border-radius: 8px;
                     font-size: 13px;
                     font-weight: 600;
@@ -1210,28 +1380,29 @@ class AgentletCore {
                 }
             </style>
         `;
-        
+
         // Add global functions for the dialog
-        window.removeEnvVar = (key) => {
-            this.envManager.remove(key);
+        window.removeEnvVar = (key: string): void => {
+            (this.envManager as EnvAPI).remove(key);
             this.refreshEnvVarsDialog();
         };
-        
-        window.addEnvVar = () => {
+
+        window.addEnvVar = (): void => {
             // These inputs live inside the fullscreen Dialog content, itself
             // mounted in the UI root (shadow root in shadowDom mode), hence
-            // this.ui.query() rather than document.getElementById().
-            const key = this.ui.query('#env-var-key').value.trim();
-            const value = this.ui.query('#env-var-value').value.trim();
+            // this.ui.query() rather than document.getElementById(). Queried
+            // fresh at each use (not cached in a local), same as the original.
+            const key = (this.ui.query('#env-var-key') as HTMLInputElement).value.trim();
+            const value = (this.ui.query('#env-var-value') as HTMLInputElement).value.trim();
 
             if (key) {
-                this.envManager.set(key, value);
-                this.ui.query('#env-var-key').value = '';
-                this.ui.query('#env-var-value').value = '';
+                (this.envManager as EnvAPI).set(key, value);
+                (this.ui.query('#env-var-key') as HTMLInputElement).value = '';
+                (this.ui.query('#env-var-value') as HTMLInputElement).value = '';
                 this.refreshEnvVarsDialog();
             }
         };
-        
+
         // Store dialog reference for refresh - create a wrapper with close method
         this.currentEnvVarsDialog = {
             close: () => {
@@ -1240,7 +1411,7 @@ class AgentletCore {
                 }
             }
         };
-        
+
         Dialog.fullscreen({
             title: 'Environment variables',
             message: content,
@@ -1252,9 +1423,14 @@ class AgentletCore {
             ]
         }, (_result) => {
             // Clean up global functions
-            delete window.removeEnvVar;
-            delete window.addEnvVar;
-            delete window.clearEnvVars;
+            //
+            // See the comment in cleanup() above for why
+            // Reflect.deleteProperty() is used instead of the `delete`
+            // operator here. `clearEnvVars` is never actually assigned
+            // anywhere (pre-existing dead code, kept as-is).
+            Reflect.deleteProperty(window, 'removeEnvVar');
+            Reflect.deleteProperty(window, 'addEnvVar');
+            Reflect.deleteProperty(window, 'clearEnvVars');
             this.currentEnvVarsDialog = null;
         });
     }
@@ -1262,22 +1438,26 @@ class AgentletCore {
     /**
      * Generate HTML for environment variables list (including the add form)
      */
-    generateEnvVarsListHTML() {
-        const currentVars = this.envManager.getAll();
-        
-        const formatValue = (value) => {
+    generateEnvVarsListHTML(): string {
+        // Unconditional access, same as the original: this method is only
+        // ever reached (via showEnvVarsDialog()'s own guard) when envManager
+        // is set, but refreshEnvVarsDialog() calls it without re-checking -
+        // preserved as-is rather than adding a new defensive fallback.
+        const currentVars = (this.envManager as EnvAPI).getAll();
+
+        const formatValue = (value: string): string => {
             if (typeof value === 'string') {
                 // Check if value contains mostly asterisks (hidden/masked value)
                 const asteriskCount = (value.match(/\*/g) || []).length;
                 if (asteriskCount > value.length * 0.7) { // If more than 70% are asterisks, treat as hidden
                     return '*'.repeat(60); // Force exactly 60 asterisks
                 } else if (value.length > 60) {
-                    return `${value.substring(0, 60)  }…`; // Regular truncate with ellipsis
+                    return `${value.substring(0, 60)}…`; // Regular truncate with ellipsis
                 }
             }
             return value;
         };
-        
+
         // Start with the add/update form
         let html = `
             <div class="env-var-item" style="display: flex; align-items: center; padding: 8px 20px; border-bottom: 2px solid #ddd; background: #f8f9fa;">
@@ -1290,7 +1470,7 @@ class AgentletCore {
                 </button>
             </div>
         `;
-        
+
         // Add existing variables
         if (Object.entries(currentVars).length === 0) {
             html += `<div class="env-vars-empty" style="text-align: center; padding: 20px; color: #666;">
@@ -1303,23 +1483,23 @@ class AgentletCore {
                         <strong style="color: #333; display: block; margin-bottom: 2px;">${key}</strong>
                         <span style="color: #666; font-size: 14px; word-break: break-all;">${formatValue(value)}</span>
                     </div>
-                    <button onclick="removeEnvVar('${key}')" 
+                    <button onclick="removeEnvVar('${key}')"
                             style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">
                         Delete
                     </button>
                 </div>
             `).join('');
         }
-        
+
         return html;
     }
 
     /**
      * Refresh environment variables dialog by updating content in place
      */
-    refreshEnvVarsDialog() {
+    refreshEnvVarsDialog(): void {
         console.log('🔧 Refreshing environment variables dialog content');
-        
+
         // Try to update the content in place first (the container lives inside
         // the Dialog content, itself mounted in the UI root)
         const envVarsContainer = this.ui.query('.env-vars-list');
@@ -1328,7 +1508,7 @@ class AgentletCore {
             envVarsContainer.innerHTML = this.generateEnvVarsListHTML();
             return;
         }
-        
+
         // Fallback to full dialog refresh if container not found
         console.log('🔧 Container not found, falling back to full dialog refresh');
         if (this.currentEnvVarsDialog && typeof this.currentEnvVarsDialog.close === 'function') {
@@ -1340,6 +1520,24 @@ class AgentletCore {
     }
 
 }
+
+/**
+ * Members assigned by `GlobalAPI.setupGlobalAccess()` onto this same
+ * instance (`window.agentlet === this`, wired synchronously at the end of
+ * the constructor above) rather than by `AgentletCore`'s own constructor.
+ * Declaration merging (not a class-field re-declaration) - see
+ * `src/core/Module.ts` for the identical pattern and its rationale. `ui`
+ * is included here too: the constructor only populates its DOM-reference
+ * subset (cast to `UIAPI` above), and `setupGlobalAccess()` completes the
+ * shape via `Object.assign(window.agentlet.ui, {show, hide, ...})` a few
+ * statements later in the same constructor.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-empty-object-type -- intentional, see the comment above; fields are populated by GlobalAPI.setupGlobalAccess(), called synchronously at the end of the constructor. The empty body is required here (as opposed to a `type` alias), since only an `interface` declaration merges with the `class AgentletCore` above.
+interface AgentletCore extends Pick<AgentletAPI,
+    | 'Module' | 'ElementSelectorClass' | 'ScriptInjectorClass' | 'utils' | 'env' | 'cookies'
+    | 'storage' | 'auth' | 'forms' | 'tables' | 'ai' | 'configurePDFWorker' | 'modules' | 'ui'
+    | 'theme' | 'debug'
+> {}
 
 export default AgentletCore;
 

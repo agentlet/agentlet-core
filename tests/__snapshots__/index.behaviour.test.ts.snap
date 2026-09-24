@@ -1,0 +1,5 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`AgentletCore behaviour createActionButton() / createDiscreteCloseButton() markup createActionButton() produces a titled agentlet-action-btn with the given icon and click handler 1`] = `"<button class="agentlet-action-btn" title="My Action">⚙</button>"`;
+
+exports[`AgentletCore behaviour createActionButton() / createDiscreteCloseButton() markup createDiscreteCloseButton() produces the close button and wires cleanup() to it 1`] = `"<button class="agentlet-action-btn" id="agentlet-close-btn" title="Close Agentlet">╳</button>"`;
