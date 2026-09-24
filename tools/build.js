@@ -307,20 +307,24 @@ class AgentletCoreBuilder {
      * Optimize bookmarklet code
      */
     optimizeBookmarklet(code) {
-        // Remove source maps and comments
-        code = code.replace(/\/\*.*?\*\//gs, '');
-        code = code.replace(/\/\/.*$/gm, '');
-        
-        // Remove unnecessary whitespace
-        code = code.replace(/\s+/g, ' ');
-        code = code.trim();
-        
-        // Ensure proper bookmarklet wrapping
-        if (!code.startsWith('javascript:')) {
-            code = 'javascript:' + code;
-        }
-        
-        return code;
+        // Re-minify with esbuild rather than stripping comments with regexes:
+        // regexes cannot tell comments from string, template or regex literals
+        // (e.g. /\*/g) and silently deleted large stretches of the bundle.
+        // Legal comments are kept since dist/ is published.
+        const source = code.replace(/^javascript:/, '');
+        const minified = esbuild.transformSync(source, {
+            minify: true,
+            legalComments: 'eof',
+            target: 'es2020'
+        }).code.trim();
+
+        // Browsers percent-decode javascript: URLs and drop raw tabs and
+        // newlines, so encode those characters to keep the executed code
+        // identical (e.g. `i%60` would otherwise decode to a backtick).
+        const encoded = minified.replace(/[%\t\n\r]/g,
+            c => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
+
+        return `javascript:${encoded}`;
     }
 
     /**
@@ -380,7 +384,7 @@ class AgentletCoreBuilder {
     <div class="bookmarklet">
         <h2>Installation</h2>
         <p>Drag this link to your bookmarks bar:</p>
-        <a href="${bookmarkletCode}" class="bookmarklet-link">Agentlet Core</a>
+        <a href="${this.escapeHtml(bookmarkletCode)}" class="bookmarklet-link">Agentlet Core</a>
         
         <h3>Manual Installation</h3>
         <p>If dragging doesn't work, you can manually create a bookmark with this code:</p>
