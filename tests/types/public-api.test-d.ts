@@ -23,11 +23,18 @@ import type {
     AIStatus,
     PageHighlighterAPI,
     DialogAPI,
+    ScriptInjectorAPI,
+    ScriptInjectorConstructor,
+    EnvAPI,
+    CookiesAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
 import { EventBus } from '../../src/core/EventBus';
 import { ThemeManager } from '../../src/core/ThemeManager';
+import ScriptInjector from '../../src/utils/system/ScriptInjector';
+import { LocalStorageEnvironmentVariablesManager } from '../../src/utils/config-persistence/EnvManager';
+import CookieManager from '../../src/utils/config-persistence/CookieManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
@@ -160,6 +167,10 @@ const themeCheck: ThemeManagerAPI = new ThemeManager();
 const zIndexCheck: ZIndexConstants = Z_INDEX;
 const highlighterCheck: PageHighlighterAPI = new PageHighlighter();
 const dialogCheck: DialogAPI = new Dialog({ theme: {} });
+const scriptInjectorCtorCheck: ScriptInjectorConstructor = ScriptInjector;
+const scriptInjectorInstanceCheck: ScriptInjectorAPI = new ScriptInjector();
+const envCheck: EnvAPI = new LocalStorageEnvironmentVariablesManager();
+const cookiesCheck: CookiesAPI = new CookieManager();
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -167,6 +178,10 @@ void themeCheck;
 void zIndexCheck;
 void highlighterCheck;
 void dialogCheck;
+void scriptInjectorCtorCheck;
+void scriptInjectorInstanceCheck;
+void envCheck;
+void cookiesCheck;
 
 // declared -> real
 //
@@ -202,6 +217,18 @@ void highlighterBackToReal;
 declare const declaredDialog: DialogAPI;
 const dialogBackToReal: Pick<InstanceType<typeof Dialog>, keyof DialogAPI> = declaredDialog;
 void dialogBackToReal;
+
+declare const declaredScriptInjector: ScriptInjectorAPI;
+const scriptInjectorBackToReal: Pick<InstanceType<typeof ScriptInjector>, keyof ScriptInjectorAPI> = declaredScriptInjector;
+void scriptInjectorBackToReal;
+
+declare const declaredEnv: EnvAPI;
+const envBackToReal: Pick<InstanceType<typeof LocalStorageEnvironmentVariablesManager>, keyof EnvAPI> = declaredEnv;
+void envBackToReal;
+
+declare const declaredCookies: CookiesAPI;
+const cookiesBackToReal: Pick<InstanceType<typeof CookieManager>, keyof CookiesAPI> = declaredCookies;
+void cookiesBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
