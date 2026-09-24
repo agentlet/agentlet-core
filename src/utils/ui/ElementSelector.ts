@@ -2,8 +2,19 @@
  * Element Selector Utility for Agentlet Core
  * Provides an interactive element selection tool for modules
  */
+import type { ElementSelectorAPI, ElementSelectorStartOptions, ElementInfo } from '../../types/public-api';
 import { Z_INDEX } from './ZIndex.js';
-export default class ElementSelector {
+
+class ElementSelector implements ElementSelectorAPI {
+    isActive: boolean;
+    callback: ((element: Element, info: ElementInfo) => void) | null;
+    overlay: HTMLDivElement | null;
+    highlightBox: HTMLDivElement | null;
+    currentElement: Element | null;
+    originalCursor: string | null;
+    // CSS selector to limit selectable elements
+    allowedSelector: string | null;
+
     constructor() {
         this.isActive = false;
         this.callback = null;
@@ -11,8 +22,8 @@ export default class ElementSelector {
         this.highlightBox = null;
         this.currentElement = null;
         this.originalCursor = null;
-        this.allowedSelector = null; // CSS selector to limit selectable elements
-        
+        this.allowedSelector = null;
+
         // Bind methods
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.handleClick = this.handleClick.bind(this);
@@ -21,12 +32,10 @@ export default class ElementSelector {
 
     /**
      * Start element selection mode
-     * @param {Function} callback - Function to call with selected element
-     * @param {Object} options - Configuration options
-     * @param {string} options.selector - CSS selector to limit selectable elements (e.g., 'form', 'input', 'button')
-     * @param {string} options.message - Custom message to show in overlay
+     * @param callback - Function to call with selected element
+     * @param options - Configuration options
      */
-    start(callback, options = {}) {
+    start(callback: (element: Element, info: ElementInfo) => void, options: ElementSelectorStartOptions = {}): void {
         if (this.isActive) {
             console.warn('Element selector is already active');
             return;
@@ -58,7 +67,7 @@ export default class ElementSelector {
     /**
      * Stop element selection mode
      */
-    stop() {
+    stop(): void {
         if (!this.isActive) return;
 
         this.isActive = false;
@@ -90,7 +99,7 @@ export default class ElementSelector {
     /**
      * Create semi-transparent overlay
      */
-    createOverlay(customMessage) {
+    createOverlay(customMessage?: string): void {
         this.overlay = document.createElement('div');
         this.overlay.id = 'agentlet-element-selector-overlay';
         this.overlay.style.cssText = `
@@ -103,13 +112,13 @@ export default class ElementSelector {
             z-index: ${Z_INDEX.SELECTION_BACKDROP};
             pointer-events: none;
         `;
-        
+
         // Add instruction message
         let message = customMessage || 'Click an element to select it, or press Enter to confirm selection, ESC to cancel';
         if (this.allowedSelector) {
             message = customMessage || `Click a ${this.allowedSelector} element to select it, or press Enter to confirm selection, ESC to cancel`;
         }
-        
+
         const messageEl = document.createElement('div');
         messageEl.style.cssText = `
             position: absolute;
@@ -127,14 +136,14 @@ export default class ElementSelector {
         `;
         messageEl.textContent = message;
         this.overlay.appendChild(messageEl);
-        
+
         document.body.appendChild(this.overlay);
     }
 
     /**
      * Remove overlay
      */
-    removeOverlay() {
+    removeOverlay(): void {
         if (this.overlay) {
             this.overlay.remove();
             this.overlay = null;
@@ -144,7 +153,7 @@ export default class ElementSelector {
     /**
      * Create highlight box for hovering elements
      */
-    createHighlightBox() {
+    createHighlightBox(): void {
         this.highlightBox = document.createElement('div');
         this.highlightBox.id = 'agentlet-element-selector-highlight';
         this.highlightBox.style.cssText = `
@@ -162,7 +171,7 @@ export default class ElementSelector {
     /**
      * Remove highlight box
      */
-    removeHighlightBox() {
+    removeHighlightBox(): void {
         if (this.highlightBox) {
             this.highlightBox.remove();
             this.highlightBox = null;
@@ -172,11 +181,11 @@ export default class ElementSelector {
     /**
      * Handle mouse movement to highlight elements
      */
-    handleMouseMove(event) {
+    handleMouseMove(event: MouseEvent): void {
         if (!this.isActive) return;
 
         const element = this.getElementFromPoint(event.clientX, event.clientY);
-        
+
         // If we're not over a valid element or it's an internal element, hide highlight
         if (!element || this.isInternalElement(element)) {
             this.hideHighlight();
@@ -186,7 +195,7 @@ export default class ElementSelector {
 
         // Find the best matching element (either the element itself or a parent that matches the selector)
         const targetElement = this.findSelectableElement(element);
-        
+
         // If no selectable element found, hide highlight
         if (!targetElement) {
             this.hideHighlight();
@@ -204,7 +213,7 @@ export default class ElementSelector {
     /**
      * Handle click to select element
      */
-    handleClick(event) {
+    handleClick(event: MouseEvent): void {
         if (!this.isActive) return;
 
         event.preventDefault();
@@ -223,7 +232,7 @@ export default class ElementSelector {
     /**
      * Handle keyboard events (ESC to cancel, Enter to select)
      */
-    handleKeydown(event) {
+    handleKeydown(event: KeyboardEvent): void {
         if (!this.isActive) return;
 
         if (event.key === 'Escape') {
@@ -240,19 +249,19 @@ export default class ElementSelector {
     /**
      * Get element at specific coordinates
      */
-    getElementFromPoint(x, y) {
+    getElementFromPoint(x: number, y: number): Element | null {
         // Temporarily hide our overlay elements
-        const overlayDisplay = this.overlay.style.display;
-        const highlightDisplay = this.highlightBox.style.display;
+        const overlayDisplay = this.overlay!.style.display;
+        const highlightDisplay = this.highlightBox!.style.display;
 
-        this.overlay.style.display = 'none';
-        this.highlightBox.style.display = 'none';
+        this.overlay!.style.display = 'none';
+        this.highlightBox!.style.display = 'none';
 
         const element = document.elementFromPoint(x, y);
 
         // Restore overlay elements
-        this.overlay.style.display = overlayDisplay;
-        this.highlightBox.style.display = highlightDisplay;
+        this.overlay!.style.display = overlayDisplay;
+        this.highlightBox!.style.display = highlightDisplay;
 
         return element;
     }
@@ -260,9 +269,9 @@ export default class ElementSelector {
     /**
      * Check if element is internal to the selector system
      */
-    isInternalElement(element) {
+    isInternalElement(element: Element | null): boolean {
         if (!element) return true;
-        
+
         // Skip our own elements
         if (element.id === 'agentlet-element-selector-overlay' ||
             element.id === 'agentlet-element-selector-highlight' ||
@@ -277,12 +286,12 @@ export default class ElementSelector {
     /**
      * Check if element matches the allowed selector
      */
-    isElementSelectable(element) {
+    isElementSelectable(element: Element | null): boolean {
         if (!element) return false;
-        
+
         // If no selector filter is set, all elements are selectable
         if (!this.allowedSelector) return true;
-        
+
         // Check if element matches the allowed selector
         try {
             return element.matches(this.allowedSelector);
@@ -296,15 +305,15 @@ export default class ElementSelector {
      * Find the best selectable element starting from the given element
      * If the element doesn't match the selector, traverse up the DOM tree to find a parent that does
      */
-    findSelectableElement(element) {
+    findSelectableElement(element: Element | null): Element | null {
         if (!element) return null;
 
         // If no selector filter is set, return the element
         if (!this.allowedSelector) return element;
 
         // Start from the given element and traverse up the DOM tree
-        let currentElement = element;
-        
+        let currentElement: Element | null = element;
+
         while (currentElement && currentElement !== document.body) {
             if (this.isElementSelectable(currentElement)) {
                 return currentElement;
@@ -318,25 +327,25 @@ export default class ElementSelector {
     /**
      * Select an element and trigger the callback
      */
-    selectElement(element) {
+    selectElement(element: Element): void {
         if (!element) return;
 
         const elementInfo = this.getElementInfo(element);
-        
+
         // Save callback before stop() clears it
         const callback = this.callback;
-        
+
         this.stop();
 
         if (callback) {
-            callback(element, elementInfo);
+            callback(element, elementInfo as ElementInfo);
         }
     }
 
     /**
      * Highlight an element
      */
-    highlightElement(element) {
+    highlightElement(element: Element): void {
         if (!this.highlightBox || !element) return;
 
         const rect = element.getBoundingClientRect();
@@ -361,7 +370,7 @@ export default class ElementSelector {
     /**
      * Hide the highlight box
      */
-    hideHighlight() {
+    hideHighlight(): void {
         if (this.highlightBox) {
             this.highlightBox.style.display = 'none';
         }
@@ -370,7 +379,7 @@ export default class ElementSelector {
     /**
      * Get comprehensive information about an element
      */
-    getElementInfo(element) {
+    getElementInfo(element: Element | null): ElementInfo | null {
         if (!element) return null;
 
         const rect = element.getBoundingClientRect();
@@ -408,8 +417,8 @@ export default class ElementSelector {
     /**
      * Get all attributes of an element
      */
-    getElementAttributes(element) {
-        const attributes = {};
+    getElementAttributes(element: Element): Record<string, string> {
+        const attributes: Record<string, string> = {};
         for (const attr of element.attributes) {
             attributes[attr.name] = attr.value;
         }
@@ -419,84 +428,91 @@ export default class ElementSelector {
     /**
      * Generate XPath for an element
      */
-    getXPath(element) {
+    getXPath(element: Element): string {
         if (element.id) {
             return `//*[@id="${element.id}"]`;
         }
 
-        const parts = [];
-        while (element && element.nodeType === Node.ELEMENT_NODE) {
+        const parts: string[] = [];
+        // Reassigned to a broader `Node` as the walk climbs past `Element`
+        // ancestors; the loop condition's `nodeType` check keeps it safe.
+        let current: Node | null = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+            const currentElement = current as Element;
             let index = 0;
             let hasFollowingSiblings = false;
             let hasPrecedingSiblings = false;
-            
-            for (let sibling = element.previousSibling; sibling; sibling = sibling.previousSibling) {
-                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
+
+            for (let sibling = currentElement.previousSibling; sibling; sibling = sibling.previousSibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === currentElement.nodeName) {
                     hasPrecedingSiblings = true;
                     index++;
                 }
             }
-            
-            for (let sibling = element.nextSibling; sibling && !hasFollowingSiblings; sibling = sibling.nextSibling) {
-                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
+
+            for (let sibling = currentElement.nextSibling; sibling && !hasFollowingSiblings; sibling = sibling.nextSibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === currentElement.nodeName) {
                     hasFollowingSiblings = true;
                 }
             }
-            
-            const tagName = element.nodeName.toLowerCase();
+
+            const tagName = currentElement.nodeName.toLowerCase();
             const pathIndex = (hasPrecedingSiblings || hasFollowingSiblings) ? `[${index + 1}]` : '';
             parts.splice(0, 0, tagName + pathIndex);
-            
-            element = element.parentNode;
+
+            current = currentElement.parentNode;
         }
-        
-        return parts.length ? `/${  parts.join('/')}` : '';
+
+        return parts.length ? `/${parts.join('/')}` : '';
     }
 
     /**
      * Generate CSS selector for an element
      */
-    generateCSSSelector(element) {
+    generateCSSSelector(element: Element): string {
         if (element.id) {
             return `#${CSS.escape(element.id)}`;
         }
 
-        const path = [];
-        while (element && element.nodeType === Node.ELEMENT_NODE) {
-            let selector = element.nodeName.toLowerCase();
-            
-            if (element.className) {
-                const classes = Array.from(element.classList)
+        const path: string[] = [];
+        let current: Element | null = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+            let selector = current.nodeName.toLowerCase();
+
+            if (current.className) {
+                const classes = Array.from(current.classList)
                     .filter(cls => cls && !cls.startsWith('agentlet-'))
                     .slice(0, 3); // Limit to 3 classes for brevity
                 if (classes.length > 0) {
-                    selector += `.${  classes.map(cls => CSS.escape(cls)).join('.')}`;
+                    selector += `.${classes.map(cls => CSS.escape(cls)).join('.')}`;
                 }
             }
-            
+
             path.unshift(selector);
-            element = element.parentElement;
-            
+            current = current.parentElement;
+
             // Stop at a reasonable depth
             if (path.length >= 5) break;
         }
-        
+
         return path.join(' > ');
     }
 
     /**
      * Check if element is visible
      */
-    isElementVisible(element) {
+    isElementVisible(element: Element): boolean {
         const rect = element.getBoundingClientRect();
         const style = window.getComputedStyle(element);
-        
+
         return !!(
-            rect.width && 
-            rect.height && 
-            style.visibility !== 'hidden' && 
+            rect.width &&
+            rect.height &&
+            style.visibility !== 'hidden' &&
             style.display !== 'none' &&
             style.opacity !== '0'
         );
     }
 }
+
+export default ElementSelector;
