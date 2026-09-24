@@ -11,8 +11,7 @@
  * - register() replacing a different instance under the same name, and the
  *   reentrant-registration guard (`_registrationInProgress`).
  * - checkUrlChange()'s emitted events and the activation context it builds
- *   (`trigger`/`oldUrl`/`newUrl`), including a pre-existing quirk in the
- *   `url:changed` event (see the dedicated test below).
+ *   (`trigger`/`oldUrl`/`newUrl`).
  * - startUrlMonitoring()'s `popstate` listener and its `history.pushState`/
  *   `replaceState` overrides.
  * - activateModule()'s already-active no-op, its cascade-prevention guard,
@@ -216,16 +215,19 @@ describe('ModuleRegistry behaviour characterization', () => {
             expect(activeModule.cleanup).toHaveBeenCalled();
         });
 
-        test('quirk: the "url:changed" event\'s oldUrl already equals the new URL, because lastUrl is reassigned before the event is built', () => {
+        test('the "url:changed" event carries the real previous URL as oldUrl', () => {
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
-            history.pushState({}, '', '/quirk-page');
+            const oldUrl = window.location.href;
+            history.pushState({}, '', '/real-old-url-page');
+            const newUrl = window.location.href;
 
             registry.checkUrlChange();
 
             expect(mockEventBus.emit).toHaveBeenCalledWith('url:changed', {
-                oldUrl: window.location.href,
-                newUrl: window.location.href
+                oldUrl,
+                newUrl
             });
+            expect(oldUrl).not.toBe(newUrl);
         });
     });
 

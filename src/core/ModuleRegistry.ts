@@ -302,8 +302,9 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         }
 
         if (urlChanged) {
+            const previousUrl = this.lastUrl;
             this.lastUrl = currentUrl;
-            this.emit('url:changed', { oldUrl: this.lastUrl, newUrl: currentUrl });
+            this.emit('url:changed', { oldUrl: previousUrl, newUrl: currentUrl });
         }
     }
 
