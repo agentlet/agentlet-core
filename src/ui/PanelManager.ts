@@ -4,18 +4,25 @@
  */
 
 import type { AgentletCoreConfig, AgentletTheme, EventBusAPI, EnvAPI, AgentletModule } from '../types/public-api';
+import type { UIManager } from './UIManager.js';
 
 /**
  * Minimal shape of the `AgentletCore` instance this class needs. Not the
  * full `AgentletAPI` from `src/types/public-api.d.ts`: this class reaches
- * into `uiManager.ui.container`/`uiManager.isMinimized`, internal
- * `UIManager` details not exposed on the public, agentlet-author-facing
- * `UIManagerInternalAPI` (`window.agentlet.uiManager`) declared there.
- * `envManager` is also narrowed to nullable here (unlike `AgentletAPI`,
- * which declares it non-null) since `initializeEnvManager()` in
- * `src/index.js` can genuinely return `null`, and this class checks for it.
+ * into `uiManager.ui.container`, an internal `UIManager` detail not exposed
+ * on the public, agentlet-author-facing `UIManagerInternalAPI`
+ * (`window.agentlet.uiManager`) declared there. `uiManager` is typed as a
+ * `Pick` from the real `UIManager` class (rather than a hand-written shape)
+ * so that any future read of a member `UIManager` doesn't actually have
+ * fails `npm run typecheck` instead of silently resolving to `undefined` at
+ * runtime, the way `uiManager.isMinimized` used to (minimized state lives
+ * only on `AgentletCore.isMinimized`, read below as `this.core.isMinimized`;
+ * see `UIManager`'s constructor comment). `envManager` is also narrowed to
+ * nullable here (unlike `AgentletAPI`, which declares it non-null) since
+ * `initializeEnvManager()` in `src/index.js` can genuinely return `null`,
+ * and this class checks for it.
  */
-interface PanelManagerCore {
+export interface PanelManagerCore {
     config: Omit<AgentletCoreConfig, 'minimumPanelWidth'> & {
         /**
          * Always populated by the time `PanelManager` runs: `AgentletCore`'s
@@ -27,7 +34,8 @@ interface PanelManagerCore {
     eventBus: EventBusAPI;
     envManager: EnvAPI | null;
     moduleRegistry: { activeModule: AgentletModule | null };
-    uiManager: { ui: { container: HTMLElement | null }; isMinimized: boolean };
+    isMinimized: boolean;
+    uiManager: Pick<UIManager, 'ui'>;
     ui: { query(selector: string): Element | null };
 }
 
@@ -105,7 +113,7 @@ export class PanelManager {
         // `ui.query()` returns `Element | null`; cast to `HTMLElement` for `.style`, as the
         // pre-existing runtime code already assumed.
         const toggleButton = this.core.ui.query('#agentlet-toggle') as HTMLElement | null;
-        if (toggleButton && !this.core.uiManager.isMinimized) {
+        if (toggleButton && !this.core.isMinimized) {
             toggleButton.style.right = `${width}px`;
         }
 
@@ -162,7 +170,7 @@ export class PanelManager {
         }
 
         // Skip restoration only if currently minimized (not just if it started minimized)
-        if (this.core.uiManager.isMinimized) {
+        if (this.core.isMinimized) {
             return;
         }
 
