@@ -15,6 +15,13 @@ function findProjectRoot() {
   return projectRoot;
 }
 
+// Port the local static server (and every test baseURL) binds to. Configurable
+// via E2E_PORT so two worktrees on the same machine can each run their own
+// e2e suite without one's `reuseExistingServer: true` picking up the other's
+// server and silently testing the wrong checkout. CI always uses the default.
+// See .github/WORKFLOWS.md for the full reasoning.
+const PORT = Number(process.env.E2E_PORT) || 3030;
+
 export default defineConfig({
   // Test directory
   testDir: './specs',
@@ -43,7 +50,7 @@ export default defineConfig({
   // Shared settings for all the projects below
   use: {
     // Base URL for tests
-    baseURL: 'http://localhost:3030',
+    baseURL: `http://localhost:${PORT}`,
 
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -101,8 +108,8 @@ export default defineConfig({
 
   // Run your local dev server before starting the tests
   webServer: {
-    command: 'python3 -m http.server 3030',
-    port: 3030,
+    command: `python3 -m http.server ${PORT}`,
+    port: PORT,
     timeout: 10000,
     reuseExistingServer: true,
     cwd: findProjectRoot()

@@ -16,15 +16,80 @@ export class UIManager {
     }
 
     /**
+     * Ensure the UI mount root exists: an open shadow root under a dedicated
+     * #agentlet-host element (shadowDom: true, the default), or document.body
+     * itself (shadowDom: false, preserving the pre-shadow-DOM behavior exactly).
+     *
+     * Safe to call multiple times: it only (re)creates the root when one isn't
+     * already tracked on this.ui, so init() can call it once up front (before
+     * styles are injected) and setupBaseUI() can call it again defensively
+     * without tearing down and recreating the shadow root on every call.
+     */
+    ensureRoot() {
+        if (this.ui.root) {
+            return this.ui.root;
+        }
+
+        if (this.core.config.shadowDom) {
+            // Remove any host left over from a previous init/cleanup cycle
+            const existingHost = document.getElementById('agentlet-host');
+            if (existingHost) {
+                existingHost.remove();
+            }
+
+            const host = document.createElement('div');
+            host.id = 'agentlet-host';
+            document.body.appendChild(host);
+
+            this.ui.host = host;
+            this.ui.root = host.attachShadow({ mode: 'open' });
+        } else {
+            this.ui.host = null;
+            this.ui.root = document.body;
+        }
+
+        // Keep AgentletCore's own reference in sync (same object today, kept
+        // explicit since this.ui and this.core.ui may diverge in the future)
+        this.core.ui.host = this.ui.host;
+        this.core.ui.root = this.ui.root;
+
+        // Let the style injector know where UI rules should now be applied
+        if (this.core.styleInjector) {
+            this.core.styleInjector.setRoot(this.ui.root);
+        }
+
+        // Point the shared Dialog/MessageBubble utility instances (created by
+        // GlobalAPI.setupGlobalAccess(), which runs from the constructor,
+        // before this root exists) at the same root, so dialogs and toasts
+        // triggered via window.agentlet.utils.* mount inside it too.
+        if (window.agentlet && window.agentlet.utils) {
+            if (window.agentlet.utils.Dialog) {
+                window.agentlet.utils.Dialog.setRoot(this.ui.root);
+            }
+            if (window.agentlet.utils.MessageBubble) {
+                window.agentlet.utils.MessageBubble.setRoot(this.ui.root);
+            }
+        }
+
+        return this.ui.root;
+    }
+
+    /**
      * Enhanced UI setup with responsive design
      */
     setupBaseUI() {
+        // Make sure we have a mount root (normally already created by init()
+        // via ensureRoot(), but create one lazily if setupBaseUI() is called
+        // standalone).
+        this.ensureRoot();
+        const root = this.ui.root;
+
         // Remove existing container if present
-        const existingContainer = document.getElementById('agentlet-container');
+        const existingContainer = root.querySelector ? root.querySelector('#agentlet-container') : null;
         if (existingContainer) {
             existingContainer.remove();
         }
-        
+
         // Create main container
         const container = document.createElement('div');
         container.id = 'agentlet-container';
@@ -59,12 +124,12 @@ export class UIManager {
         container.appendChild(content);
         container.appendChild(actions);
         
-        // Add to document
+        // Add to document (the shadow root when shadowDom is enabled, otherwise document.body)
         if (toggleButton) {
-            document.body.appendChild(toggleButton);
-            document.body.appendChild(container);
+            root.appendChild(toggleButton);
+            root.appendChild(container);
         } else {
-            document.body.appendChild(container);
+            root.appendChild(container);
         }
         
         // Store UI references in both UIManager and AgentletCore
@@ -191,7 +256,11 @@ export class UIManager {
         // Optional action buttons based on configuration
         let refreshBtn = null;
         if (this.core.config.showRefreshButton) {
-            refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => this.core.refreshContent());
+            refreshBtn = this.core.createActionButton('🔄', 'Refresh', () => {
+                this.core.refreshContent().catch(error => {
+                    console.error('Error refreshing content:', error);
+                });
+            });
         }
 
         let settingsBtn = null;
@@ -274,7 +343,7 @@ export class UIManager {
             container.style.transition = 'none';
             
             // Also disable toggle button transitions during resize
-            const toggleButton = document.getElementById('agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle');
             if (toggleButton) {
                 toggleButton.style.transition = 'none';
             }
@@ -294,7 +363,7 @@ export class UIManager {
             document.documentElement.style.setProperty('--agentlet-panel-width', `${newWidth}px`);
             
             // Update toggle button position if it exists
-            const toggleButton = document.getElementById('agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle');
             if (toggleButton && !this.core.isMinimized) {
                 toggleButton.style.right = `${newWidth}px`;
             }
@@ -314,7 +383,7 @@ export class UIManager {
             container.style.transition = '';
             
             // Restore toggle button transitions
-            const toggleButton = document.getElementById('agentlet-toggle');
+            const toggleButton = this.ui.query('#agentlet-toggle');
             if (toggleButton) {
                 toggleButton.style.transition = '';
             }
@@ -333,7 +402,7 @@ export class UIManager {
 
     toggleCollapse() {
         const container = this.ui && this.ui.container;
-        const toggleButton = document.getElementById('agentlet-toggle');
+        const toggleButton = this.ui.query('#agentlet-toggle');
         
         // Safety check for container
         if (!container) return;
@@ -399,9 +468,10 @@ export class UIManager {
             this.toggleCollapse();
         });
         
-        // Add to document
-        document.body.appendChild(imageOverlay);
-        
+        // Add to document (the shadow root when shadowDom is enabled, otherwise document.body)
+        this.ensureRoot();
+        this.ui.root.appendChild(imageOverlay);
+
         // Store reference
         this.ui.imageOverlay = imageOverlay;
     }

@@ -15,9 +15,12 @@ import type {
     AgentletAPI,
     AgentletModule,
     ModuleActivationContext,
+    ModuleMountContext,
+    ModuleMountTrigger,
     EventBusAPI,
     ThemeManagerAPI,
     ZIndexConstants,
+    PanelManagerAPI,
     FormFillResult,
     TableData,
     AIStatus,
@@ -38,6 +41,7 @@ import CookieManager from '../../src/utils/config-persistence/CookieManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
+import { PanelManager } from '../../src/ui/PanelManager';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -60,6 +64,28 @@ window.agentlet.utils.Dialog.confirm('Are you sure?', 'Confirm', (value) => {
 });
 
 window.agentlet.utils.Dialog.showProgress({ title: 'Working', totalSteps: 3 }).updateProgress(50, 'Halfway there');
+
+window.agentlet.utils.Dialog.setRoot(document.body);
+window.agentlet.utils.MessageBubble.setRoot(null);
+
+const dialogRoot: ShadowRoot | HTMLElement = window.agentlet.utils.Dialog.getRoot();
+void dialogRoot;
+
+/* -------------------------------------------------------------- */
+/* Shadow DOM UI root                                               */
+/* -------------------------------------------------------------- */
+
+const uiRoot: ShadowRoot | HTMLElement | null = window.agentlet.ui.root;
+void uiRoot;
+const uiHost: HTMLElement | null = window.agentlet.ui.host;
+void uiHost;
+const queried: Element | null = window.agentlet.ui.query('#agentlet-toggle');
+void queried;
+const queriedAll: NodeListOf<Element> = window.agentlet.ui.queryAll('.agentlet-action-btn');
+void queriedAll;
+
+const shadowConfig: import('../../src/types/public-api').AgentletCoreConfig = { shadowDom: false };
+void shadowConfig;
 
 /* -------------------------------------------------------------- */
 /* Forms                                                           */
@@ -146,6 +172,60 @@ myAgentlet.on('my-agentlet:activated', (data: unknown) => {
 window.agentlet.modules.register(myAgentlet);
 
 /* -------------------------------------------------------------- */
+/* Module mount / unmount API                                       */
+/* -------------------------------------------------------------- */
+
+declare const mountContainer: HTMLElement;
+
+class ImperativeAgentlet extends window.agentlet.Module {
+    async mount(container: HTMLElement, context: ModuleMountContext): Promise<void> {
+        // `this.mounted`/`this.mountedContainer` are tracked by the core even
+        // though this override doesn't render via `getContent()`.
+        const root: ShadowRoot | HTMLElement = context.root;
+        const trigger: ModuleMountTrigger = context.trigger;
+        void container;
+        void root;
+        void trigger;
+    }
+
+    async unmount(container: HTMLElement): Promise<void> {
+        void container;
+    }
+}
+
+const imperativeAgentlet = new ImperativeAgentlet({ name: 'imperative-agentlet', patterns: ['example.com'] });
+const mounted: boolean = imperativeAgentlet.mounted;
+const mountedContainer: HTMLElement | null = imperativeAgentlet.mountedContainer;
+void mounted;
+void mountedContainer;
+
+// Every module (whether or not it overrides mount()/unmount()) exposes the
+// full mount/unmount API, since the base implementation is not abstract.
+const plainAgentletMount: (container: HTMLElement, context: ModuleMountContext) => Promise<void> = myAgentlet.mount.bind(myAgentlet);
+void plainAgentletMount;
+
+declare const mountContext: ModuleMountContext;
+const mountContextRoot: ShadowRoot | HTMLElement = mountContext.root;
+const mountContextTheme: import('../../src/types/public-api').AgentletTheme = mountContext.theme;
+const mountContextEventBus: EventBusAPI = mountContext.eventBus;
+const mountContextApi: AgentletAPI = mountContext.api;
+const mountContextTrigger: ModuleMountTrigger = mountContext.trigger;
+void mountContextRoot;
+void mountContextTheme;
+void mountContextEventBus;
+void mountContextApi;
+void mountContextTrigger;
+
+void imperativeAgentlet.mount(mountContainer, mountContext);
+void imperativeAgentlet.unmount(mountContainer);
+
+// window.agentlet.updateModuleContent() mounts/renders the active module and
+// accepts an optional trigger describing why.
+const contentUpdated: Promise<void> = window.agentlet.updateModuleContent('refresh');
+void contentUpdated;
+void window.agentlet.updateModuleContent();
+
+/* -------------------------------------------------------------- */
 /* Conformance: real classes <-> hand-written declarations          */
 /* -------------------------------------------------------------- */
 
@@ -182,6 +262,14 @@ void scriptInjectorCtorCheck;
 void scriptInjectorInstanceCheck;
 void envCheck;
 void cookiesCheck;
+
+// PanelManager's constructor takes an internal (unexported) core shape, not
+// a public config object like Module's, so both directions below use
+// `declare const` the same way the "declared -> real" checks do further
+// down, rather than constructing a real instance.
+declare const realPanelManager: PanelManager;
+const panelManagerCheck: PanelManagerAPI = realPanelManager;
+void panelManagerCheck;
 
 // declared -> real
 //
@@ -230,6 +318,10 @@ declare const declaredCookies: CookiesAPI;
 const cookiesBackToReal: Pick<InstanceType<typeof CookieManager>, keyof CookiesAPI> = declaredCookies;
 void cookiesBackToReal;
 
+declare const declaredPanelManager: PanelManagerAPI;
+const panelManagerBackToReal: Pick<PanelManager, keyof PanelManagerAPI> = declaredPanelManager;
+void panelManagerBackToReal;
+
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
 /* -------------------------------------------------------------- */
@@ -243,6 +335,11 @@ new window.agentlet.Module({ patterns: ['example.com'] });
 class BadAgentlet extends window.agentlet.Module {
     // @ts-expect-error cleanupModule must return void or Promise<void>, not a string
     cleanupModule(): string {
+        return 'nope';
+    }
+
+    // @ts-expect-error unmount must return Promise<void>, not a string
+    unmount(_container: HTMLElement): string {
         return 'nope';
     }
 }

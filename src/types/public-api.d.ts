@@ -138,6 +138,23 @@ export interface DialogCommandOptions {
 export interface DialogAPI {
     readonly isActive: boolean;
 
+    /**
+     * Sets the element/root dialogs mount into (a `ShadowRoot`, or an
+     * `HTMLElement` such as `document.body`). AgentletCore calls this
+     * automatically once its UI root exists; pass `null` to fall back to
+     * `window.agentlet.ui.root`, or `document.body` when neither is set
+     * (standalone use of the `Dialog` class without AgentletCore).
+     */
+    setRoot(root: ShadowRoot | HTMLElement | null): void;
+
+    /**
+     * Resolves the element/root dialogs currently mount into: an explicitly
+     * set root (setRoot()), else `window.agentlet.ui.root`, else
+     * `document.body` (standalone use of the `Dialog` class without
+     * AgentletCore).
+     */
+    getRoot(): ShadowRoot | HTMLElement;
+
     show(type: 'info', options?: DialogInfoOptions, callback?: (value: unknown) => void): void;
     show(type: 'input', options?: DialogInputOptions, callback?: (value: string | null) => void): void;
     show(type: 'wait', options?: DialogWaitOptions, cancelCallback?: () => void): void;
@@ -239,6 +256,14 @@ export interface MessageBubbleRecord {
 }
 
 export interface MessageBubbleAPI {
+    /**
+     * Sets the element/root the bubble container mounts into (a
+     * `ShadowRoot`, or an `HTMLElement` such as `document.body`).
+     * AgentletCore calls this automatically once its UI root exists; pass
+     * `null` to fall back to `window.agentlet.ui.root`, or `document.body`
+     * when neither is set (standalone use without AgentletCore).
+     */
+    setRoot(root: ShadowRoot | HTMLElement | null): void;
     /** Lazily creates the fixed-position container; idempotent. */
     init(): void;
     /** Shows one bubble and returns its id (e.g. `"bubble-1"`). */
@@ -701,6 +726,8 @@ export interface ShortcutManagerAPI {
     }): Promise<void>;
     showHelp(): void;
     enabled: boolean;
+    /** Builds the fixed-shape {@link ShortcutsAPI} object exposed as `window.agentlet.utils.shortcuts`. */
+    createProxy(): ShortcutsAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -749,6 +776,8 @@ export interface EnvAPI {
     loadFromObject(envObject: Record<string, string>, merge?: boolean): void;
     addChangeListener(callback: (key: string, newValue: string | undefined, oldValue: string | undefined) => void): void;
     removeChangeListener(callback: (key: string, newValue: string | undefined, oldValue: string | undefined) => void): void;
+    /** Wraps the manager in a passthrough `Proxy` that also allows arbitrary variable-name access; see the class doc comment above. */
+    createProxy(): EnvAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -807,6 +836,9 @@ export interface CookiesAPI {
     setPollFrequency(frequency: number): void;
     getStatistics(): CookieStatistics;
     export(format?: 'json' | 'netscape' | 'curl', includeSensitive?: boolean): string;
+    /** Wraps the manager in a passthrough `Proxy` that also allows arbitrary cookie-name access; see the class doc comment above. */
+    createProxy(): CookiesAPI;
+    cleanup(): void;
     cleanup(): void;
 }
 
@@ -953,6 +985,8 @@ export interface AuthManagerAPI {
     getState(): AuthState;
     updateConfig(config: Partial<AuthManagerConfig>): void;
     cleanup(): void;
+    /** Builds the fixed-shape {@link AuthAPI} object exposed as `window.agentlet.auth`. */
+    createProxy(): AuthAPI;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1201,6 +1235,8 @@ export interface TableExtractorAPI {
     extractAllPages(tableElement: HTMLTableElement, options?: TableExtractAllOptions): Promise<TableAllPagesData>;
     downloadAsExcel(tableData: TableData | TableAllPagesData, options?: TableDownloadOptions): Promise<TableDownloadResult>;
     extractAndDownload(tableElement: HTMLTableElement, options?: TableExtractAndDownloadOptions): Promise<TableDownloadResult>;
+    /** Builds the fixed-shape {@link TablesAPI} object exposed as `window.agentlet.tables`. */
+    createProxy(): TablesAPI;
 }
 
 export interface TablesAPI {
@@ -1332,8 +1368,8 @@ export interface ModuleRegistryAPI {
     unregister(moduleName: string): Promise<boolean>;
     findMatchingModule(url?: string): AgentletModule | null;
     activateModule(module: AgentletModule, context?: ModuleActivationContext): Promise<void>;
-    deactivateModule(): Promise<void>;
-    setModuleChangeCallback(callback: (module: AgentletModule | null) => void): void;
+    deactivateModule(context?: ModuleActivationContext): Promise<void>;
+    setModuleChangeCallback(callback: (module: AgentletModule | null, context?: ModuleActivationContext) => void): void;
     initialize(): Promise<void>;
     getAll(): string[];
     get(name: string): AgentletModule | null;
@@ -1346,7 +1382,7 @@ export interface ModuleRegistryAPI {
 /* ------------------------------------------------------------------ */
 
 export interface UIAPI {
-    refreshContent(): void;
+    refreshContent(): Promise<void>;
     show(): void;
     hide(): void;
     minimize(): void;
@@ -1361,6 +1397,18 @@ export interface UIAPI {
     header: HTMLElement | null;
     actions: HTMLElement | null;
     imageOverlay: HTMLElement | null;
+    /**
+     * UI mount root: an open `ShadowRoot` when `shadowDom` is enabled
+     * (the default), or `document.body` when `shadowDom: false`. `null`
+     * before `UIManager.ensureRoot()` runs (i.e. before `init()` completes).
+     */
+    root: ShadowRoot | HTMLElement | null;
+    /** `#agentlet-host` element mounted on `document.body`, or `null` in legacy (`shadowDom: false`) mode. */
+    host: HTMLElement | null;
+    /** `root.querySelector()`, so callers never need to know whether the UI lives in a shadow root or directly in the page. */
+    query(selector: string): Element | null;
+    /** `root.querySelectorAll()`, mirroring `query()`. */
+    queryAll(selector: string): NodeListOf<Element>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1492,6 +1540,34 @@ export interface ModuleActivationContext {
     [key: string]: unknown;
 }
 
+/**
+ * Why `Module.mount()`/`unmount()` is being invoked for the active module:
+ * `'init'` on the core's first `init()`, `'moduleChange'` when a different
+ * module becomes active, `'urlChange'` when the URL changed but the same
+ * module stays active, `'refresh'` from `window.agentlet.refreshContent()` /
+ * `ui.refreshContent()`, or a caller-supplied string.
+ */
+export type ModuleMountTrigger = 'init' | 'moduleChange' | 'urlChange' | 'refresh' | string;
+
+/**
+ * Passed to `Module.mount()`/`unmount()` by the core. Gives module authors
+ * everything needed to mount a UI framework root (React, Lit, ...) into
+ * `container`: where the panel lives in the DOM, the active theme, the
+ * shared event bus, and the full `window.agentlet` surface.
+ */
+export interface ModuleMountContext {
+    /** UI mount root: the shadow root when `shadowDom` is enabled, or `document.body` otherwise (same value as `window.agentlet.ui.root`). */
+    root: ShadowRoot | HTMLElement;
+    /** The current theme, as returned by `window.agentlet.themeManager.getTheme()`. */
+    theme: AgentletTheme;
+    /** The shared core event bus, same instance as `window.agentlet.eventBus`. */
+    eventBus: EventBusAPI;
+    /** The full `window.agentlet` API surface. */
+    api: AgentletAPI;
+    /** Why this mount/unmount is happening. */
+    trigger: ModuleMountTrigger;
+}
+
 export interface ModuleMetadata {
     name: string;
     version: string;
@@ -1516,6 +1592,10 @@ export declare class AgentletModule {
     eventBus?: EventBusAPI;
     injectedStyles: Set<string>;
     styleElement: HTMLStyleElement | null;
+    /** `true` between a successful `mount()` call and the matching `unmount()`. */
+    mounted: boolean;
+    /** The container passed to the most recent `mount()` call, or `null` when not mounted. */
+    mountedContainer: HTMLElement | null;
     performanceMetrics: { initTime: number; activateTime: number; cleanupTime: number };
     /** Set by `ModuleRegistry` after the first successful `init()`; not initialized in the constructor. */
     isInitialized?: boolean;
@@ -1537,6 +1617,21 @@ export declare class AgentletModule {
 
     /** Override to return the HTML shown in the agentlet panel. */
     getContent(): string;
+    /**
+     * Render this module's content into `container`. Called by the core
+     * whenever this module becomes (or stays) the active module - on init,
+     * module switch, URL change, or a manual refresh; see `context.trigger`.
+     * Override for imperative DOM mounting (e.g. a React or Lit root).
+     * Default implementation: `container.innerHTML = this.getContent();`.
+     */
+    mount(container: HTMLElement, context: ModuleMountContext): Promise<void>;
+    /**
+     * Tear down what `mount()` set up. Called by the core before a different
+     * module mounts, and by `cleanup()` if this module is still mounted. The
+     * core clears the container's content itself, so the default
+     * implementation is a no-op.
+     */
+    unmount(container: HTMLElement): Promise<void>;
     getMetadata(): ModuleMetadata;
 
     on(event: string, callback: (data: unknown) => void): void;
@@ -1589,6 +1684,15 @@ export interface AgentletCoreConfig {
     envManager?: EnvAPI | null;
     resizablePanel?: boolean;
     minimumPanelWidth?: number;
+    /**
+     * Mount the panel UI (and dialogs/toasts triggered through
+     * `window.agentlet.utils.Dialog`/`MessageBubble`) inside an open shadow
+     * root under a `#agentlet-host` element, isolating it from the host
+     * page's CSS in both directions. Default `true`; set to `false` to
+     * restore the pre-shadow-DOM behavior of mounting directly on
+     * `document.body`.
+     */
+    shadowDom?: boolean;
     /** Enables the Ctrl/Cmd+; quick command dialog shortcut. Default `false`. */
     quickCommandDialogShortcut?: boolean;
     quickCommandCallback?: ((result: unknown) => void) | null;
@@ -1693,7 +1797,7 @@ export interface AgentletAPI {
     hide(): void;
     minimize(): void;
     maximize(): void;
-    refreshContent(): void;
+    refreshContent(): Promise<void>;
     showSettings(): void;
     showHelp(): void;
     showError(message: string): void;
@@ -1702,12 +1806,13 @@ export interface AgentletAPI {
     regenerateStyles(): void;
     getPerformanceMetrics(): AgentletPerformanceReport;
     updateApplicationDisplay(): void;
-    updateModuleContent(): void;
+    /** Mounts (or renders) the active module's content into the panel; see `Module.mount()`/`unmount()`. */
+    updateModuleContent(trigger?: ModuleMountTrigger): Promise<void>;
 
     /** @internal called once during `init()` to wire up core event-bus handlers. */
     setupEventListeners(): void;
     /** @internal called by `ModuleRegistry` whenever the active module changes. */
-    onModuleChange(activeModule: AgentletModule | null): void;
+    onModuleChange(activeModule: AgentletModule | null, context?: ModuleActivationContext): void;
     /** @internal builds the discrete close button in the panel header. */
     createDiscreteCloseButton(): HTMLButtonElement;
     /** @internal builds one action button for the panel header. */

@@ -175,7 +175,7 @@ test.describe('Module loading', () => {
 
     // Check that module-specific styles are applied
     const buttonStyles = await page.evaluate(() => {
-      const button = document.querySelector('.agentlet-{{kebabCase name}}-content button');
+      const button = window.agentlet.ui.query('.agentlet-{{kebabCase name}}-content button');
       if (!button) return null;
       
       const styles = getComputedStyle(button);
@@ -205,7 +205,7 @@ test.describe('Module loading', () => {
 
     // Check heading font size
     const headingStyles = await page.evaluate(() => {
-      const heading = document.querySelector('.agentlet-{{kebabCase name}}-content h2');
+      const heading = window.agentlet.ui.query('.agentlet-{{kebabCase name}}-content h2');
       if (!heading) return null;
 
       const styles = getComputedStyle(heading);

@@ -83,6 +83,12 @@ class Dialog implements DialogAPI {
     // the resolved config and read by handleOverlayClick().
     closeOnOverlay: boolean;
 
+    // UI mount root (ShadowRoot, or an HTMLElement/document.body). Resolved
+    // lazily via getRoot() so a Dialog created before AgentletCore's root
+    // exists still finds it once setRoot() (or window.agentlet.ui.root) is
+    // available. See getRoot().
+    root: ShadowRoot | HTMLElement | null;
+
     constructor(config: DialogConfig = {}) {
         this.theme = config.theme || {};
         this.isActive = false;
@@ -103,13 +109,44 @@ class Dialog implements DialogAPI {
         this.startTime = null;
         this.progressAutoClose = true;
         this.closeOnOverlay = true;
+        this.root = null;
 
         // Bind methods
         this.handleKeydown = this.handleKeydown.bind(this);
         this.handleOverlayClick = this.handleOverlayClick.bind(this);
 
-        // Ensure dialog styles are injected
-        this.addDialogStyles();
+        // Note: dialog styles are injected lazily on first show (see
+        // createOverlay()/createFullscreenOverlay()), once the mount root is
+        // known, rather than here in the constructor.
+    }
+
+    /**
+     * Explicitly set the root this dialog mounts into. Called by GlobalAPI /
+     * AgentletCore once the shadow root (or document.body, in legacy mode)
+     * is available.
+     */
+    setRoot(root: ShadowRoot | HTMLElement | null): void {
+        this.root = root || null;
+    }
+
+    /**
+     * Resolve the element/root the dialog should mount into. Resolution
+     * order:
+     * 1. an explicitly set root (setRoot())
+     * 2. window.agentlet.ui.root, so a Dialog instantiated directly with
+     *    `new Dialog()` by an agentlet author still lands inside the shared
+     *    AgentletCore root when one exists
+     * 3. document.body, for standalone use of the Dialog class without
+     *    AgentletCore (a supported use case: Dialog is a named export)
+     */
+    getRoot(): ShadowRoot | HTMLElement {
+        if (this.root) {
+            return this.root;
+        }
+        if (typeof window !== 'undefined' && window.agentlet?.ui?.root) {
+            return window.agentlet.ui.root;
+        }
+        return document.body;
     }
 
     /**
@@ -377,7 +414,10 @@ class Dialog implements DialogAPI {
 
         const attemptFocus = (attempt = 0): void => {
             const firstInput = this.dialog?.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
-            if (firstInput && document.body.contains(firstInput)) {
+            // isConnected (rather than document.body.contains()) also holds
+            // true for elements attached inside a shadow root, which
+            // contains() cannot see across.
+            if (firstInput && firstInput.isConnected) {
                 try {
                     firstInput.focus();
 
@@ -674,8 +714,13 @@ class Dialog implements DialogAPI {
      * Create overlay element.
      */
     createOverlay(): void {
-        this.overlay = buildOverlay(this.type || '');
-        document.body.appendChild(this.overlay);
+        // Fallback CSS animations for standalone use (no-op when
+        // AgentletCore's stylesheet already covers dialogs). Must run
+        // before the overlay is built so its animations apply from the
+        // first frame.
+        this.addDialogStyles();
+
+        this.overlay = buildOverlay(this.type || '', this.getRoot());
 
         activateOverlayBodyState();
         // Block background scroll when dialog is open, preserve scroll position.
@@ -689,9 +734,15 @@ class Dialog implements DialogAPI {
      * Create fullscreen overlay element.
      */
     createFullscreenOverlay(): void {
-        this.overlay = buildFullscreenOverlay(this.type || '');
-        document.body.appendChild(this.overlay);
+        // Fallback CSS animations for standalone use (no-op when
+        // AgentletCore's stylesheet already covers dialogs).
+        this.addDialogStyles();
 
+        this.overlay = buildFullscreenOverlay(this.type || '', this.getRoot());
+
+        // Add class to body when overlay is active (intentionally always
+        // the real page body, even in shadow mode, since it blocks page
+        // scroll)
         document.body.classList.add('agentlet-overlay-active');
         this.preserveScrollPosition();
         document.body.classList.add('agentlet-dialog-open');
@@ -808,10 +859,11 @@ class Dialog implements DialogAPI {
     }
 
     /**
-     * Add CSS animations for dialogs.
+     * Add CSS animations for dialogs. A no-op whenever a core stylesheet
+     * already covers the mount root; see dialog/styles.ts for details.
      */
     addDialogStyles(): void {
-        injectDialogStyles();
+        injectDialogStyles(this.getRoot());
     }
 
     /**

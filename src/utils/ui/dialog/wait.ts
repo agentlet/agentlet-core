@@ -4,7 +4,6 @@
  * `showAIProcessing`, `showLoading`, `showAnalyzing`, and `showThinking`.
  */
 import { Z_INDEX } from '../ZIndex.js';
-import { addDialogStyles } from './styles';
 import type { DialogWaitOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, ResolvedWaitConfig } from './types';
 
@@ -146,8 +145,6 @@ export function buildWaitDialog(
     dialog.style.display = 'block';
     dialog.style.visibility = 'visible';
     dialog.style.opacity = '1';
-
-    addDialogStyles();
 
     return dialog;
 }

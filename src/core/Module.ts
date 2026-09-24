@@ -6,6 +6,7 @@ import type {
     ModuleConfig,
     ModuleActivationContext,
     ModuleMetadata,
+    ModuleMountContext,
     ModulePatternMatcher,
     EventBusAPI
 } from '../types/public-api';
@@ -34,6 +35,14 @@ class Module {
     injectedStyles: Set<string>;
     styleElement: HTMLStyleElement | null;
 
+    // Mount state (Module mount/unmount API)
+    /** `true` between a successful `mount()` call and the matching `unmount()`. Set/cleared by the core via `_beforeMount()`/`_afterUnmount()`. */
+    mounted: boolean;
+    /** The container passed to the most recent `mount()` call, or `null` when not mounted. */
+    mountedContainer: HTMLElement | null;
+    /** The UI root (`ShadowRoot`/`HTMLElement`) captured from the last `mount()` context, used by `injectStyles()`. */
+    private _mountRoot: ShadowRoot | HTMLElement | null;
+
     // Performance tracking - basic
     performanceMetrics: { initTime: number; activateTime: number; cleanupTime: number };
 
@@ -61,6 +70,11 @@ class Module {
         // CSS injection
         this.injectedStyles = new Set();
         this.styleElement = null;
+
+        // Mount state
+        this.mounted = false;
+        this.mountedContainer = null;
+        this._mountRoot = null;
 
         // Performance tracking - basic
         this.performanceMetrics = {
@@ -184,6 +198,20 @@ class Module {
 
         try {
             this.isActive = false;
+
+            // Unmount before running cleanupModule() so subclasses can rely on the
+            // container already having been torn down. Guarded by `mounted` so a
+            // module unmounted earlier (e.g. by the core when switching the active
+            // module) is never unmounted twice.
+            if (this.mounted && this.mountedContainer) {
+                try {
+                    await this.unmount(this.mountedContainer);
+                } catch (error) {
+                    this.error('Error unmounting module content during cleanup:', error);
+                }
+                this._afterUnmount();
+            }
+
             await this.cleanupModule(context);
             this.removeAllStyles();
             this.removeAllEventListeners();
@@ -219,6 +247,61 @@ class Module {
     }
 
     cleanupModule(_context: ModuleActivationContext = {}): Promise<void> | void {
+        // Override in your module
+    }
+
+    /**
+     * Called by the core immediately before invoking `mount()`, including when a
+     * subclass fully replaces `mount()`'s body, so mount state and the UI root
+     * used by `injectStyles()` are tracked regardless of what the override does.
+     * Not meant to be called by module authors.
+     * @private
+     */
+    _beforeMount(container: HTMLElement, context: ModuleMountContext): void {
+        this.mounted = true;
+        this.mountedContainer = container;
+        this._mountRoot = context?.root ?? null;
+    }
+
+    /**
+     * Called by the core immediately after `unmount()` settles (resolves or
+     * throws) to clear mount state. Not meant to be called by module authors.
+     * @private
+     */
+    _afterUnmount(): void {
+        this.mounted = false;
+        this.mountedContainer = null;
+        this._mountRoot = null;
+    }
+
+    /**
+     * Render this module's content into `container`. Called by the core when
+     * this module becomes the active module (on init, module switch, URL
+     * change, or a manual refresh - see `context.trigger`).
+     *
+     * Override this method for imperative DOM mounting (e.g. mounting a React
+     * or Lit root). `this.mounted`/`this.mountedContainer` are kept up to
+     * date by the core regardless of whether this method is overridden (the
+     * core calls the internal `_beforeMount()`/`_afterUnmount()` steps around
+     * `mount()`/`unmount()`), so an override can rely on `this.mounted` to
+     * decide whether to update an already-mounted root in place instead of
+     * re-rendering. The default implementation keeps today's `getContent()`
+     * based rendering working unchanged for every existing agentlet.
+     */
+    async mount(container: HTMLElement, context: ModuleMountContext): Promise<void> {
+        this._beforeMount(container, context);
+        container.innerHTML = this.getContent();
+    }
+
+    /**
+     * Tear down what `mount()` set up (e.g. unmount a framework root added by
+     * an override). Called by the core before a different module mounts, and
+     * by `cleanup()` if this module is still mounted.
+     *
+     * The core clears the container's content itself after this resolves, so
+     * the default implementation is a no-op.
+     */
+    async unmount(_container: HTMLElement): Promise<void> {
         // Override in your module
     }
 
@@ -297,11 +380,36 @@ class Module {
             this.styleElement = document.createElement('style');
             this.styleElement.type = 'text/css';
             this.styleElement.setAttribute('data-module', this.name);
-            document.head.appendChild(this.styleElement);
+            this._resolveStyleRoot().appendChild(this.styleElement);
         }
 
         this.styleElement.textContent += css;
         this.injectedStyles.add(css);
+    }
+
+    /**
+     * Resolves where `injectStyles()` appends its `<style>` element: the root
+     * captured from the most recent `mount()` call when it is a real UI root
+     * (a `ShadowRoot`, or any `HTMLElement` other than `document.body`),
+     * else `window.agentlet.ui.root` under the same rule, else
+     * `document.head`. `document.body` (the UI root in `shadowDom: false`
+     * mode) is treated the same as "no root known" so styles keep landing in
+     * the historical `<head>` spot rather than the end of `<body>`.
+     * @private
+     */
+    private _resolveStyleRoot(): ShadowRoot | HTMLElement {
+        const candidates: Array<ShadowRoot | HTMLElement | null> = [
+            this._mountRoot,
+            window.agentlet?.ui?.root ?? null
+        ];
+
+        for (const candidate of candidates) {
+            if (candidate && candidate !== document.body) {
+                return candidate;
+            }
+        }
+
+        return document.head;
     }
 
     removeAllStyles(): void {

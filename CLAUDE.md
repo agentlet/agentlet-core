@@ -18,7 +18,7 @@ Key features of the `agentlet-core` framework:
 - **Utility Functions**: Essential utilities for dialogs, messages, screen capture, and script injection.
 - **Data Access**: Simple access to cookies, local storage, and environment variables.
 - **Authentication**: Optional popup-based authentication for OAuth/OIDC flows.
-- **Clean Architecture**: 3-hook module lifecycle (init, activate, cleanup) for predictable behavior.
+- **Clean Architecture**: module lifecycle (init, activate, cleanup) plus optional mount/unmount hooks for predictable behavior.
 - **No Dependencies**: Uses native DOM methods - no jQuery or complex dependencies required.
 
 These primitives enable AI developers to rapidly create agentlets that enhance their applications. Note that backend AI APIs (such as those wrapping OpenAI services or AWS Bedrock) are still required, along with proper authentication mechanisms.
@@ -28,7 +28,7 @@ These primitives enable AI developers to rapidly create agentlets that enhance t
 ### Core architecture
 - **AgentletCore** (`src/index.js`) - Main application class with plugin architecture
 - **ModuleLoader** (`src/plugin-system/ModuleLoader.js`) - Dynamic module loading system
-- **BaseModule/BaseSubmodule** (`src/core/`) - Base classes with simplified 3-hook lifecycle (init, activate, cleanup)
+- **BaseModule/BaseSubmodule** (`src/core/`) - Base classes with a simplified lifecycle (init, activate, cleanup) plus mount/unmount hooks; see `docs/module-mount-api.md`
 
 ### Form automation system (Simplified)
 - **FormExtractor** (`src/utils/data-processing/FormExtractor.js`) - Simple form structure extraction with essential data
@@ -197,7 +197,7 @@ const agentlet = new AgentletCore({
 
 ### Module lifecycle
 ```javascript
-// Simplified 3-hook lifecycle for modules and submodules
+// Simplified lifecycle for modules and submodules
 class MyAgentlet extends window.agentlet.BaseModule {
     async initModule() {
         // Called once during module startup
@@ -212,6 +212,18 @@ class MyAgentlet extends window.agentlet.BaseModule {
             console.log(`URL changed from ${context.oldUrl} to ${context.newUrl}`);
         }
         // Activation logic here
+    }
+
+    async mount(container, context) {
+        // Called on every content render (init, module/URL change, refresh).
+        // Default: container.innerHTML = this.getContent(). Override to mount
+        // a UI framework root instead - see docs/module-mount-api.md.
+        container.innerHTML = this.getContent();
+    }
+
+    async unmount(container) {
+        // Called before the next mount and during cleanup. Default: no-op.
+        // Override to tear down whatever mount() set up (e.g. a React root).
     }
     
     async cleanupModule(context = {}) {

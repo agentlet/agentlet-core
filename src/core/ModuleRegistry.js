@@ -142,7 +142,7 @@ export default class ModuleRegistry {
         try {
             // Deactivate current module if different
             if (this.activeModule && this.activeModule !== module) {
-                await this.deactivateModule();
+                await this.deactivateModule(context);
             }
 
             // Skip if already active
@@ -164,7 +164,7 @@ export default class ModuleRegistry {
 
             // Notify callback
             if (this.onModuleChange) {
-                this.onModuleChange(module);
+                this.onModuleChange(module, context);
             }
 
         } catch (error) {
@@ -178,13 +178,14 @@ export default class ModuleRegistry {
 
     /**
      * Deactivate current module
+     * @param {Object} [context] - Context describing why deactivation happened (e.g. a urlChange), forwarded to `module.cleanup()` and the module-change callback
      */
-    async deactivateModule() {
+    async deactivateModule(context = {}) {
         if (!this.activeModule) return;
 
         const module = this.activeModule;
         try {
-            await module.cleanup();
+            await module.cleanup(context);
             console.log(`⏸️ Module deactivated: ${module.name}`);
             this.emit('module:deactivated', { module: module.name });
         } catch (error) {
@@ -195,7 +196,7 @@ export default class ModuleRegistry {
 
         // Notify callback
         if (this.onModuleChange) {
-            this.onModuleChange(null);
+            this.onModuleChange(null, context);
         }
     }
 
@@ -219,7 +220,7 @@ export default class ModuleRegistry {
                 this.activateModule(matchingModule, context);
                 this.emit('application:detected', { module: matchingModule.name, url: currentUrl });
             } else {
-                this.deactivateModule();
+                this.deactivateModule(context);
                 this.emit('application:notDetected', { url: currentUrl });
             }
         }

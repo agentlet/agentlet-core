@@ -114,7 +114,9 @@ test.describe('Custom Styling Example', () => {
 
     // Verify it's actually a fullscreen dialog (covers viewport)
     const dialogDimensions = await page.evaluate(() => {
-      const dialog = document.querySelector('.agentlet-fullscreen-dialog');
+      const dialog = window.agentlet?.ui?.query
+        ? window.agentlet.ui.query('.agentlet-fullscreen-dialog')
+        : document.querySelector('.agentlet-fullscreen-dialog');
       if (dialog) {
         const rect = dialog.getBoundingClientRect();
         return {
@@ -157,6 +159,18 @@ test.describe('Custom Styling Example', () => {
     });
     expect(glassThemeProps.hasClass).toBe(true);
 
+    // The theme's CSS custom properties (set on body.theme-glass) must
+    // actually reach the panel through the shadow boundary: this is what
+    // regressed when the panel moved into the shadow root, since the old
+    // page-level `#agentlet-container { ... }` overrides stopped matching
+    // anything. A translucent (alpha < 1) panel background is a reliable
+    // sign the --agentlet-background-color custom property took effect.
+    const glassPanelBackground = await page.evaluate(() => {
+      const panel = window.agentlet.ui.query('#agentlet-container');
+      return panel ? window.getComputedStyle(panel).backgroundColor : null;
+    });
+    expect(glassPanelBackground).toMatch(/^rgba\(/);
+
     // Test Material Design theme
     await page.locator('#materialBtn').click({ force: true });
     await page.waitForTimeout(1500);
@@ -172,6 +186,16 @@ test.describe('Custom Styling Example', () => {
     expect(materialThemeState.hasMaterial).toBe(true);
     expect(materialThemeState.hasGlass).toBe(false);
 
+    // The Material theme sets a blue (#1976D2) panel header, distinct from
+    // the default white header - this only holds if the panel's own
+    // stylesheet (inside the shadow root) picked up the custom properties
+    // set on body.theme-material.
+    const materialHeaderBackground = await page.evaluate(() => {
+      const header = window.agentlet.ui.query('#agentlet-header');
+      return header ? window.getComputedStyle(header).backgroundColor : null;
+    });
+    expect(materialHeaderBackground).toBe('rgb(25, 118, 210)');
+
     // Test VS Code Dark theme (note: class is theme-vscode, not theme-vscode-dark)
     await page.locator('#vscodeBtn').click({ force: true });
     await page.waitForTimeout(1500);
@@ -186,6 +210,17 @@ test.describe('Custom Styling Example', () => {
     });
     expect(vscodeThemeState.hasVSCode).toBe(true);
     expect(vscodeThemeState.hasMaterial).toBe(false);
+
+    // The VS Code Dark theme sets a near-black (#1E1E1E) panel background.
+    // This is the exact regression reported manually in Chrome: after
+    // shadow DOM landed, the panel and header stayed white when switching
+    // to this theme because the page-level CSS could no longer reach
+    // #agentlet-container inside the shadow root.
+    const vscodePanelBackground = await page.evaluate(() => {
+      const panel = window.agentlet.ui.query('#agentlet-container');
+      return panel ? window.getComputedStyle(panel).backgroundColor : null;
+    });
+    expect(vscodePanelBackground).toBe('rgb(30, 30, 30)');
 
     // Test Tux Linux theme
     await page.locator('#tuxBtn').click({ force: true });
@@ -205,11 +240,21 @@ test.describe('Custom Styling Example', () => {
     expect(tuxThemeState.hasTux).toBe(true);
     expect(tuxThemeState.hasVSCode).toBe(false);
 
+    // The Tux theme sets a distinctive orange (#FF6B35) left border on the
+    // panel, different from both the default and every other theme here.
+    const tuxPanelBorderColor = await page.evaluate(() => {
+      const panel = window.agentlet.ui.query('#agentlet-container');
+      return panel ? window.getComputedStyle(panel).borderLeftColor : null;
+    });
+    expect(tuxPanelBorderColor).toBe('rgb(255, 107, 53)');
+
     // Verify theme affects the agentlet panel if visible
     const panelVisible = await agentletTest.isPanelVisible();
     if (panelVisible) {
       const panelThemeProps = await page.evaluate(() => {
-        const panel = document.getElementById('agentlet-container');
+        const panel = window.agentlet?.ui?.query
+          ? window.agentlet.ui.query('#agentlet-container')
+          : document.getElementById('agentlet-container');
         if (panel) {
           const computedStyle = window.getComputedStyle(panel);
           return {
@@ -234,9 +279,10 @@ test.describe('Custom Styling Example', () => {
 
     // Test programmatic panel control using window.agentlet API
     const initialState = await page.evaluate(() => {
+      const queryUi = (sel) => (window.agentlet?.ui?.query ? window.agentlet.ui.query(sel) : document.querySelector(sel));
       return {
         isMinimized: window.agentlet?.isMinimized || false,
-        panelExists: !!document.getElementById('agentlet-container')
+        panelExists: !!queryUi('#agentlet-container')
       };
     });
     expect(initialState.panelExists).toBe(true);
@@ -259,9 +305,10 @@ test.describe('Custom Styling Example', () => {
 
     // Panel should still be accessible
     const finalState = await page.evaluate(() => {
+      const queryUi = (sel) => (window.agentlet?.ui?.query ? window.agentlet.ui.query(sel) : document.querySelector(sel));
       return {
-        panelExists: !!document.getElementById('agentlet-container'),
-        hasToggleButton: !!document.querySelector('#agentlet-container button, .agentlet-toggle')
+        panelExists: !!queryUi('#agentlet-container'),
+        hasToggleButton: !!queryUi('#agentlet-container button, .agentlet-toggle')
       };
     });
     expect(finalState.panelExists).toBe(true);
@@ -307,15 +354,17 @@ test.describe('Custom Styling Example', () => {
   test('should show theme API examples', async ({ page }) => {
     // Check that theme API examples are present
     await expect(page.locator('h3:has-text("Theme switching API examples")')).toBeVisible();
-    await expect(page.locator('h4:has-text("Dynamic Theme Switching")')).toBeVisible();
-    await expect(page.locator('h4:has-text("Custom Theme Configuration")')).toBeVisible();
+    await expect(page.locator('h4:has-text("Theming through the shadow root with CSS variables")')).toBeVisible();
+    await expect(page.locator('h4:has-text("Updating the theme from JavaScript")')).toBeVisible();
 
-    // Check that code examples contain the expected API calls
+    // Check that code examples contain the expected, real API calls (the
+    // panel has no window.agentlet.theme.switchTheme()/applyTheme() - the
+    // actual runtime API is themeManager.updateTheme() + ui.regenerateStyles())
     const allCodeTexts = await page.locator('code').allTextContents();
     const combinedCode = allCodeTexts.join(' ');
 
-    expect(combinedCode).toContain('window.agentlet.theme.switchTheme');
-    expect(combinedCode).toContain('window.agentlet.theme.applyTheme');
+    expect(combinedCode).toContain('window.agentlet.themeManager.updateTheme');
+    expect(combinedCode).toContain('window.agentlet.ui.regenerateStyles');
 
     // Verify we have multiple code blocks
     const codeBlockCount = await page.locator('code').count();
@@ -324,7 +373,7 @@ test.describe('Custom Styling Example', () => {
     // Check specific theme switching examples
     expect(combinedCode).toContain('glass');
     expect(combinedCode).toContain('material');
-    expect(combinedCode).toContain('vscode-dark');
+    expect(combinedCode).toContain('vscode');
     expect(combinedCode).toContain('tux');
   });
 });

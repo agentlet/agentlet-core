@@ -1,23 +1,12 @@
-{{#if (eq libraryLoading 'bundled')}}
-{{#each externalLibs}}
-{{#if (eq this 'html2canvas')}}
-import html2canvas from 'html2canvas';
-window.html2canvas = html2canvas;
-{{/if}}
-{{#if (eq this 'xlsx')}}
-import * as XLSX from 'xlsx';
-window.XLSX = XLSX;
-{{/if}}
-{{#if (eq this 'pdfjs-dist')}}
-import * as pdfjsLib from 'pdfjs-dist';
-window.pdfjsLib = pdfjsLib;
-{{/if}}
-{{#if (eq this 'hotkeys-js')}}
-import hotkeys from 'hotkeys-js';
-window.hotkeys = hotkeys;
-{{/if}}
-{{/each}}
-{{/if}}
+// html2canvas, xlsx, pdfjs-dist and hotkeys-js are NOT imported here: this
+// project's own agentlet-core dependency already bundles all four and
+// exposes them as window.html2canvas/window.XLSX/window.pdfjsLib/window.hotkeys
+// once agentlet.init() resolves below (see src/libraries/LibrarySetup.js in
+// agentlet-core). Importing them again here would bundle a second copy of
+// each into this project's own dist/*-bundle.js. The one exception is the
+// PDF.js *worker* file, which still needs to be copied into this project's
+// dist/ folder - see the "Include the PDF.js worker file?" scaffold prompt
+// (--libs=pdfjs-dist) and the CopyPlugin entry it adds to webpack.config.js.
 
 import AgentletCore from 'agentlet-core';
 

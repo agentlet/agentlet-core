@@ -9,6 +9,37 @@ export default class MessageBubble {
         this.bubbleCounter = 0;
         this.container = null;
         this.initialized = false;
+        // UI mount root (ShadowRoot, or an HTMLElement/document.body). Resolved
+        // lazily via getRoot() - see setRoot()/getRoot() - since init() only
+        // runs on first show(), by which time AgentletCore's root normally
+        // already exists.
+        this.root = null;
+    }
+
+    /**
+     * Explicitly set the root this message bubble container mounts into.
+     * Called by GlobalAPI / AgentletCore once the shadow root (or
+     * document.body, in legacy mode) is available.
+     * @param {ShadowRoot|HTMLElement|null} root
+     */
+    setRoot(root) {
+        this.root = root || null;
+    }
+
+    /**
+     * Resolve the element/root the bubble container should mount into.
+     * Resolution order mirrors Dialog.getRoot(): an explicitly set root, then
+     * window.agentlet.ui.root, then document.body for standalone use.
+     * @returns {ShadowRoot|HTMLElement}
+     */
+    getRoot() {
+        if (this.root) {
+            return this.root;
+        }
+        if (typeof window !== 'undefined' && window.agentlet?.ui?.root) {
+            return window.agentlet.ui.root;
+        }
+        return document.body;
     }
 
     /**
@@ -31,7 +62,7 @@ export default class MessageBubble {
             max-width: 400px;
         `;
 
-        document.body.appendChild(this.container);
+        this.getRoot().appendChild(this.container);
         this.addStyles();
         this.initialized = true;
     }
@@ -363,36 +394,65 @@ export default class MessageBubble {
     }
 
     /**
-     * Add CSS styles for bubbles
+     * Add CSS styles for bubbles.
+     *
+     * These rules normally live in AgentletCore's own stylesheet (see
+     * StyleInjector.generateBubbleStyles()), injected once for the whole UI.
+     * This method is only a fallback for standalone use of MessageBubble (no
+     * AgentletCore instance around it) and is a no-op whenever a core
+     * stylesheet is already present, in the root or in <head>.
+     *
+     * Idempotent per root: safe to call every time init() runs.
      */
     addStyles() {
-        if (!document.getElementById('agentlet-bubble-styles')) {
-            const style = document.createElement('style');
-            style.id = 'agentlet-bubble-styles';
-            style.textContent = `
-                .agentlet-bubble:hover {
-                    transform: translateX(-2px) !important;
-                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
-                }
-                
-                @media (max-width: 480px) {
-                    #agentlet-message-bubbles {
-                        left: 10px !important;
-                        right: 10px !important;
-                        max-width: none !important;
-                    }
-                    
-                    .agentlet-bubble {
-                        transform: translateY(-100%) !important;
-                    }
-                    
-                    .agentlet-bubble:hover {
-                        transform: translateY(-102px) !important;
-                    }
-                }
-            `;
-            document.head.appendChild(style);
+        const root = this.getRoot();
+
+        // A core stylesheet already covers these rules: nothing to do.
+        // (document.body has no adoptedStyleSheets of its own, so this only
+        // ever matches a shadow root - no need to reference ShadowRoot
+        // directly, which also isn't declared as an ESLint browser global.)
+        const hasAdoptedCoreStyles = Array.isArray(root.adoptedStyleSheets) &&
+            root.adoptedStyleSheets.length > 0;
+        const hasCoreStyleInRoot = typeof root.querySelector === 'function' &&
+            !!root.querySelector('#agentlet-core-styles');
+        const hasCoreStyleInHead = typeof document !== 'undefined' &&
+            !!document.getElementById('agentlet-core-styles');
+        if (hasAdoptedCoreStyles || hasCoreStyleInRoot || hasCoreStyleInHead) {
+            return;
         }
+
+        // Fallback target: <head> when mounting on document.body (legacy
+        // mode / no root yet), otherwise the root itself (shadow root).
+        const target = root === document.body ? document.head : root;
+        if (!target || typeof target.querySelector !== 'function' || target.querySelector('#agentlet-bubble-styles')) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'agentlet-bubble-styles';
+        style.textContent = `
+            .agentlet-bubble:hover {
+                transform: translateX(-2px) !important;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+            }
+
+            @media (max-width: 480px) {
+                #agentlet-message-bubbles {
+                    left: 10px !important;
+                    right: 10px !important;
+                    max-width: none !important;
+                }
+
+                .agentlet-bubble {
+                    transform: translateY(-100%) !important;
+                }
+
+                .agentlet-bubble:hover {
+                    transform: translateY(-102px) !important;
+                }
+            }
+        `;
+        target.appendChild(style);
     }
 
     /**

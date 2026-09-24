@@ -89,6 +89,7 @@ export default [
                 Node: 'readonly',
                 NodeFilter: 'readonly',
                 CSS: 'readonly',
+                CSSStyleSheet: 'readonly',
                 File: 'readonly',
                 FileReader: 'readonly',
                 requestAnimationFrame: 'readonly',

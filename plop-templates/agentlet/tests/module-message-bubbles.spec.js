@@ -29,7 +29,7 @@ test.describe('Module message bubbles', () => {
 
     // Wait for new bubble to appear
     await page.waitForFunction(
-      (initialCount) => document.querySelectorAll('.agentlet-bubble').length > initialCount,
+      (initialCount) => window.agentlet.ui.queryAll('.agentlet-bubble').length > initialCount,
       initialBubbleCount,
       { timeout: 5000 }
     );
@@ -133,7 +133,7 @@ test.describe('Module message bubbles', () => {
 
     // Wait for new bubble to appear
     await page.waitForFunction(
-      (initialCount) => document.querySelectorAll('.agentlet-bubble').length > initialCount,
+      (initialCount) => window.agentlet.ui.queryAll('.agentlet-bubble').length > initialCount,
       initialBubbleCount,
       { timeout: 5000 }
     );

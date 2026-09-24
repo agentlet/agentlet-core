@@ -127,7 +127,9 @@ export class AgentletTestBase {
   async hasClass(selector, className) {
     return await this.page.evaluate(
       ([sel, cls]) => {
-        const element = document.querySelector(sel);
+        const element = window.agentlet?.ui?.query
+          ? window.agentlet.ui.query(sel)
+          : document.querySelector(sel);
         return element && element.classList.contains(cls);
       },
       [selector, className]
@@ -196,7 +198,8 @@ export class AgentletTestBase {
 
     // If none found, log what's actually in the DOM
     const allElements = await this.page.evaluate(() => {
-      const elements = Array.from(document.querySelectorAll('*')).filter(el =>
+      const queryAllUi = (sel) => (window.agentlet?.ui?.queryAll ? window.agentlet.ui.queryAll(sel) : document.querySelectorAll(sel));
+      const elements = Array.from(queryAllUi('*')).filter(el =>
         el.className && (el.className.includes('dialog') || el.className.includes('modal'))
       );
       return elements.map(el => ({

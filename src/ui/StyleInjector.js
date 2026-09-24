@@ -8,7 +8,39 @@ import { Z_INDEX } from '../utils/ui/ZIndex.js';
 export class StyleInjector {
     constructor(themeManager) {
         this.themeManager = themeManager;
+        // Id of the element/sheet holding the UI rules (panel, component, dialog,
+        // animation styles). In non-shadow mode this single element also carries
+        // the theme custom properties, matching pre-shadow-DOM behavior exactly.
         this.styleId = 'agentlet-core-styles';
+        // Id of the <style> holding only the theme CSS custom properties. Always
+        // injected into <head> (shadow mode or not) so `--agentlet-*` variables
+        // inherit into the shadow tree, since custom properties pierce `all: initial`.
+        this.themeStyleId = 'agentlet-core-theme';
+        // UI mount root (ShadowRoot when shadowDom is enabled, document.body when
+        // it's disabled). Set via setRoot(), normally by UIManager.ensureRoot().
+        this.root = null;
+        // Cached CSSStyleSheet instance reused across regenerateStyles() calls
+        // when the adoptedStyleSheets API is available, so we replace its content
+        // in place instead of creating (and appending) a new sheet every time.
+        this._adoptedSheet = null;
+    }
+
+    /**
+     * Tell the style injector where the UI rules should be applied. Called by
+     * UIManager once the mount root (shadow root or document.body) is known.
+     * @param {ShadowRoot|HTMLElement|null} root
+     */
+    setRoot(root) {
+        this.root = root;
+    }
+
+    /**
+     * Whether the current root is a shadow root (as opposed to document.body,
+     * used when shadowDom is disabled). document.body is a stable singleton, so
+     * this check is reliable for both real ShadowRoot instances and test doubles.
+     */
+    isShadowMode() {
+        return !!this.root && this.root !== document.body;
     }
 
     /**
@@ -146,27 +178,159 @@ export class StyleInjector {
     }
 
     /**
-     * Inject all styles
+     * Reset block prepended to the UI stylesheet when it lives inside a shadow
+     * root, so elements inside the shadow tree don't inherit the host page's
+     * fonts/colors. `all: initial` doesn't reset custom properties, so the
+     * `--agentlet-*` theme variables (injected separately into <head>, see
+     * injectThemeStyles()) still cascade in through `:host`.
+     */
+    generateHostResetStyles() {
+        return `
+            :host {
+                all: initial;
+                display: contents;
+                font-family: var(--agentlet-font-family);
+                color: var(--agentlet-text-color);
+                line-height: 1.4;
+                font-size: 14px;
+            }
+        `;
+    }
+
+    /**
+     * Inject all styles.
+     *
+     * - shadowDom disabled (this.root === document.body, or no root set yet):
+     *   exactly the pre-shadow-DOM behavior - one <style id="agentlet-core-styles">
+     *   in <head> containing the theme variables plus every UI rule.
+     * - shadowDom enabled: the theme variables go into <head> as their own
+     *   <style id="agentlet-core-theme"> (so they inherit into the shadow tree),
+     *   and the UI rules (prefixed with a :host reset) go into the shadow root,
+     *   via an adopted stylesheet when supported or a fallback <style> element.
      */
     injectStyles() {
+        const theme = this.themeManager.getTheme();
+
+        if (!this.isShadowMode()) {
+            this.injectLegacyStyles(theme);
+            return;
+        }
+
+        this.injectThemeStyles(theme);
+        this.injectUIStyles(theme);
+    }
+
+    /**
+     * Pre-shadow-DOM behavior: a single <style> in <head> with everything.
+     */
+    injectLegacyStyles(theme) {
         const existingStyle = document.getElementById(this.styleId);
         if (existingStyle) {
             existingStyle.remove();
         }
-        
-        const theme = this.themeManager.getTheme();
+
         const style = document.createElement('style');
         style.id = this.styleId;
-        
+
         // Build the complete stylesheet
-        style.textContent = 
+        style.textContent =
             this.generateCSSProperties(theme) +
             this.generatePanelStyles() +
             this.generateComponentStyles() +
             this.generateDialogStyles() +
+            this.generateBubbleStyles() +
             this.generateAnimationStyles();
-        
+
         document.head.appendChild(style);
+    }
+
+    /**
+     * Theme CSS custom properties (`--agentlet-*`), always injected into
+     * <head> on `:root` regardless of shadowDom, so ThemeManager keeps working
+     * unchanged and the variables inherit into any shadow tree.
+     */
+    injectThemeStyles(theme) {
+        const existingStyle = document.getElementById(this.themeStyleId);
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
+        const style = document.createElement('style');
+        style.id = this.themeStyleId;
+        style.textContent = this.generateCSSProperties(theme);
+        document.head.appendChild(style);
+    }
+
+    /**
+     * UI rules (panel, component, dialog, animation styles plus the :host
+     * reset), applied to the shadow root via adoptedStyleSheets when available,
+     * falling back to a plain <style> element appended to the root otherwise.
+     */
+    injectUIStyles() {
+        const root = this.root;
+        const css =
+            this.generateHostResetStyles() +
+            this.generatePanelStyles() +
+            this.generateComponentStyles() +
+            this.generateDialogStyles() +
+            this.generateBubbleStyles() +
+            this.generateAnimationStyles();
+
+        const supportsAdoptedStyleSheets =
+            typeof root.adoptedStyleSheets !== 'undefined' &&
+            typeof CSSStyleSheet !== 'undefined' &&
+            typeof CSSStyleSheet.prototype.replaceSync === 'function';
+
+        if (supportsAdoptedStyleSheets) {
+            this.injectAdoptedStyles(root, css);
+        } else {
+            this.injectFallbackStyles(root, css);
+        }
+    }
+
+    /**
+     * Apply UI rules via a single, reused CSSStyleSheet on root.adoptedStyleSheets.
+     * The sheet is created once and updated in place with replaceSync() on later
+     * calls (theme regeneration), so regenerating styles never duplicates it.
+     */
+    injectAdoptedStyles(root, css) {
+        // Clean up a leftover fallback <style> from an earlier injection that
+        // didn't have adoptedStyleSheets support available.
+        const existingFallback = typeof root.querySelector === 'function'
+            ? root.querySelector(`#${this.styleId}`)
+            : null;
+        if (existingFallback) {
+            existingFallback.remove();
+        }
+
+        if (!this._adoptedSheet) {
+            this._adoptedSheet = new CSSStyleSheet();
+        }
+        this._adoptedSheet.replaceSync(css);
+
+        const existingSheets = Array.isArray(root.adoptedStyleSheets) ? root.adoptedStyleSheets : [];
+        if (!existingSheets.includes(this._adoptedSheet)) {
+            root.adoptedStyleSheets = [...existingSheets, this._adoptedSheet];
+        }
+    }
+
+    /**
+     * Apply UI rules as a plain <style id="agentlet-core-styles"> element
+     * appended to the root (used when adoptedStyleSheets isn't available, e.g.
+     * jsdom in tests, or older browsers).
+     */
+    injectFallbackStyles(root, css) {
+        const existingStyle = typeof root.querySelector === 'function'
+            ? root.querySelector(`#${this.styleId}`)
+            : null;
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
+        const style = document.createElement('style');
+        style.id = this.styleId;
+        style.textContent = css;
+        root.appendChild(style);
     }
 
     /**
@@ -461,6 +625,37 @@ export class StyleInjector {
         `;
     }
     /**
+     * Generate message bubble styles (hover state and small-viewport layout).
+     * Moved here from MessageBubble.addStyles() so bubbles are covered by the
+     * core stylesheet in both legacy and shadow mode; MessageBubble keeps a
+     * fallback injector for standalone use (see MessageBubble.addStyles()).
+     */
+    generateBubbleStyles() {
+        return `
+            /* Message Bubble Styles */
+            .agentlet-bubble:hover {
+                transform: translateX(-2px) !important;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+            }
+
+            @media (max-width: 480px) {
+                #agentlet-message-bubbles {
+                    left: 10px !important;
+                    right: 10px !important;
+                    max-width: none !important;
+                }
+
+                .agentlet-bubble {
+                    transform: translateY(-100%) !important;
+                }
+
+                .agentlet-bubble:hover {
+                    transform: translateY(-102px) !important;
+                }
+            }
+        `;
+    }
+    /**
      * Generate animations and image overlay styles
      */
     generateAnimationStyles() {
@@ -512,6 +707,22 @@ export class StyleInjector {
             @keyframes agentlet-dialog-fadein {
                 from { opacity: 0; transform: scale(0.9); }
                 to { opacity: 1; transform: scale(1); }
+            }
+
+            /* Dialog animations (moved here from Dialog.addDialogStyles()) */
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.1); opacity: 0.7; }
+            }
+
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+
+            @keyframes agentlet-progress-animate {
+                0% { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
             }
         `;
     }

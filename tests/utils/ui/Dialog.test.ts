@@ -105,9 +105,16 @@ describe('Dialog', () => {
     });
 
     describe('constructor', () => {
-        it('injects the dialog style element once, keyed by id', () => {
+        it('does not inject the dialog style element until a dialog is shown (lazy injection)', () => {
             document.getElementById('agentlet-dialog-styles')?.remove();
             dialog = makeDialog();
+            expect(document.getElementById('agentlet-dialog-styles')).toBeNull();
+        });
+
+        it('injects the dialog style element on first show(), keyed by id', () => {
+            document.getElementById('agentlet-dialog-styles')?.remove();
+            dialog = makeDialog();
+            dialog.showInfo({}, jest.fn());
             const style = document.getElementById('agentlet-dialog-styles');
             expect(style).not.toBeNull();
             expect(style?.tagName).toBe('STYLE');
@@ -116,9 +123,12 @@ describe('Dialog', () => {
             expect(style?.textContent).toContain('@keyframes agentlet-progress-animate');
         });
 
-        it('does not duplicate the style element on repeated construction', () => {
-            makeDialog();
-            makeDialog();
+        it('does not duplicate the style element across repeated show() calls or dialogs', () => {
+            dialog = makeDialog();
+            dialog.showInfo({}, jest.fn());
+            dialog.hide();
+            dialog = makeDialog();
+            dialog.showInfo({}, jest.fn());
             const styles = document.querySelectorAll('#agentlet-dialog-styles');
             expect(styles.length).toBe(1);
         });
@@ -933,6 +943,176 @@ describe('Dialog', () => {
             expect(dialog.escapeHtml('<div class="a" data-x=\'y\'>&amp;</div>')).toBe(
                 '&lt;div class="a" data-x=\'y\'&gt;&amp;amp;&lt;/div&gt;'
             );
+        });
+    });
+
+    /**
+     * Shadow-DOM-aware mounting:
+     *  - setRoot()/getRoot() resolution (explicit root -> window.agentlet.ui.root
+     *    -> document.body)
+     *  - overlays mount inside the configured root instead of always on
+     *    document.body
+     *  - focusFirstInput() works across the shadow boundary (isConnected
+     *    rather than document.body.contains())
+     *  - the addDialogStyles() fallback (standalone use, no AgentletCore) is
+     *    a no-op whenever a core stylesheet already covers the root
+     *  - Escape keydown, dispatched from inside a shadow root, still reaches
+     *    the document-level listener and closes the dialog
+     *
+     * Relies on the file-level beforeAll() above, which restores jsdom's
+     * real Document.prototype implementations (document.createElement,
+     * document.head) in place of tests/setup.js's lightweight mocks, since
+     * these tests need real attachShadow()/style elements/focus handling.
+     */
+    describe('mount root', () => {
+        function createShadowRoot(): ShadowRoot {
+            const host = document.createElement('div');
+            document.body.appendChild(host);
+            return host.attachShadow({ mode: 'open' });
+        }
+
+        afterEach(() => {
+            document.getElementById('agentlet-dialog-styles')?.remove();
+            document.getElementById('agentlet-core-styles')?.remove();
+            delete (window as { agentlet?: unknown }).agentlet;
+        });
+
+        describe('setRoot()/getRoot()', () => {
+            it('info() mounts the overlay inside the shadow root, not document.body', () => {
+                const shadowRoot = createShadowRoot();
+                const d = makeDialog();
+                d.setRoot(shadowRoot);
+                expect(d.getRoot()).toBe(shadowRoot);
+
+                d.info('Hello there', 'Title');
+
+                expect(d.overlay).not.toBeNull();
+                expect(d.overlay?.getRootNode()).toBe(shadowRoot);
+                expect(shadowRoot.querySelector('.agentlet-dialog-overlay')).toBe(d.overlay);
+                // document.body.contains() cannot see across the shadow boundary
+                expect(document.body.contains(d.overlay)).toBe(false);
+
+                d.hide();
+            });
+
+            it('prompt() (input dialog) also mounts inside the shadow root', () => {
+                const shadowRoot = createShadowRoot();
+                const d = makeDialog();
+                d.setRoot(shadowRoot);
+
+                d.prompt('Enter a value', 'default');
+
+                expect(shadowRoot.querySelector('.agentlet-input-dialog')).not.toBeNull();
+                expect(document.body.querySelector('.agentlet-input-dialog')).toBeNull();
+
+                d.hide();
+            });
+
+            it('falls back to window.agentlet.ui.root when setRoot() was never called', () => {
+                const shadowRoot = createShadowRoot();
+                (window as unknown as { agentlet: { ui: { root: ShadowRoot } } }).agentlet = { ui: { root: shadowRoot } };
+
+                const d = makeDialog();
+                expect(d.getRoot()).toBe(shadowRoot);
+                d.info('Hello there');
+
+                expect(d.overlay?.getRootNode()).toBe(shadowRoot);
+
+                d.hide();
+            });
+        });
+
+        describe('standalone use (no setRoot, no window.agentlet)', () => {
+            it('mounts the overlay on document.body', () => {
+                const d = makeDialog();
+                d.info('Hello there');
+
+                expect(d.overlay?.parentNode).toBe(document.body);
+
+                d.hide();
+            });
+
+            it('injects the fallback #agentlet-dialog-styles exactly once, even across multiple dialogs', () => {
+                const d1 = makeDialog();
+                d1.info('First');
+                expect(document.head.querySelectorAll('#agentlet-dialog-styles').length).toBe(1);
+                d1.hide();
+
+                const d2 = makeDialog();
+                d2.info('Second');
+                expect(document.head.querySelectorAll('#agentlet-dialog-styles').length).toBe(1);
+                d2.hide();
+            });
+        });
+
+        describe('addDialogStyles() fallback skip when a core stylesheet is present', () => {
+            it('no fallback style is injected into a shadow root that already has #agentlet-core-styles', () => {
+                const shadowRoot = createShadowRoot();
+                const coreStyle = document.createElement('style');
+                coreStyle.id = 'agentlet-core-styles';
+                shadowRoot.appendChild(coreStyle);
+
+                const d = makeDialog();
+                d.setRoot(shadowRoot);
+                d.info('Hello there');
+
+                expect(shadowRoot.querySelector('#agentlet-dialog-styles')).toBeNull();
+
+                d.hide();
+            });
+
+            it('no fallback style is injected on document.body when #agentlet-core-styles already exists in <head>', () => {
+                const coreStyle = document.createElement('style');
+                coreStyle.id = 'agentlet-core-styles';
+                document.head.appendChild(coreStyle);
+
+                const d = makeDialog();
+                d.info('Hello there');
+
+                expect(document.head.querySelector('#agentlet-dialog-styles')).toBeNull();
+
+                d.hide();
+            });
+        });
+
+        describe('focusFirstInput() across the shadow boundary', () => {
+            it('focuses the input field mounted inside the shadow root', () => {
+                const shadowRoot = createShadowRoot();
+                const d = makeDialog();
+                d.setRoot(shadowRoot);
+
+                d.prompt('Enter your name', 'default value');
+
+                const input = shadowRoot.querySelector('.agentlet-input-field');
+                expect(input).not.toBeNull();
+                expect(shadowRoot.activeElement).toBe(input);
+
+                d.hide();
+            });
+        });
+
+        describe('Escape key handling across the shadow boundary', () => {
+            it('Escape dispatched from inside the shadow root still closes the dialog', () => {
+                const shadowRoot = createShadowRoot();
+                const d = makeDialog();
+                d.setRoot(shadowRoot);
+
+                const callback = jest.fn();
+                d.info('Hello there', 'Title', callback);
+                expect(d.isActive).toBe(true);
+
+                // keydown is a composed event, so it bubbles out of the
+                // shadow root to the document-level listener Dialog registers.
+                const escapeEvent = new KeyboardEvent('keydown', {
+                    key: 'Escape',
+                    bubbles: true,
+                    composed: true
+                });
+                d.overlay?.dispatchEvent(escapeEvent);
+
+                expect(d.isActive).toBe(false);
+                expect(callback).toHaveBeenCalledWith('cancel');
+            });
         });
     });
 });

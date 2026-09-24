@@ -127,8 +127,17 @@ test.describe('Screen Capture Example', () => {
     const consoleOutput = await page.locator('#console').textContent();
     expect(consoleOutput).toMatch(/Capturing.*sample.*table|Table.*screenshot.*captured/i);
 
-    // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    // Screenshot dialog should appear. Match the real, specific class the
+    // screenshot preview always uses (Dialog.fullscreen(), see
+    // examples/ui/screen-capture.html) rather than a catch-all like
+    // `[class*="dialog"]`: Dialog.createOverlay() adds
+    // "agentlet-dialog-open"/"agentlet-overlay-active" classes to
+    // document.body itself while any dialog is open (intentionally, to
+    // block page scroll), so a substring selector also matches <body> -
+    // which, being an ancestor of every dialog, always sorts first in
+    // document order and makes .first() silently resolve to the wrong
+    // element.
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Dialog should contain screenshot image
@@ -163,7 +172,7 @@ test.describe('Screen Capture Example', () => {
     expect(consoleOutput).toMatch(/Capturing.*full.*page|Full.*page.*screenshot.*captured/i);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 15000 });
 
     // Dialog should contain screenshot image
@@ -217,7 +226,7 @@ test.describe('Screen Capture Example', () => {
     expect(consoleOutput).toMatch(/Element.*screenshot.*captured/i);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Close dialog
@@ -236,7 +245,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Screenshot dialog should appear with title
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Dialog should have appropriate title (look for the title or header text)
@@ -262,7 +271,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Wait for download to be set up, then click download button
@@ -316,7 +325,7 @@ test.describe('Screen Capture Example', () => {
     expect(consoleOutput).toMatch(/Element.*selected.*h1/i);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Close dialog
@@ -339,7 +348,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(4000);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Dialog title should include selector information
@@ -393,7 +402,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Close screenshot dialog if it appears
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     if (await screenshotDialog.first().isVisible()) {
       const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
       await closeButton.first().click();
@@ -429,7 +438,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Check the image element
@@ -488,7 +497,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Close first dialog
-    const screenshotDialog1 = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog1 = page.locator('.agentlet-fullscreen-dialog');
     if (await screenshotDialog1.first().isVisible()) {
       const closeButton1 = screenshotDialog1.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
       await closeButton1.first().click();
@@ -502,7 +511,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Second dialog should appear
-    const screenshotDialog2 = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog2 = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog2.first()).toBeVisible({ timeout: 10000 });
 
     // Console should show both capture activities
@@ -526,7 +535,7 @@ test.describe('Screen Capture Example', () => {
     await page.waitForTimeout(3000);
 
     // Screenshot dialog should appear
-    const screenshotDialog = page.locator('.agentlet-dialog, .agentlet-fullscreen-dialog, [class*="dialog"]');
+    const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog.first()).toBeVisible({ timeout: 10000 });
 
     // Check dialog contains expected structure

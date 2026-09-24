@@ -6,7 +6,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  // 'open: never' - without it, Playwright auto-opens and serves the HTML
+  // report on any local (non-CI) run with failures, which blocks the
+  // process (and `npm run test:scaffold` in agentlet-core) indefinitely
+  // until the report server is killed. The report is still written to
+  // playwright-report/ and viewable with `npx playwright show-report`.
+  reporter: [['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:8080',
     trace: 'on-first-retry',

@@ -3,23 +3,53 @@
  * Handles panel resizing, width management, and state persistence
  */
 
+import type { AgentletCoreConfig, AgentletTheme, EventBusAPI, EnvAPI, AgentletModule } from '../types/public-api';
+
+/**
+ * Minimal shape of the `AgentletCore` instance this class needs. Not the
+ * full `AgentletAPI` from `src/types/public-api.d.ts`: this class reaches
+ * into `uiManager.ui.container`/`uiManager.isMinimized`, internal
+ * `UIManager` details not exposed on the public, agentlet-author-facing
+ * `UIManagerInternalAPI` (`window.agentlet.uiManager`) declared there.
+ * `envManager` is also narrowed to nullable here (unlike `AgentletAPI`,
+ * which declares it non-null) since `initializeEnvManager()` in
+ * `src/index.js` can genuinely return `null`, and this class checks for it.
+ */
+interface PanelManagerCore {
+    config: Omit<AgentletCoreConfig, 'minimumPanelWidth'> & {
+        /**
+         * Always populated by the time `PanelManager` runs: `AgentletCore`'s
+         * constructor defaults it (`config.minimumPanelWidth || 320`) even
+         * though `AgentletCoreConfig.minimumPanelWidth` itself is optional.
+         */
+        minimumPanelWidth: number;
+    };
+    eventBus: EventBusAPI;
+    envManager: EnvAPI | null;
+    moduleRegistry: { activeModule: AgentletModule | null };
+    uiManager: { ui: { container: HTMLElement | null }; isMinimized: boolean };
+    ui: { query(selector: string): Element | null };
+}
+
 export class PanelManager {
-    constructor(agentletCore) {
+    core: PanelManagerCore;
+
+    constructor(agentletCore: PanelManagerCore) {
         this.core = agentletCore;
     }
 
     /**
      * Resize panel to a preset size or custom width
-     * @param {string|number} size - 'small', 'medium', 'large', or width in pixels
+     * @param size - 'small', 'medium', 'large', or width in pixels
      */
-    resizePanel(size) {
+    resizePanel(size: 'small' | 'medium' | 'large' | number): void {
         if (!this.core.config.resizablePanel) {
             console.warn('Panel resizing is disabled');
             return;
         }
 
-        let targetWidth;
-        
+        let targetWidth: number;
+
         if (typeof size === 'string') {
             switch (size.toLowerCase()) {
             case 'small':
@@ -47,9 +77,9 @@ export class PanelManager {
 
     /**
      * Set panel width to a specific value
-     * @param {number} width - Width in pixels
+     * @param width - Width in pixels
      */
-    setPanelWidth(width) {
+    setPanelWidth(width: number): void {
         if (!this.core.config.resizablePanel) {
             console.warn('Panel resizing is disabled');
             return;
@@ -67,42 +97,47 @@ export class PanelManager {
         }
 
         container.style.width = `${width}px`;
-        
+
         // Update CSS custom property for consistent theming
         document.documentElement.style.setProperty('--agentlet-panel-width', `${width}px`);
-        
+
         // Update toggle button position if it exists
-        const toggleButton = document.getElementById('agentlet-toggle');
+        // `ui.query()` returns `Element | null`; cast to `HTMLElement` for `.style`, as the
+        // pre-existing runtime code already assumed.
+        const toggleButton = this.core.ui.query('#agentlet-toggle') as HTMLElement | null;
         if (toggleButton && !this.core.uiManager.isMinimized) {
             toggleButton.style.right = `${width}px`;
         }
-        
+
         // Emit single resize complete event
         this.core.eventBus.emit('panel:resizeComplete', { width });
-        
+
         // Save panel width for the current module if env vars are available
         this.savePanelWidthForModule(width);
-        
+
         console.log(`Panel resized to ${width}px`);
     }
 
     /**
      * Get current panel width
-     * @returns {number} Current panel width in pixels
+     * @returns Current panel width in pixels
      */
-    getPanelWidth() {
+    getPanelWidth(): number {
         const container = this.core.uiManager.ui.container;
         if (!container) {
-            return parseInt(this.core.config.theme.panelWidth) || this.core.config.minimumPanelWidth;
+            // `config.theme` is `string | Partial<AgentletTheme> | undefined` at the type level
+            // (see AgentletCoreConfig); this cast mirrors the pre-existing runtime code, which
+            // reads `.panelWidth` straight off whatever was passed in without narrowing first.
+            return parseInt((this.core.config.theme as AgentletTheme).panelWidth) || this.core.config.minimumPanelWidth;
         }
         return container.offsetWidth;
     }
 
     /**
      * Save panel width for the current module in environment variables
-     * @param {number} width - Width in pixels to save
+     * @param width - Width in pixels to save
      */
-    savePanelWidthForModule(width) {
+    savePanelWidthForModule(width: number): void {
         if (!this.core.envManager || !this.core.moduleRegistry.activeModule) {
             return;
         }
@@ -119,9 +154,9 @@ export class PanelManager {
 
     /**
      * Restore panel width for a specific module from environment variables
-     * @param {Object} activeModule - The module to restore width for
+     * @param activeModule - The module to restore width for
      */
-    restorePanelWidthForModule(activeModule) {
+    restorePanelWidthForModule(activeModule: AgentletModule | null): void {
         if (!this.core.envManager || !activeModule || !activeModule.name) {
             return;
         }
