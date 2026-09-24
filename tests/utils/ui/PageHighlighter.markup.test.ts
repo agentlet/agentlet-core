@@ -188,15 +188,11 @@ describe('PageHighlighter markup characterization', () => {
             expect(overlay.element.querySelector('.agentlet-message-text')?.textContent).toBe('Almost done');
         });
 
-        test('BUG: update({ type }) never changes the message content class', () => {
-            // showOverlay's update() does `Object.assign(config, updates)` *before*
-            // comparing `updates.type !== config.type`, so that comparison is always
-            // false once `updates.type` has just been written into `config.type` -
-            // the className branch is dead code. This pins that current behaviour.
+        test('update({ type }) swaps the message content class to the new type', () => {
             const overlay = pageHighlighter.showOverlay({ type: 'info', persistent: true });
             overlay.update({ type: 'success' });
             expect(overlay.element.querySelector('.agentlet-message-content')?.className)
-                .toBe('agentlet-message-content info');
+                .toBe('agentlet-message-content success');
         });
 
         test('update() updates progress bar width and text for progress overlays', () => {
@@ -407,21 +403,20 @@ describe('PageHighlighter markup characterization', () => {
             expect(pageHighlighter.highlights.has(id)).toBe(false);
         });
 
-        test('the highlightControl.visible flag itself is never flipped by show()/hide() (dead field)', () => {
-            // highlight()'s show/hide closures are arrow functions that read/write
-            // `this.visible`, and `this` there is the PageHighlighter instance (the
-            // enclosing method's `this`), not the returned control object. So the
-            // control's own `visible` property - set to `true` at creation - is
-            // never actually updated by calling hide()/show().
+        test('control.visible tracks show()/hide() on that same control', () => {
             const control = pageHighlighter.highlight(target, { type: 'border' }) as PageHighlighterHighlightControl;
             expect(control.visible).toBe(true);
+
             control.hide();
-            expect(control.visible).toBe(true);
+            expect(control.visible).toBe(false);
+            expect((control.highlightElements[0] as HTMLElement).style.display).toBe('none');
+
             control.show();
             expect(control.visible).toBe(true);
+            expect((control.highlightElements[0] as HTMLElement).style.display).toBe('block');
         });
 
-        test('BUG: show()/hide() toggle a single flag shared by the whole PageHighlighter instance, not per-highlight', () => {
+        test('show()/hide() toggle each highlight independently, not a flag shared across the instance', () => {
             const a = pageHighlighter.highlight(target, { type: 'border' }) as PageHighlighterHighlightControl;
             const target2 = document.createElement('div');
             document.body.appendChild(target2);
@@ -431,23 +426,26 @@ describe('PageHighlighter markup characterization', () => {
             const aEl = a.highlightElements[0] as HTMLElement;
             const bEl = b.highlightElements[0] as HTMLElement;
 
-            // Instance-level `visible` starts undefined => hide() no-ops (guard is `if (this.visible)`)
+            // Both start visible; hiding A must not affect B.
             a.hide();
-            expect(aEl.style.display).toBe('');
+            expect(aEl.style.display).toBe('none');
+            expect(a.visible).toBe(false);
+            expect(bEl.style.display).toBe('');
+            expect(b.visible).toBe(true);
 
-            // show() flips the *shared* flag to true and shows A
-            a.show();
-            expect(aEl.style.display).toBe('block');
-
-            // Calling hide() on B now hides B (because the shared flag is true) even
-            // though B was never shown, and flips the shared flag back to false.
+            // Hiding B (already independent of A) leaves A hidden.
             b.hide();
             expect(bEl.style.display).toBe('none');
+            expect(b.visible).toBe(false);
+            expect(aEl.style.display).toBe('none');
+            expect(a.visible).toBe(false);
 
-            // A subsequent show() on A re-shows A again because the shared flag is
-            // false again - demonstrating the two controls fight over one flag.
+            // Showing A again must not re-show B.
             a.show();
             expect(aEl.style.display).toBe('block');
+            expect(a.visible).toBe(true);
+            expect(bEl.style.display).toBe('none');
+            expect(b.visible).toBe(false);
         });
     });
 
@@ -491,23 +489,7 @@ describe('PageHighlighter markup characterization', () => {
             ];
         }
 
-        // BUG (found while writing this characterization suite, not previously
-        // covered by tests/utils/ui/PageHighlighter.test.js): `start`, `next`,
-        // `previous` and `goTo` are arrow functions defined inside createTour(),
-        // so their `this` is the enclosing method's `this` - the PageHighlighter
-        // instance - not the `tour` object. They all call `this.showStep()`,
-        // but `showStep` only exists on `tour`, not on PageHighlighter. So every
-        // one of these calls throws `TypeError: ... .showStep is not a
-        // function` whenever it would actually need to display a step. Only
-        // `tour.showStep()` itself (which a caller can invoke directly) and
-        // `tour.end()` (which never calls showStep) work as documented.
-        // Also: `tour.currentStep` is a plain number copied onto the returned
-        // object once, at creation time - it is never the closure's `let
-        // currentStep` variable, so it stays frozen at its initial value (0)
-        // forever, even though the closure variable it name-shadows really
-        // does get mutated by next()/previous()/goTo()/end().
-
-        test('showStep() - the only working way to display a step - highlights steps[currentStep]', () => {
+        test('showStep() highlights steps[currentStep]', () => {
             const steps = makeSteps();
             const tour = pageHighlighter.createTour(steps);
             tour.showStep();
@@ -524,52 +506,82 @@ describe('PageHighlighter markup characterization', () => {
             expect(pageHighlighter.highlights.size).toBe(1);
         });
 
-        test('BUG: start() throws once there is a step to show, because it calls this.showStep() instead of tour.showStep()', () => {
+        test('start() shows the first step', () => {
             const steps = makeSteps();
             const tour = pageHighlighter.createTour(steps);
-            expect(() => tour.start()).toThrow(TypeError);
-            expect(() => tour.start()).toThrow(/showStep is not a function/);
+            tour.start();
+            expect(pageHighlighter.highlights.size).toBe(1);
+            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 1');
+            expect(tour.currentStep).toBe(0);
         });
 
-        test('start() is a safe no-op for an empty tour (the steps.length guard runs before the broken call)', () => {
+        test('start() is a safe no-op for an empty tour', () => {
             const tour = pageHighlighter.createTour([]);
             expect(() => tour.start()).not.toThrow();
             expect(pageHighlighter.highlights.size).toBe(0);
         });
 
-        test('BUG: next()/previous()/goTo() throw the same way whenever they would move to a real step', () => {
-            expect(() => pageHighlighter.createTour(makeSteps()).next()).toThrow(/showStep is not a function/);
-            // previous()'s own guard (currentStep > 0) is false on a freshly
-            // created tour, so it short-circuits before the broken call.
-            expect(() => pageHighlighter.createTour(makeSteps()).previous()).not.toThrow();
-            expect(() => pageHighlighter.createTour(makeSteps()).goTo(1)).toThrow(/showStep is not a function/);
-        });
-
-        test('next() returns false without throwing once the closure step index has reached the last step', () => {
+        test('next() advances to and shows the next step', () => {
             const steps = makeSteps();
             const tour = pageHighlighter.createTour(steps);
-            // Each throwing call still runs `currentStep++` (the closure
-            // variable) before it throws, so two throws are enough to walk
-            // the closure index from 0 to steps.length - 1 = 1.
-            expect(() => tour.next()).toThrow();
-            expect(() => tour.next()).not.toThrow(); // would-be step 2 doesn't exist -> guard is false
-            expect(tour.next()).toBe(false);
-        });
-
-        test('BUG: tour.currentStep never reflects navigation - it is frozen at its initial value', () => {
-            const steps = makeSteps();
-            const tour = pageHighlighter.createTour(steps);
-            expect(tour.currentStep).toBe(0);
-
-            try { tour.next(); } catch { /* see BUG above */ }
-            expect(tour.currentStep).toBe(0);
-
-            tour.showStep(); // proves the closure's currentStep really did advance to 1
+            expect(tour.next()).toBe(true);
+            expect(pageHighlighter.highlights.size).toBe(1);
             expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 2');
-            expect(tour.currentStep).toBe(0); // ...yet the public property still says 0
+            expect(tour.currentStep).toBe(1);
         });
 
-        test('end() works (it never calls showStep): destroys the current highlight and resets the closure step to 0', () => {
+        test('previous() is a no-op on the first step, and steps back once past it', () => {
+            const steps = makeSteps();
+            const tour = pageHighlighter.createTour(steps);
+            expect(tour.previous()).toBe(false);
+            expect(pageHighlighter.highlights.size).toBe(0);
+
+            tour.next();
+            expect(tour.previous()).toBe(true);
+            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 1');
+            expect(tour.currentStep).toBe(0);
+        });
+
+        test('goTo(stepIndex) jumps directly to and shows that step', () => {
+            const steps = makeSteps();
+            const tour = pageHighlighter.createTour(steps);
+            tour.goTo(1);
+            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 2');
+            expect(tour.currentStep).toBe(1);
+        });
+
+        test('next() returns false and stays put once the last step is reached', () => {
+            const steps = makeSteps();
+            const tour = pageHighlighter.createTour(steps);
+            expect(tour.next()).toBe(true); // -> step 2 (index 1, the last one)
+            expect(tour.next()).toBe(false); // no more steps
+            expect(tour.currentStep).toBe(1);
+            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 2');
+        });
+
+        test('currentStep reflects live navigation across next()/previous()/goTo()/start()/end()', () => {
+            const steps = makeSteps();
+            const tour = pageHighlighter.createTour(steps);
+            expect(tour.currentStep).toBe(0);
+
+            tour.next();
+            expect(tour.currentStep).toBe(1);
+
+            tour.previous();
+            expect(tour.currentStep).toBe(0);
+
+            tour.goTo(1);
+            expect(tour.currentStep).toBe(1);
+
+            tour.start();
+            expect(tour.currentStep).toBe(0);
+
+            tour.next();
+            tour.end();
+            expect(tour.currentStep).toBe(0);
+        });
+
+        test('end() destroys the current highlight and resets the step index to 0', () => {
             const steps = makeSteps();
             const tour = pageHighlighter.createTour(steps);
             tour.showStep();
@@ -582,24 +594,23 @@ describe('PageHighlighter markup characterization', () => {
             expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 1');
         });
 
-        test("BUG: a step highlight's auto-advance onClick also throws, since it calls the broken tour.next()", () => {
+        test("a step highlight's clickable onClick auto-advances, then ends the tour past the last step", () => {
             const steps = makeSteps();
             const tour = pageHighlighter.createTour(steps);
             tour.showStep();
 
-            const clickable = document.querySelector('.agentlet-highlight-border') as HTMLElement;
-            // Per spec, an exception thrown by a DOM event listener doesn't
-            // propagate to the dispatchEvent()/click() caller - it's reported
-            // to window as an uncaught error instead. Swallow that report so
-            // it doesn't fail this test, then confirm the advance never
-            // actually happened.
-            const onError = (event: ErrorEvent): void => event.preventDefault();
-            window.addEventListener('error', onError);
+            let clickable = document.querySelector('.agentlet-highlight-border') as HTMLElement;
             clickable.click();
-            window.removeEventListener('error', onError);
 
             expect(pageHighlighter.highlights.size).toBe(1);
-            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 1');
+            expect(document.querySelectorAll('.agentlet-tooltip')[0]?.textContent).toBe('Step 2');
+            expect(tour.currentStep).toBe(1);
+
+            clickable = document.querySelector('.agentlet-highlight-border') as HTMLElement;
+            clickable.click(); // no more steps -> tour.end()
+
+            expect(pageHighlighter.highlights.size).toBe(0);
+            expect(tour.currentStep).toBe(0);
         });
     });
 

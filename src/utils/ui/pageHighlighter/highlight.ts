@@ -128,24 +128,17 @@ export function highlight(
             }
         },
 
-        // BUG (preserved from PageHighlighter.js): these read/write
-        // `context.visible` - the PageHighlighter instance's own property -
-        // rather than this control's own `visible` field above. Every
-        // highlight created by the same PageHighlighter instance therefore
-        // shares one visibility flag; see the `PageHighlighterContext.visible`
-        // doc comment in types.ts and the "BUG: show()/hide() toggle a
-        // single flag..." test in PageHighlighter.markup.test.ts.
         show: () => {
-            if (!context.visible) {
+            if (!highlightControl.visible) {
                 highlightElements.forEach(el => { el.style.display = 'block'; });
-                context.visible = true;
+                highlightControl.visible = true;
             }
         },
 
         hide: () => {
-            if (context.visible) {
+            if (highlightControl.visible) {
                 highlightElements.forEach(el => { el.style.display = 'none'; });
-                context.visible = false;
+                highlightControl.visible = false;
             }
         },
 

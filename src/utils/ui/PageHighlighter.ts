@@ -12,9 +12,7 @@
  * This class is a thin facade: the implementation lives in typed modules
  * under ./pageHighlighter/ (styles, overlay, highlight, positioning, tour,
  * scroll). Every method below just forwards to its module counterpart,
- * passing `this` as the shared `PageHighlighterContext` so behaviour -
- * including the pre-existing bugs documented in those modules - is
- * unchanged from the original single-file implementation.
+ * passing `this` as the shared `PageHighlighterContext`.
  */
 import type {
     PageHighlighterAPI,

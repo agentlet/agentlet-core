@@ -125,19 +125,14 @@ export function showOverlay(context: PageHighlighterContext, options: PageHighli
         timeoutId,
 
         update: (updates) => {
+            const previousType = config.type;
             Object.assign(config, updates);
 
             if (updates.message) {
                 messageText.textContent = updates.message;
             }
 
-            // BUG (preserved from PageHighlighter.js): `config.type` was just
-            // overwritten to `updates.type` by the Object.assign above, so
-            // this comparison is always false whenever `updates.type` is set
-            // - the class never actually changes. See
-            // tests/utils/ui/PageHighlighter.markup.test.ts's "update({
-            // type }) never changes the message content class" test.
-            if (updates.type && updates.type !== config.type) {
+            if (updates.type && updates.type !== previousType) {
                 messageContent.className = `agentlet-message-content ${updates.type}`;
             }
 
