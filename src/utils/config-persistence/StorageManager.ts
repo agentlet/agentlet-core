@@ -2,40 +2,68 @@
  * StorageManager - Enhanced localStorage and sessionStorage management with change detection
  * Provides storage operations and change subscription capabilities for both localStorage and sessionStorage
  */
+import type {
+    StorageManagerAPI,
+    StorageStatistics,
+    StorageType,
+    BoundStorageAPI
+} from '../../types/public-api';
 
-export default class StorageManager {
+/** A single storage change-listener callback, matching {@link StorageManagerAPI}. */
+type StorageChangeListener = (
+    storageType: StorageType,
+    key: string | null,
+    newValue: string | null,
+    oldValue: string | null
+) => void;
+
+/**
+ * The three native `Storage` methods this file patches for same-tab change
+ * detection. Stored together in one `Map<string, StorageOriginalMethod>`
+ * (keyed by `` `${storageType}_setItem` `` etc., exactly as the original
+ * code did) since the arities differ; retrieval sites cast back to the
+ * specific member they know they stored, mirroring how `ScriptInjector.ts`
+ * uses narrow `as` casts around dynamic/untyped access rather than `any`.
+ */
+type StorageOriginalMethod = Storage['setItem'] | Storage['removeItem'] | Storage['clear'];
+
+export default class StorageManager implements StorageManagerAPI {
+    listeners: Map<StorageType, Set<StorageChangeListener>>;
+    storageSnapshot: Map<StorageType, Map<string, string>>;
+    originalMethods: Map<string, StorageOriginalMethod>;
+
     constructor() {
         this.listeners = new Map(); // Map of storage type to Set of listeners
         this.storageSnapshot = new Map(); // Map of storage type to Map of key-value pairs
         this.originalMethods = new Map();
-        
+
         // Initialize listeners and snapshots for both storage types
         this.listeners.set('localStorage', new Set());
         this.listeners.set('sessionStorage', new Set());
         this.storageSnapshot.set('localStorage', new Map());
         this.storageSnapshot.set('sessionStorage', new Map());
-        
+
         // Take initial snapshots
         this.updateSnapshot('localStorage');
         this.updateSnapshot('sessionStorage');
-        
+
         // Override storage methods for same-tab change detection
         this.overrideStorageMethods();
-        
+
         // Listen for storage events (changes from other tabs/windows)
         this.setupStorageEventListener();
-        
+
         console.log('StorageManager initialized');
     }
 
     /**
      * Get a value from storage
-     * @param {string} key - Storage key
-     * @param {string} defaultValue - Default value if key doesn't exist
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {string|undefined} Storage value
+     * @param key - Storage key
+     * @param defaultValue - Default value if key doesn't exist
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Storage value
      */
-    get(key, defaultValue = undefined, storageType = 'localStorage') {
+    get(key: string, defaultValue: string | null | undefined = undefined, storageType: StorageType = 'localStorage'): string | null | undefined {
         if (!key || typeof key !== 'string') {
             throw new Error('Storage key must be a non-empty string');
         }
@@ -54,11 +82,11 @@ export default class StorageManager {
 
     /**
      * Set a value in storage
-     * @param {string} key - Storage key
-     * @param {string} value - Storage value
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
+     * @param key - Storage key
+     * @param value - Storage value
+     * @param storageType - 'localStorage' or 'sessionStorage'
      */
-    set(key, value, storageType = 'localStorage') {
+    set(key: string, value: string, storageType: StorageType = 'localStorage'): void {
         if (!key || typeof key !== 'string') {
             throw new Error('Storage key must be a non-empty string');
         }
@@ -73,27 +101,27 @@ export default class StorageManager {
             const storage = this.getStorage(storageType);
             const oldValue = storage.getItem(key);
             const stringValue = String(value);
-            
+
             storage.setItem(key, stringValue);
-            
+
             // Update snapshot and notify listeners
             this.updateSnapshot(storageType);
             this.notifyChange(storageType, key, stringValue, oldValue);
-            
+
             console.log(`${storageType} set: ${key} = ${this.maskSensitive(key, stringValue)}`);
         } catch (error) {
             console.error(`Failed to set ${storageType} item:`, error);
-            throw new Error(`Failed to set ${storageType} item: ${error.message}`);
+            throw new Error(`Failed to set ${storageType} item: ${(error as Error).message}`);
         }
     }
 
     /**
      * Remove a value from storage
-     * @param {string} key - Storage key
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {boolean} True if item was removed
+     * @param key - Storage key
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns True if item was removed
      */
-    remove(key, storageType = 'localStorage') {
+    remove(key: string, storageType: StorageType = 'localStorage'): boolean {
         if (!key || typeof key !== 'string') {
             throw new Error('Storage key must be a non-empty string');
         }
@@ -103,34 +131,34 @@ export default class StorageManager {
         try {
             const storage = this.getStorage(storageType);
             const oldValue = storage.getItem(key);
-            
+
             if (oldValue !== null) {
                 storage.removeItem(key);
-                
+
                 // Update snapshot and notify listeners
                 this.updateSnapshot(storageType);
                 this.notifyChange(storageType, key, null, oldValue);
-                
+
                 console.log(`${storageType} removed: ${key}`);
                 return true;
             }
-            
+
             return false;
         } catch (error) {
             console.error(`Failed to remove ${storageType} item:`, error);
-            throw new Error(`Failed to remove ${storageType} item: ${error.message}`);
+            throw new Error(`Failed to remove ${storageType} item: ${(error as Error).message}`);
         }
     }
 
     /**
      * Check if a key exists in storage
-     * @param {string} key - Storage key
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {boolean} True if key exists
+     * @param key - Storage key
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns True if key exists
      */
-    has(key, storageType = 'localStorage') {
+    has(key: string, storageType: StorageType = 'localStorage'): boolean {
         this.validateStorageType(storageType);
-        
+
         try {
             const storage = this.getStorage(storageType);
             return storage.getItem(key) !== null;
@@ -142,49 +170,49 @@ export default class StorageManager {
 
     /**
      * Clear all items from storage
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {number} Number of items cleared
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Number of items cleared
      */
-    clear(storageType = 'localStorage') {
+    clear(storageType: StorageType = 'localStorage'): number {
         this.validateStorageType(storageType);
 
         try {
             const storage = this.getStorage(storageType);
             const count = storage.length;
-            
+
             storage.clear();
-            
+
             // Update snapshot and notify listeners
             this.updateSnapshot(storageType);
             this.notifyChange(storageType, '*', null, null);
-            
+
             console.log(`${storageType} cleared: ${count} items`);
             return count;
         } catch (error) {
             console.error(`Failed to clear ${storageType}:`, error);
-            throw new Error(`Failed to clear ${storageType}: ${error.message}`);
+            throw new Error(`Failed to clear ${storageType}: ${(error as Error).message}`);
         }
     }
 
     /**
      * Get all items from storage
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @param {boolean} includeSensitive - Whether to include sensitive values
-     * @returns {Object} Object containing all storage items
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @param includeSensitive - Whether to include sensitive values
+     * @returns Object containing all storage items
      */
-    getAll(storageType = 'localStorage', includeSensitive = false) {
+    getAll(storageType: StorageType = 'localStorage', includeSensitive = false): Record<string, string> {
         this.validateStorageType(storageType);
 
         try {
             const storage = this.getStorage(storageType);
-            const items = {};
-            
+            const items: Record<string, string> = {};
+
             for (let i = 0; i < storage.length; i++) {
-                const key = storage.key(i);
-                const value = storage.getItem(key);
+                const key = storage.key(i)!; // i < storage.length guarantees a key exists here
+                const value = storage.getItem(key)!; // key was just enumerated, so a value exists
                 items[key] = includeSensitive ? value : this.maskSensitive(key, value);
             }
-            
+
             return items;
         } catch (error) {
             console.error(`Failed to get all ${storageType} items:`, error);
@@ -194,43 +222,46 @@ export default class StorageManager {
 
     /**
      * Get items matching a pattern
-     * @param {string|RegExp} pattern - Pattern to match keys
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {Object} Object containing matching items
+     * @param pattern - Pattern to match keys
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Object containing matching items
      */
-    getMatching(pattern, storageType = 'localStorage') {
+    getMatching(pattern: string | RegExp, storageType: StorageType = 'localStorage'): Record<string, string> {
         this.validateStorageType(storageType);
 
         const allItems = this.getAll(storageType, true);
-        const matching = {};
-        
+        const matching: Record<string, string> = {};
+
         const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-        
+
         Object.entries(allItems).forEach(([key, value]) => {
             if (regex.test(key)) {
                 matching[key] = value;
             }
         });
-        
+
         return matching;
     }
 
     /**
      * Get and parse JSON value from storage
-     * @param {string} key - Storage key
-     * @param {*} defaultValue - Default value if key doesn't exist or parsing fails
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {*} Parsed JSON value
+     * @param key - Storage key
+     * @param defaultValue - Default value if key doesn't exist or parsing fails
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Parsed JSON value
      */
-    getJSON(key, defaultValue = null, storageType = 'localStorage') {
+    getJSON<T = unknown>(key: string, defaultValue: T | null = null, storageType: StorageType = 'localStorage'): T | null {
         const value = this.get(key, null, storageType);
-        
+
         if (value === null) {
             return defaultValue;
         }
-        
+
         try {
-            return JSON.parse(value);
+            // `get(key, null, ...)` only returns `undefined` when its own
+            // defaultValue argument is `undefined` - since we pass `null`
+            // above and already excluded `null` itself, `value` is a string here.
+            return JSON.parse(value as string) as T;
         } catch (error) {
             console.error(`Failed to parse JSON for key ${key}:`, error);
             return defaultValue;
@@ -239,26 +270,26 @@ export default class StorageManager {
 
     /**
      * Set JSON value in storage
-     * @param {string} key - Storage key
-     * @param {*} value - Value to stringify and store
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
+     * @param key - Storage key
+     * @param value - Value to stringify and store
+     * @param storageType - 'localStorage' or 'sessionStorage'
      */
-    setJSON(key, value, storageType = 'localStorage') {
+    setJSON(key: string, value: unknown, storageType: StorageType = 'localStorage'): void {
         try {
             const jsonString = JSON.stringify(value);
             this.set(key, jsonString, storageType);
         } catch (error) {
             console.error(`Failed to stringify JSON for key ${key}:`, error);
-            throw new Error(`Failed to stringify JSON for key ${key}: ${error.message}`);
+            throw new Error(`Failed to stringify JSON for key ${key}: ${(error as Error).message}`);
         }
     }
 
     /**
      * Set multiple items at once
-     * @param {Object} items - Object containing key-value pairs
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
+     * @param items - Object containing key-value pairs
+     * @param storageType - 'localStorage' or 'sessionStorage'
      */
-    setMultiple(items, storageType = 'localStorage') {
+    setMultiple(items: Record<string, string>, storageType: StorageType = 'localStorage'): void {
         if (typeof items !== 'object' || items === null) {
             throw new Error('Items must be an object');
         }
@@ -270,45 +301,45 @@ export default class StorageManager {
 
     /**
      * Add a change listener
-     * @param {Function} callback - Callback function (storageType, key, newValue, oldValue) => void
-     * @param {string} storageType - 'localStorage', 'sessionStorage', or 'both'
+     * @param callback - Callback function (storageType, key, newValue, oldValue) => void
+     * @param storageType - 'localStorage', 'sessionStorage', or 'both'
      */
-    addChangeListener(callback, storageType = 'both') {
+    addChangeListener(callback: StorageChangeListener, storageType: StorageType | 'both' = 'both'): void {
         if (typeof callback !== 'function') {
             throw new Error('Callback must be a function');
         }
 
         if (storageType === 'both') {
-            this.listeners.get('localStorage').add(callback);
-            this.listeners.get('sessionStorage').add(callback);
+            this.listeners.get('localStorage')!.add(callback);
+            this.listeners.get('sessionStorage')!.add(callback);
         } else {
             this.validateStorageType(storageType);
-            this.listeners.get(storageType).add(callback);
+            this.listeners.get(storageType)!.add(callback);
         }
-        
+
         console.log(`Storage change listener added for ${storageType}`);
     }
 
     /**
      * Remove a change listener
-     * @param {Function} callback - Callback function to remove
-     * @param {string} storageType - 'localStorage', 'sessionStorage', or 'both'
+     * @param callback - Callback function to remove
+     * @param storageType - 'localStorage', 'sessionStorage', or 'both'
      */
-    removeChangeListener(callback, storageType = 'both') {
+    removeChangeListener(callback: StorageChangeListener, storageType: StorageType | 'both' = 'both'): boolean {
         let removed = false;
-        
+
         if (storageType === 'both') {
-            removed = this.listeners.get('localStorage').delete(callback) || removed;
-            removed = this.listeners.get('sessionStorage').delete(callback) || removed;
+            removed = this.listeners.get('localStorage')!.delete(callback) || removed;
+            removed = this.listeners.get('sessionStorage')!.delete(callback) || removed;
         } else {
             this.validateStorageType(storageType);
-            removed = this.listeners.get(storageType).delete(callback);
+            removed = this.listeners.get(storageType)!.delete(callback);
         }
-        
+
         if (removed) {
             console.log(`Storage change listener removed for ${storageType}`);
         }
-        
+
         return removed;
     }
 
@@ -316,38 +347,41 @@ export default class StorageManager {
      * Override storage methods for same-tab change detection
      * @private
      */
-    overrideStorageMethods() {
-        ['localStorage', 'sessionStorage'].forEach(storageType => {
+    overrideStorageMethods(): void {
+        const storageTypes: StorageType[] = ['localStorage', 'sessionStorage'];
+
+        storageTypes.forEach(storageType => {
             const storage = this.getStorage(storageType);
-            
+
             if (!storage) return;
-            
+
             // Store original methods
             this.originalMethods.set(`${storageType}_setItem`, storage.setItem.bind(storage));
             this.originalMethods.set(`${storageType}_removeItem`, storage.removeItem.bind(storage));
             this.originalMethods.set(`${storageType}_clear`, storage.clear.bind(storage));
-            
+
             // Override setItem
-            storage.setItem = (key, value) => {
+            storage.setItem = (key: string, value: string): void => {
                 const oldValue = storage.getItem(key);
-                this.originalMethods.get(`${storageType}_setItem`)(key, value);
+                // Retrieved by the key it was stored under above, so this is really a Storage['setItem'].
+                (this.originalMethods.get(`${storageType}_setItem`) as Storage['setItem'])(key, value);
                 this.handleStorageChange(storageType, key, value, oldValue);
             };
-            
+
             // Override removeItem
-            storage.removeItem = (key) => {
+            storage.removeItem = (key: string): void => {
                 const oldValue = storage.getItem(key);
-                this.originalMethods.get(`${storageType}_removeItem`)(key);
+                (this.originalMethods.get(`${storageType}_removeItem`) as Storage['removeItem'])(key);
                 this.handleStorageChange(storageType, key, null, oldValue);
             };
-            
+
             // Override clear
-            storage.clear = () => {
-                this.originalMethods.get(`${storageType}_clear`)();
+            storage.clear = (): void => {
+                (this.originalMethods.get(`${storageType}_clear`) as Storage['clear'])();
                 this.handleStorageChange(storageType, '*', null, null);
             };
         });
-        
+
         console.log('Storage methods overridden for change detection');
     }
 
@@ -355,13 +389,13 @@ export default class StorageManager {
      * Set up storage event listener for cross-tab changes
      * @private
      */
-    setupStorageEventListener() {
-        window.addEventListener('storage', (event) => {
+    setupStorageEventListener(): void {
+        window.addEventListener('storage', (event: StorageEvent) => {
             // Storage events only fire for changes from other tabs/windows
-            const storageType = event.storageArea === localStorage ? 'localStorage' : 'sessionStorage';
+            const storageType: StorageType = event.storageArea === localStorage ? 'localStorage' : 'sessionStorage';
             this.handleStorageChange(storageType, event.key, event.newValue, event.oldValue);
         });
-        
+
         console.log('Storage event listener set up for cross-tab change detection');
     }
 
@@ -369,10 +403,10 @@ export default class StorageManager {
      * Handle storage changes
      * @private
      */
-    handleStorageChange(storageType, key, newValue, oldValue) {
+    handleStorageChange(storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null): void {
         // Update snapshot
         this.updateSnapshot(storageType);
-        
+
         // Notify listeners
         this.notifyChange(storageType, key, newValue, oldValue);
     }
@@ -381,18 +415,18 @@ export default class StorageManager {
      * Update storage snapshot
      * @private
      */
-    updateSnapshot(storageType) {
+    updateSnapshot(storageType: StorageType): void {
         const storage = this.getStorage(storageType);
-        const snapshot = new Map();
-        
+        const snapshot = new Map<string, string>();
+
         if (storage) {
             for (let i = 0; i < storage.length; i++) {
-                const key = storage.key(i);
-                const value = storage.getItem(key);
+                const key = storage.key(i)!; // i < storage.length guarantees a key exists here
+                const value = storage.getItem(key)!; // key was just enumerated, so a value exists
                 snapshot.set(key, value);
             }
         }
-        
+
         this.storageSnapshot.set(storageType, snapshot);
     }
 
@@ -400,9 +434,9 @@ export default class StorageManager {
      * Notify all listeners of a change
      * @private
      */
-    notifyChange(storageType, key, newValue, oldValue) {
+    notifyChange(storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null): void {
         const listeners = this.listeners.get(storageType);
-        
+
         if (listeners) {
             listeners.forEach(callback => {
                 try {
@@ -418,7 +452,7 @@ export default class StorageManager {
      * Get storage object
      * @private
      */
-    getStorage(storageType) {
+    getStorage(storageType: StorageType): Storage {
         switch (storageType) {
         case 'localStorage':
             return window.localStorage;
@@ -433,7 +467,7 @@ export default class StorageManager {
      * Validate storage type
      * @private
      */
-    validateStorageType(storageType) {
+    validateStorageType(storageType: StorageType): void {
         if (!['localStorage', 'sessionStorage'].includes(storageType)) {
             throw new Error(`Invalid storage type: ${storageType}. Must be 'localStorage' or 'sessionStorage'`);
         }
@@ -443,45 +477,45 @@ export default class StorageManager {
      * Mask sensitive values for logging
      * @private
      */
-    maskSensitive(key, value) {
+    maskSensitive(key: string, value: string): string {
         const sensitiveKeys = ['password', 'secret', 'token', 'key', 'auth', 'session'];
-        const isSensitive = sensitiveKeys.some(sensitive => 
+        const isSensitive = sensitiveKeys.some(sensitive =>
             key.toLowerCase().includes(sensitive)
         );
-        
+
         if (isSensitive && value && value.length > 4) {
             return value.substring(0, 2) + '*'.repeat(value.length - 4) + value.substring(value.length - 2);
         }
-        
+
         return value;
     }
 
     /**
      * Get statistics about storage
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {Object} Statistics object
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Statistics object
      */
-    getStatistics(storageType = 'localStorage') {
+    getStatistics(storageType: StorageType = 'localStorage'): StorageStatistics {
         this.validateStorageType(storageType);
 
         try {
             const storage = this.getStorage(storageType);
             const items = this.getAll(storageType, false);
             const keys = Object.keys(items);
-            
+
             // Calculate total size
             let totalSize = 0;
             keys.forEach(key => {
                 totalSize += key.length + (storage.getItem(key) || '').length;
             });
-            
+
             return {
                 type: storageType,
                 total: keys.length,
                 totalSize: totalSize,
                 averageSize: keys.length > 0 ? Math.round(totalSize / keys.length) : 0,
                 keys: keys.sort(),
-                listeners: this.listeners.get(storageType).size,
+                listeners: this.listeners.get(storageType)!.size,
                 available: !!storage
             };
         } catch (error) {
@@ -494,27 +528,27 @@ export default class StorageManager {
                 keys: [],
                 listeners: 0,
                 available: false,
-                error: error.message
+                error: (error as Error).message
             };
         }
     }
 
     /**
      * Export storage data in various formats
-     * @param {string} format - Export format ('json', 'csv', 'tsv')
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @param {boolean} includeSensitive - Whether to include sensitive values
-     * @returns {string} Formatted export string
+     * @param format - Export format ('json', 'csv', 'tsv')
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @param includeSensitive - Whether to include sensitive values
+     * @returns Formatted export string
      */
-    export(format = 'json', storageType = 'localStorage', includeSensitive = false) {
+    export(format = 'json', storageType: StorageType = 'localStorage', includeSensitive = false): string {
         this.validateStorageType(storageType);
 
         const data = this.getAll(storageType, includeSensitive);
-        
+
         switch (format.toLowerCase()) {
         case 'json':
             return JSON.stringify(data, null, 2);
-                
+
         case 'csv': {
             const csvRows = ['Key,Value'];
             Object.entries(data).forEach(([key, value]) => {
@@ -525,7 +559,7 @@ export default class StorageManager {
             });
             return csvRows.join('\n');
         }
-                
+
         case 'tsv': {
             const tsvRows = ['Key\tValue'];
             Object.entries(data).forEach(([key, value]) => {
@@ -533,7 +567,7 @@ export default class StorageManager {
             });
             return tsvRows.join('\n');
         }
-                
+
         default:
             throw new Error(`Unsupported export format: ${format}`);
         }
@@ -541,53 +575,63 @@ export default class StorageManager {
 
     /**
      * Create a proxy object for convenient access
-     * @param {string} storageType - 'localStorage' or 'sessionStorage'
-     * @returns {Proxy} Proxy object for storage access
+     * @param storageType - 'localStorage' or 'sessionStorage'
+     * @returns Proxy object for storage access
      */
-    createProxy(storageType = 'localStorage') {
+    createProxy(storageType: StorageType = 'localStorage'): BoundStorageAPI {
         this.validateStorageType(storageType);
-        
+
         return new Proxy(this, {
-            get(target, property) {
-                if (typeof property === 'string' && !target[property]) {
+            get(target, property: string | symbol): unknown {
+                // Dynamic key access (see BoundStorageAPI's doc comment):
+                // `target[property]` reads either a real method/field or -
+                // when it isn't one - falls through to `target.get(property)`.
+                const indexable = target as unknown as Record<string | symbol, unknown>;
+                if (typeof property === 'string' && !indexable[property]) {
                     return target.get(property, undefined, storageType);
                 }
-                return target[property];
+                return indexable[property];
             },
-            
-            set(target, property, value) {
-                if (typeof property === 'string' && !target[property]) {
-                    target.set(property, value, storageType);
+
+            set(target, property: string | symbol, value: unknown): boolean {
+                const indexable = target as unknown as Record<string | symbol, unknown>;
+                if (typeof property === 'string' && !indexable[property]) {
+                    // `value`'s real type is whatever the caller assigned via
+                    // `agentlet.storage.local.myKey = ...`; set() itself
+                    // expects a string.
+                    target.set(property, value as string, storageType);
                     return true;
                 }
-                target[property] = value;
+                indexable[property] = value;
                 return true;
             },
-            
-            has(target, property) {
-                return target.has(property, storageType) || property in target;
+
+            has(target, property: string | symbol): boolean {
+                return target.has(property as string, storageType) || property in target;
             }
-        });
+        }) as unknown as BoundStorageAPI;
     }
 
     /**
      * Cleanup method
      */
-    cleanup() {
+    cleanup(): void {
         // Restore original storage methods
-        ['localStorage', 'sessionStorage'].forEach(storageType => {
+        const storageTypes: StorageType[] = ['localStorage', 'sessionStorage'];
+
+        storageTypes.forEach(storageType => {
             const storage = this.getStorage(storageType);
-            
+
             if (storage && this.originalMethods.has(`${storageType}_setItem`)) {
-                storage.setItem = this.originalMethods.get(`${storageType}_setItem`);
-                storage.removeItem = this.originalMethods.get(`${storageType}_removeItem`);
-                storage.clear = this.originalMethods.get(`${storageType}_clear`);
+                storage.setItem = this.originalMethods.get(`${storageType}_setItem`) as Storage['setItem'];
+                storage.removeItem = this.originalMethods.get(`${storageType}_removeItem`) as Storage['removeItem'];
+                storage.clear = this.originalMethods.get(`${storageType}_clear`) as Storage['clear'];
             }
         });
-        
+
         // Clear listeners
         this.listeners.forEach(listenerSet => listenerSet.clear());
-        
+
         console.log('StorageManager cleaned up');
     }
 }

@@ -2,36 +2,44 @@
  * AuthManager - Customizable authentication utility for Agentlet Core
  * Provides popup-based authentication with customizable IDP integration
  */
+import type { AuthManagerAPI, AuthManagerConfig, AuthResult, AuthState, AuthAPI } from '../../types/public-api';
 
-class AuthManager {
-    constructor(config = {}) {
+class AuthManager implements AuthManagerAPI {
+    config: Required<AuthManagerConfig>;
+    isAuthenticating: boolean;
+    authPopup: Window | null;
+    messageListener: ((event: MessageEvent) => void) | null;
+    loginButton: HTMLButtonElement | null;
+    authenticatedUser: Record<string, unknown> | null;
+
+    constructor(config: AuthManagerConfig = {}) {
         this.config = {
             // Authentication button configuration
             enabled: config.enabled || false,
             buttonText: config.buttonText || 'Login',
             buttonIcon: config.buttonIcon || '🔐',
-            
+
             // Popup configuration
             loginUrl: config.loginUrl || '',
             popupWidth: config.popupWidth || 400,
             popupHeight: config.popupHeight || 600,
             popupFeatures: config.popupFeatures || 'scrollbars=yes,resizable=yes,status=no,location=no,toolbar=no,menubar=no',
-            
+
             // Token extraction configuration
             tokenExtractor: config.tokenExtractor || null, // Custom function to extract token
             messageHandler: config.messageHandler || null, // Custom message handler
-            
+
             // Events
             onSuccess: config.onSuccess || null,
             onError: config.onError || null,
             onCancel: config.onCancel || null,
-            
+
             // Security
             allowedOrigins: config.allowedOrigins || [],
-            
+
             ...config
-        };
-        
+        } as Required<AuthManagerConfig>;
+
         this.isAuthenticating = false;
         this.authPopup = null;
         this.messageListener = null;
@@ -44,14 +52,14 @@ class AuthManager {
     /**
      * Check if authentication is enabled
      */
-    isEnabled() {
+    isEnabled(): boolean | string {
         return this.config.enabled && this.config.loginUrl;
     }
 
     /**
      * Create the login button element
      */
-    createLoginButton(onClick) {
+    createLoginButton(onClick?: () => void): HTMLButtonElement | null {
         if (!this.isEnabled()) {
             return null;
         }
@@ -66,7 +74,7 @@ class AuthManager {
 
         // Set initial button content
         this.updateButtonContent();
-        
+
         // Apply button styling (will be styled via theme in main application)
         button.style.cssText = `
             background: #28a745;
@@ -79,18 +87,18 @@ class AuthManager {
             color: white;
             transition: all 0.3s ease;
         `;
-        
+
         // Hover effects
-        button.onmouseenter = () => {
+        button.onmouseenter = (): void => {
             button.style.background = '#218838';
             button.style.borderColor = '#1e7e34';
         };
-        
-        button.onmouseleave = () => {
+
+        button.onmouseleave = (): void => {
             button.style.background = '#28a745';
             button.style.borderColor = '#1e7e34';
         };
-        
+
         return button;
     }
 
@@ -98,7 +106,7 @@ class AuthManager {
      * Start the authentication process
      */
     // eslint-disable-next-line require-await
-    async startAuthentication() {
+    async startAuthentication(): Promise<void> {
         if (this.isAuthenticating) {
             console.warn('Authentication already in progress');
             return;
@@ -114,49 +122,49 @@ class AuthManager {
         try {
             this.isAuthenticating = true;
             console.log('Starting authentication flow...');
-            
+
             // Open popup window
             this.authPopup = this.openAuthPopup();
-            
+
             // Set up message listener
             this.setupMessageListener();
-            
+
             // Monitor popup closure
             this.monitorPopupClosure();
-            
+
         } catch (error) {
             console.error('Failed to start authentication:', error);
-            this.handleError(error);
+            this.handleError(error as Error);
         }
     }
 
     /**
      * Open the authentication popup window
      */
-    openAuthPopup() {
+    openAuthPopup(): Window {
         const { loginUrl, popupWidth, popupHeight, popupFeatures } = this.config;
-        
+
         // Calculate popup position (center of screen)
         const left = Math.round((screen.width - popupWidth) / 2);
         const top = Math.round((screen.height - popupHeight) / 2);
-        
+
         const features = `${popupFeatures},width=${popupWidth},height=${popupHeight},left=${left},top=${top}`;
-        
+
         console.log(`Opening auth popup: ${loginUrl}`);
         const popup = window.open(loginUrl, 'agentlet_auth', features);
-        
+
         if (!popup) {
             throw new Error('Failed to open authentication popup. Please allow popups for this site.');
         }
-        
+
         return popup;
     }
 
     /**
      * Set up message listener for popup communication
      */
-    setupMessageListener() {
-        this.messageListener = (event) => {
+    setupMessageListener(): void {
+        this.messageListener = (event: MessageEvent): void => {
             // Security check: verify origin if configured
             if (this.config.allowedOrigins.length > 0) {
                 if (!this.config.allowedOrigins.includes(event.origin)) {
@@ -164,18 +172,19 @@ class AuthManager {
                     return;
                 }
             }
-            
+
             console.log('AuthManager: Received message from popup:', event.data);
-            
+
             try {
                 // Use custom message handler if provided
                 if (this.config.messageHandler) {
-                    const result = this.config.messageHandler(event.data, this);
+                    // `event.data`'s real shape is whatever the popup posted - dynamic by design.
+                    const result = this.config.messageHandler(event.data as unknown, this);
 
                     // If custom handler returns a result, process it
                     if (result) {
                         if (result.success) {
-                            this.handleSuccess(result.accessToken || result.token, result);
+                            this.handleSuccess((result.accessToken || result.token) as string, result);
                         } else if (result.cancelled) {
                             this.handleCancel();
                         } else {
@@ -184,34 +193,36 @@ class AuthManager {
                     }
                     // If result is null/undefined, fall back to default handling
                     else {
-                        this.handleAuthMessage(event.data);
+                        this.handleAuthMessage(event.data as unknown);
                     }
                 } else {
                     // Default message handling
-                    this.handleAuthMessage(event.data);
+                    this.handleAuthMessage(event.data as unknown);
                 }
             } catch (error) {
                 console.error('Error handling auth message:', error);
-                this.handleError(error);
+                this.handleError(error as Error);
             }
         };
-        
+
         window.addEventListener('message', this.messageListener);
     }
 
     /**
      * Default message handler for authentication
      */
-    handleAuthMessage(data) {
+    handleAuthMessage(data: unknown): void {
         // Expected message format: { type: 'auth_result', success: true/false, token?: string, error?: string }
         if (data && typeof data === 'object') {
-            if (data.type === 'auth_result') {
-                if (data.success && data.token) {
-                    this.handleSuccess(data.token, data);
+            // Dynamic shape posted by the popup, same as the original untyped JS.
+            const message = data as { type?: string; success?: boolean; token?: string; error?: string };
+            if (message.type === 'auth_result') {
+                if (message.success && message.token) {
+                    this.handleSuccess(message.token, message as Record<string, unknown>);
                 } else {
-                    this.handleError(new Error(data.error || 'Authentication failed'));
+                    this.handleError(new Error(message.error || 'Authentication failed'));
                 }
-            } else if (data.type === 'auth_cancel') {
+            } else if (message.type === 'auth_cancel') {
                 this.handleCancel();
             }
         } else if (typeof data === 'string') {
@@ -227,7 +238,7 @@ class AuthManager {
                     console.error('Token extraction failed:', error);
                 }
             }
-            
+
             // Default: treat string as potential token
             if (data.trim()) {
                 this.handleSuccess(data.trim(), { rawData: data });
@@ -240,8 +251,8 @@ class AuthManager {
     /**
      * Monitor popup closure
      */
-    monitorPopupClosure() {
-        const checkClosed = () => {
+    monitorPopupClosure(): void {
+        const checkClosed = (): void => {
             if (this.authPopup && this.authPopup.closed) {
                 console.log('Auth popup was closed by user');
                 this.handleCancel();
@@ -249,20 +260,22 @@ class AuthManager {
                 setTimeout(checkClosed, 1000);
             }
         };
-        
+
         setTimeout(checkClosed, 1000);
     }
 
     /**
      * Handle successful authentication
      */
-    handleSuccess(token, additionalData = {}) {
+    handleSuccess(token: string, additionalData: Record<string, unknown> = {}): void {
         console.log('Authentication successful');
 
         this.cleanup();
 
         // Store user info from authentication result
-        this.authenticatedUser = additionalData.user_info || additionalData.userInfo || null;
+        // `user_info`/`userInfo` is whatever shape the popup or custom
+        // messageHandler sent - dynamic by design, same as the original.
+        this.authenticatedUser = (additionalData.user_info ?? additionalData.userInfo ?? null) as Record<string, unknown> | null;
 
         // Update button to show user info
         this.updateButtonContent();
@@ -273,7 +286,7 @@ class AuthManager {
             timestamp: new Date().toISOString(),
             userInfo: this.authenticatedUser,
             ...additionalData
-        };
+        } as AuthResult;
 
         if (this.config.onSuccess) {
             try {
@@ -282,7 +295,7 @@ class AuthManager {
                 console.error('Error in onSuccess callback:', error);
             }
         }
-        
+
         // Emit event if eventBus is available
         if (window.agentlet && window.agentlet.eventBus) {
             window.agentlet.eventBus.emit('auth:success', result);
@@ -292,17 +305,17 @@ class AuthManager {
     /**
      * Handle authentication error
      */
-    handleError(error) {
+    handleError(error: Error): void {
         console.error('Authentication error:', error.message);
-        
+
         this.cleanup();
-        
-        const result = {
+
+        const result: { success: false; error: string; timestamp: string } = {
             success: false,
             error: error.message,
             timestamp: new Date().toISOString()
         };
-        
+
         if (this.config.onError) {
             try {
                 this.config.onError(result);
@@ -310,7 +323,7 @@ class AuthManager {
                 console.error('Error in onError callback:', callbackError);
             }
         }
-        
+
         // Emit event if eventBus is available
         if (window.agentlet && window.agentlet.eventBus) {
             window.agentlet.eventBus.emit('auth:error', result);
@@ -320,17 +333,17 @@ class AuthManager {
     /**
      * Handle authentication cancellation
      */
-    handleCancel() {
+    handleCancel(): void {
         console.log('Authentication cancelled by user');
-        
+
         this.cleanup();
-        
-        const result = {
+
+        const result: { success: false; cancelled: true; timestamp: string } = {
             success: false,
             cancelled: true,
             timestamp: new Date().toISOString()
         };
-        
+
         if (this.config.onCancel) {
             try {
                 this.config.onCancel(result);
@@ -338,7 +351,7 @@ class AuthManager {
                 console.error('Error in onCancel callback:', error);
             }
         }
-        
+
         // Emit event if eventBus is available
         if (window.agentlet && window.agentlet.eventBus) {
             window.agentlet.eventBus.emit('auth:cancel', result);
@@ -348,15 +361,15 @@ class AuthManager {
     /**
      * Clean up authentication state
      */
-    cleanup() {
+    cleanup(): void {
         this.isAuthenticating = false;
-        
+
         // Close popup if still open
         if (this.authPopup && !this.authPopup.closed) {
             this.authPopup.close();
         }
         this.authPopup = null;
-        
+
         // Remove message listener
         if (this.messageListener) {
             window.removeEventListener('message', this.messageListener);
@@ -367,19 +380,19 @@ class AuthManager {
     /**
      * Update configuration
      */
-    updateConfig(newConfig) {
+    updateConfig(newConfig: Partial<AuthManagerConfig>): void {
         this.config = {
             ...this.config,
             ...newConfig
-        };
-        
+        } as Required<AuthManagerConfig>;
+
         console.log('AuthManager config updated:', this.config);
     }
 
     /**
      * Get current authentication state
      */
-    getState() {
+    getState(): AuthState {
         return {
             enabled: this.isEnabled(),
             authenticating: this.isAuthenticating,
@@ -390,7 +403,7 @@ class AuthManager {
     /**
      * Handle button click - either logout if authenticated or start authentication
      */
-    async handleButtonClick() {
+    async handleButtonClick(): Promise<void> {
         if (this.authenticatedUser) {
             await this.logout();
         } else {
@@ -401,7 +414,7 @@ class AuthManager {
     /**
      * Update button content based on authentication state
      */
-    updateButtonContent() {
+    updateButtonContent(): void {
         if (!this.loginButton) return;
 
         if (this.authenticatedUser) {
@@ -429,12 +442,13 @@ class AuthManager {
     /**
      * Extract user initials from user info
      */
-    getUserInitials(userInfo) {
+    getUserInitials(userInfo: Record<string, unknown> | null): string {
         if (!userInfo) return 'U';
 
-        // Try to get initials from name first
+        // `name`/`username` are whatever shape the IDP or custom auth flow
+        // sent - dynamic by design, same as the original untyped JS.
         if (userInfo.name) {
-            const nameParts = userInfo.name.trim().split(/\s+/);
+            const nameParts = (userInfo.name as string).trim().split(/\s+/);
             if (nameParts.length >= 2) {
                 return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase();
             } else if (nameParts.length === 1) {
@@ -444,7 +458,7 @@ class AuthManager {
 
         // Fallback to username
         if (userInfo.username) {
-            const username = userInfo.username;
+            const username = userInfo.username as string;
             if (username.includes('.')) {
                 // For usernames like "john.doe", extract "JD"
                 const parts = username.split('.');
@@ -466,14 +480,14 @@ class AuthManager {
     /**
      * Logout user and reset authentication state
      */
-    async logout() {
+    async logout(): Promise<void> {
         if (!this.authenticatedUser) {
             console.warn('No user is currently authenticated');
             return;
         }
 
         // Show confirmation dialog
-        const userName = this.authenticatedUser.name || this.authenticatedUser.username || 'Unknown User';
+        const userName = (this.authenticatedUser.name || this.authenticatedUser.username || 'Unknown User') as string;
         const confirmed = await this.showLogoutConfirmation(userName);
 
         if (!confirmed) {
@@ -498,7 +512,7 @@ class AuthManager {
     /**
      * Show logout confirmation dialog
      */
-    async showLogoutConfirmation(userName) {
+    async showLogoutConfirmation(userName: string): Promise<boolean> {
         // Check if Dialog utility is available
         if (!window.agentlet || !window.agentlet.utils || !window.agentlet.utils.Dialog) {
             console.warn('Dialog utility not available, proceeding with logout');
@@ -509,7 +523,7 @@ class AuthManager {
             const Dialog = window.agentlet.utils.Dialog;
 
             // Wrap the callback-based Dialog.confirm in a Promise
-            return new Promise((resolve) => {
+            return new Promise<boolean>((resolve) => {
                 Dialog.confirm(
                     `You're currently logged in as ${userName}, do you want to logout?`,
                     'Confirm Logout',
@@ -529,14 +543,14 @@ class AuthManager {
     /**
      * Create a proxy for safe external access
      */
-    createProxy() {
+    createProxy(): AuthAPI {
         return {
             isEnabled: () => this.isEnabled(),
             startAuthentication: () => this.startAuthentication(),
             logout: () => this.logout(),
             getState: () => this.getState(),
             getAuthenticatedUser: () => this.authenticatedUser,
-            updateConfig: (config) => this.updateConfig(config)
+            updateConfig: (config: Partial<AuthManagerConfig>) => this.updateConfig(config)
         };
     }
 }
