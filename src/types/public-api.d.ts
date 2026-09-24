@@ -866,7 +866,13 @@ export interface StorageStatistics {
  * access, shadowed by the method names below.
  */
 export interface BoundStorageAPI {
-    get(key: string, defaultValue?: string): string | undefined;
+    /**
+     * `defaultValue` (and thus the return value) may be `null` as well as
+     * `undefined` - `getJSON()` below calls `get(key, null, ...)`
+     * internally, so `null` flows through as a legitimate "missing key"
+     * sentinel, not just the parameter's own default.
+     */
+    get(key: string, defaultValue?: string | null): string | null | undefined;
     set(key: string, value: string): void;
     remove(key: string): boolean;
     has(key: string): boolean;
@@ -874,15 +880,20 @@ export interface BoundStorageAPI {
     clear(): number;
     getAll(includeSensitive?: boolean): Record<string, string>;
     getMatching(pattern: string | RegExp): Record<string, string>;
-    /** Returns `defaultValue` if the key is missing or the stored value fails to parse as JSON. */
-    getJSON<T = unknown>(key: string, defaultValue?: T): T;
+    /** Returns `defaultValue` (which itself defaults to `null`, not `undefined`) if the key is missing or the stored value fails to parse as JSON. */
+    getJSON<T = unknown>(key: string, defaultValue?: T | null): T | null;
     setJSON(key: string, value: unknown): void;
     setMultiple(items: Record<string, string>): void;
+    /**
+     * `key` is `null` (not `'*'`) specifically for a cross-tab `clear()`:
+     * the native `storage` event reports `key: null` for that case, while
+     * a same-tab `clear()` (patched in-process) reports the `'*'` sentinel.
+     */
     addChangeListener(
-        callback: (storageType: StorageType, key: string, newValue: string | null, oldValue: string | null) => void
+        callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void
     ): void;
     removeChangeListener(
-        callback: (storageType: StorageType, key: string, newValue: string | null, oldValue: string | null) => void
+        callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void
     ): boolean;
     getStatistics(): StorageStatistics;
     export(format?: 'json' | 'csv' | 'tsv', includeSensitive?: boolean): string;
@@ -896,22 +907,25 @@ export interface BoundStorageAPI {
  * manages both storages.
  */
 export interface StorageManagerAPI {
-    get(key: string, defaultValue?: string, storageType?: StorageType): string | undefined;
+    /** See {@link BoundStorageAPI.get} - `defaultValue`/the return value may be `null`, not just `undefined`. */
+    get(key: string, defaultValue?: string | null, storageType?: StorageType): string | null | undefined;
     set(key: string, value: string, storageType?: StorageType): void;
     remove(key: string, storageType?: StorageType): boolean;
     has(key: string, storageType?: StorageType): boolean;
     clear(storageType?: StorageType): number;
     getAll(storageType?: StorageType, includeSensitive?: boolean): Record<string, string>;
     getMatching(pattern: string | RegExp, storageType?: StorageType): Record<string, string>;
-    getJSON<T = unknown>(key: string, defaultValue?: T, storageType?: StorageType): T;
+    /** See {@link BoundStorageAPI.getJSON} - `defaultValue` itself defaults to `null`, not `undefined`. */
+    getJSON<T = unknown>(key: string, defaultValue?: T | null, storageType?: StorageType): T | null;
     setJSON(key: string, value: unknown, storageType?: StorageType): void;
     setMultiple(items: Record<string, string>, storageType?: StorageType): void;
+    /** See {@link BoundStorageAPI.addChangeListener} - `key` is `null` for a cross-tab `clear()`. */
     addChangeListener(
-        callback: (storageType: StorageType, key: string, newValue: string | null, oldValue: string | null) => void,
+        callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void,
         storageType?: StorageType | 'both'
     ): void;
     removeChangeListener(
-        callback: (storageType: StorageType, key: string, newValue: string | null, oldValue: string | null) => void,
+        callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void,
         storageType?: StorageType | 'both'
     ): boolean;
     getStatistics(storageType?: StorageType): StorageStatistics;
@@ -960,7 +974,12 @@ export interface AuthResult {
 }
 
 export interface AuthState {
-    enabled: boolean;
+    /**
+     * Not a strict boolean: `isEnabled()` (which this delegates to)
+     * returns `this.config.enabled && this.config.loginUrl`, so a truthy
+     * result is actually the `loginUrl` string, not `true`.
+     */
+    enabled: boolean | string;
     authenticating: boolean;
     /** `null` (not strictly `false`) when there is no popup at all. */
     popupOpen: boolean | null;
@@ -968,7 +987,8 @@ export interface AuthState {
 
 /** The fixed-shape object returned by `AuthManager.createProxy()`. */
 export interface AuthAPI {
-    isEnabled(): boolean;
+    /** See {@link AuthState.enabled} - may return the `loginUrl` string instead of strict `true`. */
+    isEnabled(): boolean | string;
     startAuthentication(): Promise<void>;
     logout(): Promise<void>;
     getState(): AuthState;
@@ -978,7 +998,8 @@ export interface AuthAPI {
 
 /** The full `AuthManager` class surface, exposed as `window.agentlet.authManager`. */
 export interface AuthManagerAPI {
-    isEnabled(): boolean;
+    /** See {@link AuthState.enabled} - may return the `loginUrl` string instead of strict `true`. */
+    isEnabled(): boolean | string;
     createLoginButton(onClick?: () => void): HTMLButtonElement | null;
     startAuthentication(): Promise<void>;
     logout(): Promise<void>;

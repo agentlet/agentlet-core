@@ -30,6 +30,10 @@ import type {
     ScriptInjectorConstructor,
     EnvAPI,
     CookiesAPI,
+    StorageManagerAPI,
+    BoundStorageAPI,
+    AuthManagerAPI,
+    AuthAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -38,6 +42,8 @@ import { ThemeManager } from '../../src/core/ThemeManager';
 import ScriptInjector from '../../src/utils/system/ScriptInjector';
 import { LocalStorageEnvironmentVariablesManager } from '../../src/utils/config-persistence/EnvManager';
 import CookieManager from '../../src/utils/config-persistence/CookieManager';
+import StorageManager from '../../src/utils/config-persistence/StorageManager';
+import AuthManager from '../../src/utils/system/AuthManager';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
@@ -133,7 +139,7 @@ void myVar;
 window.agentlet.cookies.set('session', 'abc123', { secure: true, sameSite: 'Strict' });
 
 window.agentlet.storage.local.set('key', 'value');
-const storedValue: string | undefined = window.agentlet.storage.local.get('key');
+const storedValue: string | null | undefined = window.agentlet.storage.local.get('key');
 void storedValue;
 
 /* -------------------------------------------------------------- */
@@ -251,6 +257,10 @@ const scriptInjectorCtorCheck: ScriptInjectorConstructor = ScriptInjector;
 const scriptInjectorInstanceCheck: ScriptInjectorAPI = new ScriptInjector();
 const envCheck: EnvAPI = new LocalStorageEnvironmentVariablesManager();
 const cookiesCheck: CookiesAPI = new CookieManager();
+const storageManagerCheck: StorageManagerAPI = new StorageManager();
+const boundStorageCheck: BoundStorageAPI = new StorageManager().createProxy('localStorage');
+const authManagerCheck: AuthManagerAPI = new AuthManager();
+const authApiCheck: AuthAPI = new AuthManager().createProxy();
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -262,6 +272,10 @@ void scriptInjectorCtorCheck;
 void scriptInjectorInstanceCheck;
 void envCheck;
 void cookiesCheck;
+void storageManagerCheck;
+void boundStorageCheck;
+void authManagerCheck;
+void authApiCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -321,6 +335,21 @@ void cookiesBackToReal;
 declare const declaredPanelManager: PanelManagerAPI;
 const panelManagerBackToReal: Pick<PanelManager, keyof PanelManagerAPI> = declaredPanelManager;
 void panelManagerBackToReal;
+declare const declaredStorageManager: StorageManagerAPI;
+const storageManagerBackToReal: Pick<InstanceType<typeof StorageManager>, keyof StorageManagerAPI> = declaredStorageManager;
+void storageManagerBackToReal;
+
+declare const declaredBoundStorage: BoundStorageAPI;
+const boundStorageBackToReal: Pick<ReturnType<InstanceType<typeof StorageManager>['createProxy']>, keyof BoundStorageAPI> = declaredBoundStorage;
+void boundStorageBackToReal;
+
+declare const declaredAuthManager: AuthManagerAPI;
+const authManagerBackToReal: Pick<InstanceType<typeof AuthManager>, keyof AuthManagerAPI> = declaredAuthManager;
+void authManagerBackToReal;
+
+declare const declaredAuthApi: AuthAPI;
+const authApiBackToReal: Pick<ReturnType<InstanceType<typeof AuthManager>['createProxy']>, keyof AuthAPI> = declaredAuthApi;
+void authApiBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
