@@ -3,8 +3,84 @@
  * Manages module registration, activation, and lifecycle
  */
 
-export default class ModuleRegistry {
-    constructor(config = {}) {
+import type {
+    AgentletModule,
+    EventBusAPI,
+    ModuleActivationContext,
+    ModuleRegistryAPI,
+    ModuleStatistics
+} from '../types/public-api';
+
+/**
+ * Constructor configuration. Not part of the public `window.agentlet`
+ * surface (nothing in src/types/public-api.d.ts references it directly -
+ * `AgentletCoreConfig` only carries `registryUrl` /
+ * `skipRegistryModuleRegistration` at the top level and the core builds
+ * this object itself), so it lives here rather than in public-api.d.ts.
+ */
+export interface ModuleRegistryConfig {
+    eventBus?: EventBusAPI;
+    registryUrl?: string;
+    skipRegistryModuleRegistration?: boolean;
+}
+
+/** A single entry inside a loaded registry's `agentlets` array. */
+interface AgentletRegistryEntryConfig {
+    name: string;
+    url: string;
+    module: string;
+}
+
+/**
+ * Shape of the JSON-like payload delivered via the `agentletRegistryLoaded`
+ * event (see `loadRegistryScript()`). This is data supplied by an
+ * externally-hosted registry script, not something this codebase controls,
+ * so its true shape is genuinely dynamic; this interface only documents the
+ * fields this class itself reads/writes.
+ */
+interface AgentletRegistryPayload {
+    agentlets?: AgentletRegistryEntryConfig[];
+    libraries?: unknown;
+    baseUrl?: string;
+}
+
+/**
+ * Subset of {@link ModuleStatistics} tracked directly on `this.metrics`;
+ * `activeModule` and `moduleList` are derived on demand in
+ * `getStatistics()`.
+ */
+interface ModuleRegistryMetrics {
+    totalModules: number;
+    activationCount: number;
+    failedActivations: number;
+    registriesLoaded: number;
+    registryLoadFailures: number;
+}
+
+export default class ModuleRegistry implements ModuleRegistryAPI {
+    modules: Map<string, AgentletModule>;
+    activeModule: AgentletModule | null;
+    lastUrl: string;
+
+    // Event system
+    eventBus?: EventBusAPI;
+
+    // Registry configuration
+    registryUrl?: string;
+    loadedRegistries: Set<string>;
+    skipRegistryModuleRegistration: boolean;
+
+    // Callback for module changes
+    onModuleChange: ((module: AgentletModule | null, context?: ModuleActivationContext) => void) | null;
+
+    // Performance tracking - simplified
+    metrics: ModuleRegistryMetrics;
+
+    // Guards to prevent duplicate operations
+    _registrationInProgress: Set<string>;
+    _activationInProgress: Set<string>;
+
+    constructor(config: ModuleRegistryConfig = {}) {
         this.modules = new Map();
         this.activeModule = null;
         this.lastUrl = window.location.href;
@@ -39,9 +115,9 @@ export default class ModuleRegistry {
 
     /**
      * Register a module
-     * @param {Module} module - Module instance to register
+     * @param module - Module instance to register
      */
-    register(module) {
+    register(module: AgentletModule): void {
         if (!module || !module.name) {
             throw new Error('Invalid module: name is required');
         }
@@ -83,9 +159,9 @@ export default class ModuleRegistry {
 
     /**
      * Unregister a module
-     * @param {string} moduleName - Name of module to unregister
+     * @param moduleName - Name of module to unregister
      */
-    async unregister(moduleName) {
+    async unregister(moduleName: string): Promise<boolean> {
         const module = this.modules.get(moduleName);
         if (!module) return false;
 
@@ -104,16 +180,16 @@ export default class ModuleRegistry {
 
         console.log(`📦 Module unregistered: ${moduleName}`);
         this.emit('module:unregistered', { module: moduleName });
-        
+
         return true;
     }
 
     /**
      * Find module that matches the current URL
-     * @param {string} url - URL to check (defaults to current URL)
-     * @returns {Module|null} - Matching module or null
+     * @param url - URL to check (defaults to current URL)
+     * @returns Matching module or null
      */
-    findMatchingModule(url = window.location.href) {
+    findMatchingModule(url: string = window.location.href): AgentletModule | null {
         for (const module of this.modules.values()) {
             if (module.checkPattern && module.checkPattern(url)) {
                 return module;
@@ -124,10 +200,10 @@ export default class ModuleRegistry {
 
     /**
      * Activate a specific module
-     * @param {Module} module - Module to activate
-     * @param {Object} context - Activation context
+     * @param module - Module to activate
+     * @param context - Activation context
      */
-    async activateModule(module, context = {}) {
+    async activateModule(module: AgentletModule, context: ModuleActivationContext = {}): Promise<void> {
         if (!module) return;
 
         // Prevent cascade activations
@@ -170,7 +246,7 @@ export default class ModuleRegistry {
         } catch (error) {
             this.metrics.failedActivations++;
             console.error(`❌ Module activation failed: ${module.name}`, error);
-            this.emit('module:activationFailed', { module: module.name, error: error.message });
+            this.emit('module:activationFailed', { module: module.name, error: (error as Error).message });
         } finally {
             this._activationInProgress.delete(activationKey);
         }
@@ -178,9 +254,9 @@ export default class ModuleRegistry {
 
     /**
      * Deactivate current module
-     * @param {Object} [context] - Context describing why deactivation happened (e.g. a urlChange), forwarded to `module.cleanup()` and the module-change callback
+     * @param context - Context describing why deactivation happened (e.g. a urlChange), forwarded to `module.cleanup()` and the module-change callback
      */
-    async deactivateModule(context = {}) {
+    async deactivateModule(context: ModuleActivationContext = {}): Promise<void> {
         if (!this.activeModule) return;
 
         const module = this.activeModule;
@@ -203,19 +279,19 @@ export default class ModuleRegistry {
     /**
      * Check for URL changes and activate appropriate module
      */
-    checkUrlChange() {
+    checkUrlChange(): void {
         const currentUrl = window.location.href;
         const urlChanged = currentUrl !== this.lastUrl;
-        
+
         const matchingModule = this.findMatchingModule(currentUrl);
-        
+
         if (matchingModule !== this.activeModule) {
-            const context = {
+            const context: ModuleActivationContext = {
                 trigger: urlChanged ? 'urlChange' : 'moduleRegistration',
                 oldUrl: this.lastUrl,
                 newUrl: currentUrl
             };
-            
+
             if (matchingModule) {
                 this.activateModule(matchingModule, context);
                 this.emit('application:detected', { module: matchingModule.name, url: currentUrl });
@@ -234,7 +310,7 @@ export default class ModuleRegistry {
     /**
      * Start monitoring URL changes
      */
-    startUrlMonitoring() {
+    startUrlMonitoring(): void {
         // Check periodically
         setInterval(() => {
             this.checkUrlChange();
@@ -249,12 +325,12 @@ export default class ModuleRegistry {
         const originalPushState = history.pushState;
         const originalReplaceState = history.replaceState;
 
-        history.pushState = function(...args) {
+        history.pushState = function (this: ModuleRegistry, ...args: Parameters<History['pushState']>): void {
             originalPushState.apply(history, args);
             setTimeout(() => this.checkUrlChange(), 100);
         }.bind(this);
 
-        history.replaceState = function(...args) {
+        history.replaceState = function (this: ModuleRegistry, ...args: Parameters<History['replaceState']>): void {
             originalReplaceState.apply(history, args);
             setTimeout(() => this.checkUrlChange(), 100);
         }.bind(this);
@@ -262,17 +338,17 @@ export default class ModuleRegistry {
 
     /**
      * Set callback for module changes
-     * @param {Function} callback - Callback function
+     * @param callback - Callback function
      */
-    setModuleChangeCallback(callback) {
+    setModuleChangeCallback(callback: (module: AgentletModule | null, context?: ModuleActivationContext) => void): void {
         this.onModuleChange = callback;
     }
 
     /**
      * Load agentlets from registry JavaScript file via script injection
-     * @param {string} registryUrl - URL to registry JavaScript file (optional, uses config default)
+     * @param registryUrl - URL to registry JavaScript file (optional, uses config default)
      */
-    async loadFromRegistry(registryUrl = null) {
+    async loadFromRegistry(registryUrl: string | null = null): Promise<void> {
         const url = registryUrl || this.registryUrl;
         if (!url) {
             console.warn('📦 No registry URL configured, skipping registry loading');
@@ -288,12 +364,13 @@ export default class ModuleRegistry {
         try {
             console.log(`📦 Loading agentlets registry from: ${url}`);
 
+            // Payload shape is not guaranteed by the external registry script.
             const registryData = await this.loadRegistryScript(url);
 
             // Handle registry data structure
-            const agentlets = Array.isArray(registryData)
+            const agentlets: AgentletRegistryEntryConfig[] | unknown = Array.isArray(registryData)
                 ? registryData
-                : registryData.agentlets || [];
+                : (registryData as AgentletRegistryPayload).agentlets || [];
 
             if (!Array.isArray(agentlets)) {
                 throw new Error('Registry must contain an agentlets array');
@@ -302,7 +379,7 @@ export default class ModuleRegistry {
             console.log(`📦 Found ${agentlets.length} agentlet(s) in registry`);
 
             // Extract base URL from registry URL for relative library paths
-            let baseUrl;
+            let baseUrl: string;
             try {
                 const registryUrlObj = new URL(url);
                 baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
@@ -313,12 +390,12 @@ export default class ModuleRegistry {
             }
 
             // Add base URL to registry data if it has libraries
-            if (registryData.libraries) {
-                registryData.baseUrl = baseUrl;
+            if ((registryData as AgentletRegistryPayload).libraries) {
+                (registryData as AgentletRegistryPayload).baseUrl = baseUrl;
             }
 
             // Load each agentlet module
-            for (const agentletConfig of agentlets) {
+            for (const agentletConfig of agentlets as AgentletRegistryEntryConfig[]) {
                 try {
                     await this.loadAgentletModule(agentletConfig);
                 } catch (error) {
@@ -336,36 +413,36 @@ export default class ModuleRegistry {
         } catch (error) {
             this.metrics.registryLoadFailures++;
             console.error(`❌ Failed to load registry from ${url}:`, error);
-            this.emit('registry:loadFailed', { url, error: error.message });
+            this.emit('registry:loadFailed', { url, error: (error as Error).message });
         }
     }
 
     /**
      * Load registry via script injection with event-based communication
-     * @param {string} url - Registry JavaScript file URL
-     * @returns {Promise<Object>} Registry data
+     * @param url - Registry JavaScript file URL
+     * @returns Registry data - shape depends entirely on the external registry script
      */
-    loadRegistryScript(url) {
+    loadRegistryScript(url: string): Promise<unknown> {
         return new Promise((resolve, reject) => {
             const timeoutMs = 10000; // 10 second timeout
-            let timeoutId;
-            let eventListener;
+            let timeoutId: ReturnType<typeof setTimeout>;
+            let eventListener: (event: CustomEvent) => void;
 
             const cleanup = () => {
                 if (timeoutId) clearTimeout(timeoutId);
                 if (eventListener) {
-                    window.removeEventListener('agentletRegistryLoaded', eventListener);
+                    window.removeEventListener('agentletRegistryLoaded', eventListener as EventListener);
                 }
             };
 
             // Set up event listener for registry data
-            eventListener = (event) => {
+            eventListener = (event: CustomEvent) => {
                 cleanup();
                 console.log('📦 Registry data received via event');
                 resolve(event.detail);
             };
 
-            window.addEventListener('agentletRegistryLoaded', eventListener, { once: true });
+            window.addEventListener('agentletRegistryLoaded', eventListener as EventListener, { once: true });
 
             // Set up timeout
             timeoutId = setTimeout(() => {
@@ -397,36 +474,39 @@ export default class ModuleRegistry {
             document.head.appendChild(script);
         });
     }
-    
+
     /**
      * Load a single agentlet module from configuration
-     * @param {Object} agentletConfig - Agentlet configuration {name, url, module}
+     * @param agentletConfig - Agentlet configuration {name, url, module}
      */
-    async loadAgentletModule(agentletConfig) {
+    async loadAgentletModule(agentletConfig: AgentletRegistryEntryConfig): Promise<void> {
         const { name, url, module: moduleClass } = agentletConfig;
-        
+
         if (!name || !url || !moduleClass) {
             throw new Error('Agentlet config must have name, url, and module properties');
         }
-        
+
         // Skip if already loaded
         if (this.modules.has(name)) {
             console.log(`📦 Agentlet already loaded: ${name}`);
             return;
         }
-        
+
         try {
             console.log(`📦 Loading agentlet module: ${name} from ${url}`);
-            
+
             // Dynamically import the module
             const _moduleScript = await this.loadScript(url);
-            
-            // Get the module class from global scope
-            const ModuleClass = window[moduleClass];
+
+            // Get the module class from global scope. `window` has no index
+            // signature for arbitrary string keys, and the class named here is
+            // genuinely dynamic (supplied by the registry payload), so it is
+            // read through an untyped view of `window`.
+            const ModuleClass = (window as unknown as Record<string, unknown>)[moduleClass] as (new () => AgentletModule) | undefined;
             if (!ModuleClass) {
                 throw new Error(`Module class '${moduleClass}' not found in global scope after loading ${url}`);
             }
-            
+
             // Create module instance
             const moduleInstance = new ModuleClass();
             if (!moduleInstance.name) {
@@ -440,19 +520,18 @@ export default class ModuleRegistry {
             } else {
                 console.log(`✅ Agentlet loaded (registration skipped): ${name}`);
             }
-            
+
         } catch (error) {
             console.error(`❌ Failed to load agentlet module ${name}:`, error);
             throw error;
         }
     }
-    
+
     /**
      * Load a script dynamically
-     * @param {string} url - Script URL
-     * @returns {Promise<void>}
+     * @param url - Script URL
      */
-    loadScript(url) {
+    loadScript(url: string): Promise<void> {
         return new Promise((resolve, reject) => {
             // Check if script is already loaded
             const existingScript = document.querySelector(`script[src="${url}"]`);
@@ -465,12 +544,12 @@ export default class ModuleRegistry {
             script.src = url;
             script.type = 'text/javascript';
             script.crossOrigin = 'anonymous';
-            
+
             script.onload = () => {
                 console.log(`📦 Script loaded: ${url}`);
                 resolve();
             };
-            
+
             script.onerror = (error) => {
                 console.error(`📦 Script load failed: ${url}`, error);
                 // Clean up failed script
@@ -487,7 +566,7 @@ export default class ModuleRegistry {
     /**
      * Initialize the registry
      */
-    async initialize() {
+    async initialize(): Promise<void> {
         console.log('🚀 Module Registry initialized');
 
         // Load from registry if configured
@@ -505,26 +584,26 @@ export default class ModuleRegistry {
 
     /**
      * Get all registered modules
-     * @returns {Array} - Array of module names
+     * @returns Array of module names
      */
-    getAll() {
+    getAll(): string[] {
         return Array.from(this.modules.keys());
     }
 
     /**
      * Get module by name
-     * @param {string} name - Module name
-     * @returns {Module|null} - Module instance or null
+     * @param name - Module name
+     * @returns Module instance or null
      */
-    get(name) {
+    get(name: string): AgentletModule | null {
         return this.modules.get(name) || null;
     }
 
     /**
      * Get registry statistics
-     * @returns {Object} - Statistics object
+     * @returns Statistics object
      */
-    getStatistics() {
+    getStatistics(): ModuleStatistics {
         return {
             ...this.metrics,
             activeModule: this.activeModule?.name || null,
@@ -534,10 +613,10 @@ export default class ModuleRegistry {
 
     /**
      * Emit event to event bus
-     * @param {string} event - Event name
-     * @param {Object} data - Event data
+     * @param event - Event name
+     * @param data - Event data
      */
-    emit(event, data) {
+    emit(event: string, data?: unknown): void {
         if (this.eventBus && typeof this.eventBus.emit === 'function') {
             this.eventBus.emit(event, data);
         }
@@ -546,7 +625,7 @@ export default class ModuleRegistry {
     /**
      * Cleanup all modules and stop monitoring
      */
-    async cleanup() {
+    async cleanup(): Promise<void> {
         // Deactivate current module
         await this.deactivateModule();
 
@@ -563,7 +642,7 @@ export default class ModuleRegistry {
 
         this.modules.clear();
         this.activeModule = null;
-        
+
         console.log('🧹 Module Registry cleaned up');
     }
 }

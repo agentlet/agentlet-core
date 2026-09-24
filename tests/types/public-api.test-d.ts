@@ -48,6 +48,8 @@ import type {
     ShortcutsAPI,
     StyleInjectorAPI,
     UIManagerInternalAPI,
+    ModuleRegistryAPI,
+    ModuleManagerAPI,
 } from '../../src/types/public-api';
 
 import Module from '../../src/core/Module';
@@ -73,6 +75,8 @@ import PDFProcessor from '../../src/utils/ai/PDFProcessor';
 import { AIManager } from '../../src/utils/ai/AIProvider';
 import MessageBubble from '../../src/utils/ui/MessageBubble';
 import ShortcutManager from '../../src/utils/ui/ShortcutManager';
+import ModuleRegistry from '../../src/core/ModuleRegistry';
+import ModuleManager from '../../src/core/ModuleManager';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -300,6 +304,8 @@ const aiManagerCheck: AIManagerAPI = new AIManager(envStub);
 const messageBubbleCheck: MessageBubbleAPI = new MessageBubble();
 const shortcutManagerCheck: ShortcutManagerAPI = new ShortcutManager();
 const shortcutsApiCheck: ShortcutsAPI = new ShortcutManager().createProxy();
+const moduleRegistryCheck: ModuleRegistryAPI = new ModuleRegistry();
+const moduleManagerCheck: ModuleManagerAPI = new ModuleManager(new ModuleRegistry());
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -327,6 +333,8 @@ void aiManagerCheck;
 void messageBubbleCheck;
 void shortcutManagerCheck;
 void shortcutsApiCheck;
+void moduleRegistryCheck;
+void moduleManagerCheck;
 
 // PanelManager's constructor takes an internal (unexported) core shape, not
 // a public config object like Module's, so both directions below use
@@ -462,6 +470,14 @@ void shortcutManagerBackToReal;
 declare const declaredShortcutsApi: ShortcutsAPI;
 const shortcutsApiBackToReal: Pick<ReturnType<InstanceType<typeof ShortcutManager>['createProxy']>, keyof ShortcutsAPI> = declaredShortcutsApi;
 void shortcutsApiBackToReal;
+
+declare const declaredModuleRegistry: ModuleRegistryAPI;
+const moduleRegistryBackToReal: Pick<InstanceType<typeof ModuleRegistry>, keyof ModuleRegistryAPI> = declaredModuleRegistry;
+void moduleRegistryBackToReal;
+
+declare const declaredModuleManager: ModuleManagerAPI;
+const moduleManagerBackToReal: Pick<InstanceType<typeof ModuleManager>, keyof ModuleManagerAPI> = declaredModuleManager;
+void moduleManagerBackToReal;
 
 /* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */

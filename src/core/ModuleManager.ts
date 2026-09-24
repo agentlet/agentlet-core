@@ -3,23 +3,39 @@
  * Eliminates duplicate registration points
  */
 
-export default class ModuleManager {
-    constructor(moduleRegistry) {
+import type {
+    AgentletModule,
+    ModuleActivationContext,
+    ModuleManagerAPI,
+    ModuleStatistics
+} from '../types/public-api';
+import type ModuleRegistry from './ModuleRegistry.js';
+
+export default class ModuleManager implements ModuleManagerAPI {
+    moduleRegistry: ModuleRegistry;
+    modules: Map<string, AgentletModule>;
+    activeModule: AgentletModule | null;
+    _isInitialized: boolean;
+
+    // Track registration sources to prevent duplicates
+    _registrationSources: Map<string, string>; // module name -> source
+
+    constructor(moduleRegistry: ModuleRegistry) {
         this.moduleRegistry = moduleRegistry;
         this.modules = new Map();
         this.activeModule = null;
         this._isInitialized = false;
 
         // Track registration sources to prevent duplicates
-        this._registrationSources = new Map(); // module name -> source
+        this._registrationSources = new Map();
     }
 
     /**
      * Single registration point - all module registration goes through here
-     * @param {Module} module - Module to register
-     * @param {string} source - Registration source for debugging
+     * @param module - Module to register
+     * @param source - Registration source for debugging
      */
-    register(module, source = 'unknown') {
+    register(module: AgentletModule, source = 'unknown'): void {
         if (!module || !module.name) {
             throw new Error('Invalid module: name is required');
         }
@@ -53,9 +69,9 @@ export default class ModuleManager {
 
     /**
      * Unregister a module
-     * @param {string} moduleName - Name of module to unregister
+     * @param moduleName - Name of module to unregister
      */
-    async unregister(moduleName) {
+    async unregister(moduleName: string): Promise<boolean> {
         this.modules.delete(moduleName);
         this._registrationSources.delete(moduleName);
         return await this.moduleRegistry.unregister(moduleName);
@@ -63,33 +79,33 @@ export default class ModuleManager {
 
     /**
      * Get a registered module
-     * @param {string} moduleName - Name of module to get
+     * @param moduleName - Name of module to get
      */
-    get(moduleName) {
+    get(moduleName: string): AgentletModule | undefined {
         return this.modules.get(moduleName);
     }
 
     /**
      * Get all registered module names
      */
-    getAll() {
+    getAll(): string[] {
         return Array.from(this.modules.keys());
     }
 
     /**
      * Activate a module through the registry
-     * @param {Module} module - Module to activate
-     * @param {Object} context - Activation context
+     * @param module - Module to activate
+     * @param context - Activation context
      */
-    async activate(module, context = {}) {
+    async activate(module: AgentletModule, context: ModuleActivationContext = {}): Promise<void> {
         return await this.moduleRegistry.activateModule(module, context);
     }
 
     /**
      * Get statistics including registration sources
      */
-    getStatistics() {
-        const stats = this.moduleRegistry.getStatistics();
+    getStatistics(): ModuleStatistics & { registrationSources: Record<string, string> } {
+        const stats = this.moduleRegistry.getStatistics() as ModuleStatistics & { registrationSources: Record<string, string> };
 
         // Add source tracking info
         stats.registrationSources = {};
@@ -103,7 +119,7 @@ export default class ModuleManager {
     /**
      * Initialize the module manager
      */
-    initialize() {
+    initialize(): void {
         if (this._isInitialized) {
             console.warn('ModuleManager already initialized');
             return;
