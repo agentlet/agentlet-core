@@ -71,6 +71,8 @@ export interface DialogWaitOptions {
     icon?: string;
     showSpinner?: boolean;
     allowCancel?: boolean;
+    /** Only read by `showAIProcessing()`: set false to omit the icon entirely (overridden by an empty `icon`). */
+    showIcon?: boolean;
 }
 
 export interface DialogProgressCallbacks {
@@ -187,8 +189,14 @@ export interface DialogAPI {
 
     fullscreen(options: DialogFullscreenOptions, callback?: (value: unknown) => void): void;
 
-    /** `options` may be a bare string, treated as `message` (legacy call form). */
-    showAIProcessing(options?: DialogWaitOptions | string, cancelCallback?: () => void): void;
+    /**
+     * `options` may be a bare string, treated as `message` (legacy call
+     * form). In that legacy form the code also reads a 2nd positional
+     * `allowCancel` boolean via `arguments[1]` before the callback, which
+     * this overload exposes explicitly.
+     */
+    showAIProcessing(message: string, allowCancel?: boolean, cancelCallback?: () => void): void;
+    showAIProcessing(options?: DialogWaitOptions, cancelCallback?: () => void): void;
     showLoading(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
     showAnalyzing(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
     showThinking(message?: string, allowCancel?: boolean, cancelCallback?: () => void): void;
@@ -1408,6 +1416,19 @@ export interface AgentletTheme {
     imageOverlayZIndex: number;
     imageOverlayTransition: string;
     imageOverlayHoverScale: string;
+    /**
+     * Command-prompt dialog input background. Not one of the keys
+     * `ThemeManager.getTheme()` ever populates (there is no default for
+     * it), so in practice this is always `undefined` and the dialog falls
+     * back to `#ffffff`; documented here because `Dialog` reads it.
+     */
+    inputBackground?: string;
+    /**
+     * Fullscreen-dialog footer background. Same situation as
+     * {@link AgentletTheme.inputBackground}: `ThemeManager` never sets it,
+     * so the dialog always falls back to `rgba(248, 249, 250, 0.8)`.
+     */
+    footerBackground?: string;
 }
 
 export interface ThemeManagerAPI {
