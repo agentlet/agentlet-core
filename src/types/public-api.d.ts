@@ -38,6 +38,8 @@ export interface DialogButton {
     disabled?: boolean;
     /** Accepted but currently has no visual effect in the built-in dialog renderer. */
     secondary?: boolean;
+    /** Accepted but not read by the built-in `'info'`-type dialog renderer (`src/utils/ui/dialog/info.ts` only ever reads `text`/`disabled`/`primary`/`value`). */
+    icon?: string;
 }
 
 export interface DialogInfoOptions {
@@ -722,7 +724,7 @@ export interface ShortcutManagerAPI {
     clear(): void;
     registerDefaultShortcuts(config?: {
         quickCommandDialogShortcut?: boolean;
-        quickCommandCallback?: (result: unknown) => void;
+        quickCommandCallback?: ((result: unknown) => void) | null;
     }): Promise<void>;
     showHelp(): void;
     enabled: boolean;
@@ -1753,7 +1755,14 @@ export interface AgentletDebugAPI {
     getConfig(): AgentletCoreConfig;
     getStatistics(): ModuleStatistics;
     eventBus: EventBusAPI;
-    envManager: EnvAPI;
+    /**
+     * Matches `AgentletCore.envManager`'s real type: `initializeEnvManager()`
+     * returns `null` when the core is constructed with `envManager: null`
+     * (environment variables disabled). An earlier version of this
+     * declaration claimed non-null `EnvAPI`, which `AgentletCore implements
+     * AgentletAPI` would have failed to satisfy.
+     */
+    envManager: EnvAPI | null;
     cookieManager: CookiesAPI;
     storageManager: StorageManagerAPI;
 }
@@ -1806,7 +1815,13 @@ export interface AgentletAPI {
     initialized: boolean;
     config: AgentletCoreConfig;
     eventBus: EventBusAPI;
-    envManager: EnvAPI;
+    /**
+     * `null` when the core was constructed with `envManager: null`
+     * (environment variables disabled) - see
+     * `AgentletCoreConfig.envManager`/`AgentletCore.initializeEnvManager()`.
+     * An earlier version of this declaration claimed non-null `EnvAPI`.
+     */
+    envManager: EnvAPI | null;
     cookieManager: CookiesAPI;
     storageManager: StorageManagerAPI;
     authManager: AuthManagerAPI;

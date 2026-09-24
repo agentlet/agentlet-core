@@ -64,8 +64,10 @@ import { Z_INDEX } from '../../src/utils/ui/ZIndex';
 import PageHighlighter from '../../src/utils/ui/PageHighlighter';
 import Dialog from '../../src/utils/ui/Dialog';
 import { PanelManager } from '../../src/ui/PanelManager';
+import type { PanelManagerCore } from '../../src/ui/PanelManager';
 import { StyleInjector } from '../../src/ui/StyleInjector';
 import { UIManager } from '../../src/ui/UIManager';
+import type { UIManagerCore } from '../../src/ui/UIManager';
 import ElementSelector from '../../src/utils/ui/ElementSelector';
 import ScreenCapture from '../../src/utils/ui/ScreenCapture';
 import FormExtractor from '../../src/utils/data-processing/FormExtractor';
@@ -77,6 +79,7 @@ import MessageBubble from '../../src/utils/ui/MessageBubble';
 import ShortcutManager from '../../src/utils/ui/ShortcutManager';
 import ModuleRegistry from '../../src/core/ModuleRegistry';
 import ModuleManager from '../../src/core/ModuleManager';
+import AgentletCore from '../../src/index';
 
 /* -------------------------------------------------------------- */
 /* window.agentlet matches the exported AgentletAPI shape          */
@@ -352,6 +355,24 @@ void styleInjectorCheck;
 declare const realUIManager: UIManager;
 const uiManagerCheck: UIManagerInternalAPI = realUIManager;
 void uiManagerCheck;
+
+/**
+ * Step 2.6 converted src/index.js (AgentletCore) to TypeScript. AgentletCore
+ * is the concrete "core" object `UIManager`/`PanelManager`/`GlobalAPI` each
+ * declare their own minimal dependency shape for (`UIManagerCore`,
+ * `PanelManagerCore`, and `AgentletAPI` respectively - `GlobalAPI` types its
+ * `core` field directly as the full public `AgentletAPI`, unlike the other
+ * two). These three assignments are the real conformance check: if
+ * AgentletCore's shape ever drifts from what any of the three collaborators
+ * need, one of these fails `npm run typecheck`.
+ */
+declare const agentletCoreInstance: AgentletCore;
+const agentletCoreAsUIManagerCore: UIManagerCore = agentletCoreInstance;
+const agentletCoreAsPanelManagerCore: PanelManagerCore = agentletCoreInstance;
+const agentletCoreAsAgentletAPI: AgentletAPI = agentletCoreInstance;
+void agentletCoreAsUIManagerCore;
+void agentletCoreAsPanelManagerCore;
+void agentletCoreAsAgentletAPI;
 
 // declared -> real
 //
