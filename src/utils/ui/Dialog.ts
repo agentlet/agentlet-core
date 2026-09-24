@@ -73,6 +73,15 @@ class Dialog implements DialogAPI {
     stepLabels: string[];
     currentStep: number;
     startTime: number | null;
+    // Whether the active progress dialog should auto-close after
+    // completeProgress(), set from the resolved `autoClose` option.
+    progressAutoClose: boolean;
+
+    // Whether the active dialog closes when its overlay is clicked. Only
+    // meaningful for the 'command'/'fullscreen' types (the only ones that
+    // expose a `closeOnOverlay` option); set by their show*() methods from
+    // the resolved config and read by handleOverlayClick().
+    closeOnOverlay: boolean;
 
     constructor(config: DialogConfig = {}) {
         this.theme = config.theme || {};
@@ -92,6 +101,8 @@ class Dialog implements DialogAPI {
         this.stepLabels = [];
         this.currentStep = 0;
         this.startTime = null;
+        this.progressAutoClose = true;
+        this.closeOnOverlay = true;
 
         // Bind methods
         this.handleKeydown = this.handleKeydown.bind(this);
@@ -245,6 +256,7 @@ class Dialog implements DialogAPI {
         this.callback = (callback as DialogCallback | undefined) ?? null;
         this.isActive = true;
         this.type = 'fullscreen';
+        this.closeOnOverlay = config.closeOnOverlay;
 
         this.createFullscreenOverlay();
         this.dialog = buildFullscreenDialog(this.theme, config, (result) => this.hide(result));
@@ -266,6 +278,7 @@ class Dialog implements DialogAPI {
         this.callback = (callback as DialogCallback | undefined) ?? null;
         this.isActive = true;
         this.type = 'command';
+        this.closeOnOverlay = config.closeOnOverlay;
 
         this.createOverlay();
         const { element, input } = buildCommandPromptDialog(this.theme, config, (result) => this.hide(result));
@@ -299,6 +312,7 @@ class Dialog implements DialogAPI {
         this.stepLabels = config.stepLabels;
         this.currentStep = config.currentStep;
         this.startTime = Date.now();
+        this.progressAutoClose = config.autoClose;
 
         this.isActive = true;
         this.type = 'progress';
@@ -780,14 +794,9 @@ class Dialog implements DialogAPI {
             this.onComplete();
         }
 
-        // Auto-close if enabled.
-        //
-        // Known quirk (preserved from the pre-split implementation): this
-        // always reads `true` for `dialog.dataset.autoClose !== 'false'`
-        // because nothing ever sets `dataset.autoClose`, so the dialog
-        // auto-closes after 2000ms regardless of the `autoClose` option.
-        const shouldAutoClose = this.dialog?.dataset?.autoClose !== 'false';
-        if (shouldAutoClose) {
+        // Auto-close if enabled, honouring the `autoClose` option (default
+        // `true`) that showProgress() resolved and stored on the instance.
+        if (this.progressAutoClose) {
             setTimeout(() => {
                 if (this.isActive) {
                     this.hide('complete');
@@ -880,15 +889,12 @@ class Dialog implements DialogAPI {
                     this.hide(this.activeInput?.value.trim());
                 }
             } else if (this.type === 'info') {
-                // Click primary button if available.
-                //
-                // Known quirk (preserved from the pre-split implementation):
-                // this selector never matches in practice. Both browsers and
-                // jsdom normalize an inline `background: #007bff` style to
-                // `background: rgb(0, 123, 255)` when it is read back, so
-                // `button[style*="background: #007bff"]` never finds the
-                // primary button and Enter is a no-op on info dialogs.
-                const primaryButton = this.dialog?.querySelector<HTMLButtonElement>(`button[style*="background: ${this.theme.primaryColor || '#007bff'}"]`);
+                // Click the primary button if available. buildInfoDialog()
+                // marks it with `data-primary="true"` at build time, since
+                // matching on the inline `background` style is unreliable:
+                // browsers/jsdom normalize it (e.g. to `rgb(0, 123, 255)`)
+                // so a `style*="background: #007bff"` selector never matches.
+                const primaryButton = this.dialog?.querySelector<HTMLButtonElement>('button[data-primary="true"]');
                 if (primaryButton && !primaryButton.disabled) {
                     primaryButton.click();
                 }
@@ -904,23 +910,17 @@ class Dialog implements DialogAPI {
             if (this.type === 'input') {
                 this.hide(null);
             } else if (this.type === 'command') {
-                // Check if command dialog allows closing on overlay click.
-                //
-                // Known quirk (preserved from the pre-split implementation):
-                // this always reads `true`, because nothing ever sets
-                // `dialog.dataset.closeOnOverlay`, so `closeOnOverlay: false`
-                // has no effect and the command dialog always closes.
-                const closeOnOverlay = this.dialog?.dataset?.closeOnOverlay !== 'false';
-                if (closeOnOverlay) {
+                // Honour the `closeOnOverlay` option (default `true`) that
+                // showCommandPrompt() resolved and stored on the instance.
+                if (this.closeOnOverlay) {
                     this.hide(null);
                 }
             } else if (this.type === 'info') {
                 this.hide('cancel');
             } else if (this.type === 'fullscreen') {
-                // Check if fullscreen dialog allows closing on overlay click.
-                // Same `dataset.closeOnOverlay` quirk as the command dialog above.
-                const closeOnOverlay = this.dialog?.dataset?.closeOnOverlay !== 'false';
-                if (closeOnOverlay) {
+                // Honour the `closeOnOverlay` option (default `true`) that
+                // showFullscreen() resolved and stored on the instance.
+                if (this.closeOnOverlay) {
                     this.hide('cancel');
                 }
             }

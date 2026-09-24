@@ -110,6 +110,7 @@ export function buildInfoDialog(theme: DialogTheme, config: ResolvedInfoConfig, 
         `;
 
         if (buttonConfig.primary) {
+            button.dataset.primary = 'true';
             buttonStyle += `
                 background: ${theme.primaryColor || '#007bff'};
                 color: white;
