@@ -80,6 +80,15 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     _registrationInProgress: Set<string>;
     _activationInProgress: Set<string>;
 
+    // URL monitoring internals (see startUrlMonitoring()/stopUrlMonitoring())
+    _urlMonitoringActive: boolean;
+    _urlMonitoringIntervalId: ReturnType<typeof setInterval> | null;
+    _popstateListener: (() => void) | null;
+    _originalPushState: History['pushState'] | null;
+    _originalReplaceState: History['replaceState'] | null;
+    _pushStateWrapper: History['pushState'] | null;
+    _replaceStateWrapper: History['replaceState'] | null;
+
     constructor(config: ModuleRegistryConfig = {}) {
         this.modules = new Map();
         this.activeModule = null;
@@ -108,6 +117,15 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         // Guards to prevent duplicate operations
         this._registrationInProgress = new Set();
         this._activationInProgress = new Set();
+
+        // URL monitoring internals
+        this._urlMonitoringActive = false;
+        this._urlMonitoringIntervalId = null;
+        this._popstateListener = null;
+        this._originalPushState = null;
+        this._originalReplaceState = null;
+        this._pushStateWrapper = null;
+        this._replaceStateWrapper = null;
 
         // Start URL monitoring
         this.startUrlMonitoring();
@@ -172,7 +190,11 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         // Cleanup the module
         if (typeof module.cleanup === 'function') {
-            await module.cleanup();
+            try {
+                await module.cleanup();
+            } catch (error) {
+                console.error(`Error cleaning up module ${module.name}:`, error);
+            }
         }
 
         this.modules.delete(moduleName);
@@ -302,38 +324,94 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         }
 
         if (urlChanged) {
+            const previousUrl = this.lastUrl;
             this.lastUrl = currentUrl;
-            this.emit('url:changed', { oldUrl: this.lastUrl, newUrl: currentUrl });
+            this.emit('url:changed', { oldUrl: previousUrl, newUrl: currentUrl });
         }
     }
 
     /**
-     * Start monitoring URL changes
+     * Start monitoring URL changes. Idempotent: a second call while
+     * monitoring is already active is a no-op.
      */
     startUrlMonitoring(): void {
+        if (this._urlMonitoringActive) {
+            return;
+        }
+        this._urlMonitoringActive = true;
+
         // Check periodically
-        setInterval(() => {
+        this._urlMonitoringIntervalId = setInterval(() => {
+            if (!this._urlMonitoringActive) return;
             this.checkUrlChange();
         }, 1000);
 
         // Listen for navigation events
-        window.addEventListener('popstate', () => {
-            setTimeout(() => this.checkUrlChange(), 100);
-        });
+        this._popstateListener = () => {
+            setTimeout(() => {
+                if (this._urlMonitoringActive) this.checkUrlChange();
+            }, 100);
+        };
+        window.addEventListener('popstate', this._popstateListener);
 
         // Override pushState and replaceState
         const originalPushState = history.pushState;
         const originalReplaceState = history.replaceState;
+        this._originalPushState = originalPushState;
+        this._originalReplaceState = originalReplaceState;
 
-        history.pushState = function (this: ModuleRegistry, ...args: Parameters<History['pushState']>): void {
+        this._pushStateWrapper = (...args: Parameters<History['pushState']>): void => {
             originalPushState.apply(history, args);
-            setTimeout(() => this.checkUrlChange(), 100);
-        }.bind(this);
+            setTimeout(() => {
+                if (this._urlMonitoringActive) this.checkUrlChange();
+            }, 100);
+        };
 
-        history.replaceState = function (this: ModuleRegistry, ...args: Parameters<History['replaceState']>): void {
+        this._replaceStateWrapper = (...args: Parameters<History['replaceState']>): void => {
             originalReplaceState.apply(history, args);
-            setTimeout(() => this.checkUrlChange(), 100);
-        }.bind(this);
+            setTimeout(() => {
+                if (this._urlMonitoringActive) this.checkUrlChange();
+            }, 100);
+        };
+
+        history.pushState = this._pushStateWrapper;
+        history.replaceState = this._replaceStateWrapper;
+    }
+
+    /**
+     * Stop monitoring URL changes: clears the polling interval, removes the
+     * `popstate` listener, and restores `history.pushState`/`replaceState`
+     * if they are still the wrappers installed by startUrlMonitoring().
+     *
+     * If another script has wrapped `history.pushState`/`replaceState` on
+     * top of ours in the meantime, those methods are left untouched (they
+     * are not ours to restore); the `_urlMonitoringActive` flag still makes
+     * any call that reaches our wrapper through that chain a harmless no-op.
+     */
+    stopUrlMonitoring(): void {
+        this._urlMonitoringActive = false;
+
+        if (this._urlMonitoringIntervalId !== null) {
+            clearInterval(this._urlMonitoringIntervalId);
+            this._urlMonitoringIntervalId = null;
+        }
+
+        if (this._popstateListener) {
+            window.removeEventListener('popstate', this._popstateListener);
+            this._popstateListener = null;
+        }
+
+        if (this._originalPushState && history.pushState === this._pushStateWrapper) {
+            history.pushState = this._originalPushState;
+        }
+        if (this._originalReplaceState && history.replaceState === this._replaceStateWrapper) {
+            history.replaceState = this._originalReplaceState;
+        }
+
+        this._originalPushState = null;
+        this._originalReplaceState = null;
+        this._pushStateWrapper = null;
+        this._replaceStateWrapper = null;
     }
 
     /**
@@ -626,6 +704,9 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
      * Cleanup all modules and stop monitoring
      */
     async cleanup(): Promise<void> {
+        // Stop URL monitoring (interval, popstate listener, history wrappers)
+        this.stopUrlMonitoring();
+
         // Deactivate current module
         await this.deactivateModule();
 

@@ -11,14 +11,14 @@
  * - register() replacing a different instance under the same name, and the
  *   reentrant-registration guard (`_registrationInProgress`).
  * - checkUrlChange()'s emitted events and the activation context it builds
- *   (`trigger`/`oldUrl`/`newUrl`), including a pre-existing quirk in the
- *   `url:changed` event (see the dedicated test below).
+ *   (`trigger`/`oldUrl`/`newUrl`).
  * - startUrlMonitoring()'s `popstate` listener and its `history.pushState`/
  *   `replaceState` overrides.
  * - activateModule()'s already-active no-op, its cascade-prevention guard,
  *   and `init()` only running once per module.
- * - unregister() propagating a rejecting `module.cleanup()` (unlike
- *   activateModule()/deactivateModule(), it has no try/catch around it).
+ * - unregister() removing the module and resolving `true` even when
+ *   `module.cleanup()` rejects, the same try/catch-and-log pattern used by
+ *   activateModule()/deactivateModule()/cleanup().
  * - setModuleChangeCallback().
  * - the registry/script-injection loading path (loadFromRegistry(),
  *   loadRegistryScript(), loadAgentletModule(), loadScript() - the
@@ -87,6 +87,7 @@ interface ModuleRegistryTestInstance {
     deactivateModule(context?: ModuleActivationContext): Promise<void>;
     checkUrlChange(): void;
     startUrlMonitoring(): void;
+    stopUrlMonitoring(): void;
     setModuleChangeCallback(callback: (module: AgentletModule | null, context?: ModuleActivationContext) => void): void;
     loadFromRegistry(registryUrl?: string | null): Promise<void>;
     loadRegistryScript(url: string): Promise<unknown>;
@@ -119,10 +120,11 @@ class RealCustomEvent<T = unknown> extends Event {
     }
 }
 
-// The constructor calls startUrlMonitoring(), which sets a 1s setInterval
-// that is never cleared (a pre-existing quirk - see tests/core/ModuleRegistry.test.js's
-// own top-level jest.useFakeTimers() for precedent); fake timers keep that
-// from leaving real dangling timers across every test in this file.
+// The constructor calls startUrlMonitoring(), which sets a 1s setInterval;
+// most tests here never call cleanup()/stopUrlMonitoring() to clear it (see
+// tests/core/ModuleRegistry.test.js's own top-level jest.useFakeTimers() for
+// precedent), so fake timers keep that from leaving real dangling timers
+// across every test in this file.
 jest.useFakeTimers();
 
 // Captured once, before any ModuleRegistry instance can wrap them, so every
@@ -216,16 +218,19 @@ describe('ModuleRegistry behaviour characterization', () => {
             expect(activeModule.cleanup).toHaveBeenCalled();
         });
 
-        test('quirk: the "url:changed" event\'s oldUrl already equals the new URL, because lastUrl is reassigned before the event is built', () => {
+        test('the "url:changed" event carries the real previous URL as oldUrl', () => {
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
-            history.pushState({}, '', '/quirk-page');
+            const oldUrl = window.location.href;
+            history.pushState({}, '', '/real-old-url-page');
+            const newUrl = window.location.href;
 
             registry.checkUrlChange();
 
             expect(mockEventBus.emit).toHaveBeenCalledWith('url:changed', {
-                oldUrl: window.location.href,
-                newUrl: window.location.href
+                oldUrl,
+                newUrl
             });
+            expect(oldUrl).not.toBe(newUrl);
         });
     });
 
@@ -257,6 +262,62 @@ describe('ModuleRegistry behaviour characterization', () => {
             expect(window.location.pathname).toBe('/replaced-page');
             jest.advanceTimersByTime(100);
             expect(checkUrlChangeSpy).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    describe('startUrlMonitoring() / stopUrlMonitoring() - lifecycle', () => {
+        test('a second startUrlMonitoring() call while monitoring is active does not install a second interval', () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+            checkUrlChangeSpy.mockClear();
+
+            registry.startUrlMonitoring();
+
+            jest.advanceTimersByTime(1000);
+            expect(checkUrlChangeSpy).toHaveBeenCalledTimes(1);
+        });
+
+        test('cleanup() stops the interval, removes the popstate listener, and restores history.pushState/replaceState', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+
+            await registry.cleanup();
+            checkUrlChangeSpy.mockClear();
+
+            jest.advanceTimersByTime(5000);
+            history.pushState({}, '', '/after-cleanup-push');
+            history.replaceState({}, '', '/after-cleanup-replace');
+            window.dispatchEvent(new Event('popstate'));
+            jest.advanceTimersByTime(1000);
+
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
+            expect(history.pushState).toBe(nativePushState);
+            expect(history.replaceState).toBe(nativeReplaceState);
+        });
+
+        test('when another script wraps history.pushState after startUrlMonitoring(), cleanup() leaves that wrapper in place and calling it stays harmless', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+
+            // A later script wraps pushState again, on top of ours.
+            const ourPushState = history.pushState;
+            const outerPushState = function (...args: Parameters<History['pushState']>): void {
+                ourPushState.apply(history, args);
+            };
+            history.pushState = outerPushState;
+
+            await registry.cleanup();
+            checkUrlChangeSpy.mockClear();
+
+            // Not restored: it isn't ours to touch.
+            expect(history.pushState).toBe(outerPushState);
+
+            // The call still reaches our (now-inert) wrapper through the
+            // chain, but the cleaned-up registry no longer reacts to it.
+            history.pushState({}, '', '/through-outer-wrapper');
+            jest.advanceTimersByTime(1000);
+
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
         });
     });
 
@@ -314,16 +375,20 @@ describe('ModuleRegistry behaviour characterization', () => {
     });
 
     describe('unregister()', () => {
-        test('propagates a rejecting module.cleanup() (no try/catch around it, unlike activateModule()/deactivateModule())', async () => {
+        test('resolves true and removes the module even when module.cleanup() rejects, logging the error', async () => {
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
             const module = new Module({ name: 'boom', patterns: ['x'] });
             const error = new Error('cleanup boom');
             module.cleanup = jest.fn().mockRejectedValue(error);
             registry.register(module);
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-            await expect(registry.unregister('boom')).rejects.toThrow('cleanup boom');
-            // The rejection happens before `this.modules.delete()` runs, so the module is still registered.
-            expect(registry.modules.has('boom')).toBe(true);
+            await expect(registry.unregister('boom')).resolves.toBe(true);
+
+            expect(consoleSpy).toHaveBeenCalledWith('Error cleaning up module boom:', error);
+            expect(registry.modules.has('boom')).toBe(false);
+            expect(mockEventBus.emit).toHaveBeenCalledWith('module:unregistered', { module: 'boom' });
+            consoleSpy.mockRestore();
         });
     });
 
