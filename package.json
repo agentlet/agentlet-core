@@ -37,7 +37,6 @@
     "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "create-module": "node tools/create-module.js",
     "scaffold:agentlet": "plop agentlet",
     "scaffold:agentlet:defaults": "plop agentlet --defaults",
     "prepare": "husky",
