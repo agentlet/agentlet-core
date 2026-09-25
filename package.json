@@ -5,7 +5,10 @@
   "main": "dist/agentlet-core.js",
   "types": "./dist/agentlet-core.d.ts",
   "files": [
-    "dist",
+    "dist/agentlet-core.js",
+    "dist/agentlet-core.min.js",
+    "dist/agentlet-core.esm.js",
+    "dist/agentlet-core.d.ts",
     "README.md",
     "LICENSE"
   ],
@@ -32,6 +35,7 @@
     "test:coverage": "jest --coverage",
     "test:verbose": "jest --verbose",
     "test:scaffold": "node tools/test-scaffold.js",
+    "verify:dist-types": "node tools/verify-dist-types.mjs",
     "test:examples": "playwright test --config=tests/examples/playwright.config.js",
     "test:examples:visible": "playwright test --config=tests/examples/playwright.config.js --headed",
     "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",

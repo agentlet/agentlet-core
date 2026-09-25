@@ -46,6 +46,7 @@ import type {
     MessageBubbleAPI,
     ShortcutManagerAPI,
     ShortcutsAPI,
+    LibrarySetupAPI,
     StyleInjectorAPI,
     UIManagerInternalAPI,
     ModuleRegistryAPI,
@@ -77,6 +78,7 @@ import PDFProcessor from '../../src/utils/ai/PDFProcessor';
 import { AIManager } from '../../src/utils/ai/AIProvider';
 import MessageBubble from '../../src/utils/ui/MessageBubble';
 import ShortcutManager from '../../src/utils/ui/ShortcutManager';
+import { LibrarySetup } from '../../src/libraries/LibrarySetup';
 import ModuleRegistry from '../../src/core/ModuleRegistry';
 import ModuleManager from '../../src/core/ModuleManager';
 import AgentletCore from '../../src/index';
@@ -336,6 +338,7 @@ const elementSelectorCtorCheck: ElementSelectorConstructor = ElementSelector;
 const elementSelectorInstanceCheck: ElementSelectorAPI = new ElementSelector();
 declare const librarySetupStub: { ensureLibrary(name: string): Promise<boolean> };
 const screenCaptureCheck: ScreenCaptureAPI = new ScreenCapture(librarySetupStub);
+const librarySetupCheck: LibrarySetupAPI = new LibrarySetup();
 const formExtractorCheck: FormExtractorAPI = new FormExtractor();
 const formFillerCheck: FormFillerAPI = new FormFiller();
 const tableExtractorCheck: TableExtractorAPI = new TableExtractor();
@@ -366,6 +369,7 @@ void authApiCheck;
 void elementSelectorCtorCheck;
 void elementSelectorInstanceCheck;
 void screenCaptureCheck;
+void librarySetupCheck;
 void formExtractorCheck;
 void formFillerCheck;
 void tableExtractorCheck;
@@ -495,6 +499,11 @@ void elementSelectorBackToReal;
 declare const declaredScreenCapture: ScreenCaptureAPI;
 const screenCaptureBackToReal: Pick<InstanceType<typeof ScreenCapture>, keyof ScreenCaptureAPI> = declaredScreenCapture;
 void screenCaptureBackToReal;
+
+declare const declaredLibrarySetup: LibrarySetupAPI;
+const librarySetupBackToReal: Pick<InstanceType<typeof LibrarySetup>, keyof LibrarySetupAPI> = declaredLibrarySetup;
+void librarySetupBackToReal;
+
 declare const declaredFormExtractor: FormExtractorAPI;
 const formExtractorBackToReal: Pick<InstanceType<typeof FormExtractor>, keyof FormExtractorAPI> = declaredFormExtractor;
 void formExtractorBackToReal;

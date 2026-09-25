@@ -122,6 +122,15 @@ agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `te
 - esbuild compiles `.ts` sources natively, so no extra build step is needed.
 - Tests may be written in `.ts`; Jest transforms them with babel-jest, the same as `.js` tests.
 
+### Public API declarations (dist/agentlet-core.d.ts)
+
+`src/types/public-api.d.ts` is hand-written and copied as-is to `dist/agentlet-core.d.ts` by `tools/build.js` (`copyTypeDeclarations()`). This is deliberate, not a gap to fill in with `tsc --emitDeclarationOnly`:
+
+- The published surface (`AgentletAPI`, driving the `window.agentlet` global augmentation) does not correspond to any single class in `src/`. It is a curated view assembled from many internal managers, several of which are typed narrower on purpose (for example `ShortcutManagerAPI`/`LibrarySetupAPI` intentionally omit the framework-internal `init()`/wiring methods that the concrete `ShortcutManager`/`LibrarySetup` classes still need). A compiler-generated declaration reflects the concrete classes verbatim, internal members included, and has no way to know which members are author-facing.
+- We tried it: running `tsc --declaration --emitDeclarationOnly` over `src/` does compile cleanly, but it emits one `.d.ts` per source file (46 files for the current tree, no single `AgentletAPI`/`window.agentlet` shape) and declares `AgentletCore` as a constructible class rather than the singleton instance surface agentlet authors actually use. Turning that output into something equivalent to today's `public-api.d.ts` would need both a bundler (`dts-bundle-generator`, `rollup-plugin-dts`, or API Extractor) and hand-curation on top of it, at which point the manual file is simpler to maintain and review than the generation pipeline.
+- `tests/types/public-api.test-d.ts` (checked by `npm run typecheck`) is the conformance contract: it imports both `public-api.d.ts` and the real implementation classes and asserts they stay compatible in both directions. Keep it up to date whenever a public class's shape changes; that is what protects the hand-written declarations from drifting out of sync with the code, not code generation.
+- As a cheap guard rail, `npm run build` compiles a small standalone consumer file against the built `dist/agentlet-core.d.ts` (see `tools/verify-dist-types.mjs`) to catch a declarations file that fails to parse or load, without requiring a full generation pipeline.
+
 ### Module Development
 
 When creating new modules:

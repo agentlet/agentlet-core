@@ -8,6 +8,7 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 class AgentletCoreBuilder {
     constructor() {
@@ -142,6 +143,19 @@ class AgentletCoreBuilder {
         } catch (error) {
             console.warn(`⚠️ Failed to copy type declarations: ${error.message}`);
         }
+    }
+
+    /**
+     * Cheap guard rail for the type declarations just copied to
+     * dist/agentlet-core.d.ts: type-checks a minimal consumer file against
+     * it (see tools/verify-dist-types.mjs and CONTRIBUTING.md's "Public
+     * API declarations" section for why this exists instead of generating
+     * the declarations from source).
+     */
+    verifyDistTypes() {
+        const scriptPath = path.join(__dirname, 'verify-dist-types.mjs');
+        const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' });
+        return { success: result.status === 0 };
     }
 
     /**
@@ -1432,7 +1446,12 @@ document.addEventListener('DOMContentLoaded', () => {
             bookmarklet: await this.buildBookmarklet(),
             extension: await this.buildExtension()
         };
-        
+
+        // Guard rail: make sure dist/agentlet-core.d.ts actually loads and
+        // type-checks now that every target (and the declarations copy
+        // they each repeat) has finished.
+        results.distTypes = this.verifyDistTypes();
+
         console.log('\n📋 Build Summary:');
         Object.entries(results).forEach(([target, result]) => {
             const status = result.success ? '✅' : '❌';

@@ -10,16 +10,13 @@ import type {
     ScreenCaptureDownloadOptions,
     ScreenCaptureRegion
 } from '../../types/public-api';
+import type { LibrarySetup } from '../../libraries/LibrarySetup.js';
 
 /**
- * Minimal shape of `src/libraries/LibrarySetup.js` this file actually uses -
- * deliberately not the whole class, just the one method `ensureHTML2Canvas()`
- * calls. `LibrarySetup.js` is untyped plain JS, so callers (GlobalAPI.js)
- * pass a real `LibrarySetup` instance duck-typed against this interface.
+ * Minimal shape of `LibrarySetup` this file actually uses - deliberately
+ * not the whole class, just the one method `ensureHTML2Canvas()` calls.
  */
-interface LibrarySetupLike {
-    ensureLibrary(name: string): Promise<boolean>;
-}
+type LibrarySetupLike = Pick<LibrarySetup, 'ensureLibrary'>;
 
 /** Signature of the global `html2canvas` function once the library is loaded. */
 type Html2CanvasFn = (element: Element, options: Html2CanvasOptions) => Promise<HTMLCanvasElement>;
