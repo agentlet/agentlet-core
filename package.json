@@ -18,7 +18,8 @@
       "import": "./dist/agentlet-core.esm.js",
       "require": "./dist/agentlet-core.js",
       "default": "./dist/agentlet-core.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "dev": "node tools/dev-server.js",
@@ -36,6 +37,8 @@
     "test:verbose": "jest --verbose",
     "test:scaffold": "node tools/test-scaffold.js",
     "verify:dist-types": "node tools/verify-dist-types.mjs",
+    "verify:node-import": "node tools/verify-node-import.mjs",
+    "verify:tarball-import": "node tools/verify-tarball-import.mjs",
     "test:examples": "playwright test --config=tests/examples/playwright.config.js",
     "test:examples:visible": "playwright test --config=tests/examples/playwright.config.js --headed",
     "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",

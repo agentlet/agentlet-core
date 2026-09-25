@@ -35,12 +35,13 @@ test.describe('Agentlet core framework', () => {
     });
     expect(isInitialized).toBe(true);
 
-    // Verify module content is loaded
-    const hasModuleContent = await page.locator('#agentlet-content').textContent();
+    // Verify module content is loaded. toContainText retries: a module
+    // mounted with React renders asynchronously, after registration.
+    const moduleContent = page.locator('#agentlet-content');
     {{#if (eq template 'minimal')}}
-    expect(hasModuleContent).toContain('Hello from {{titleCase name}}!');
+    await expect(moduleContent).toContainText('Hello from {{titleCase name}}!');
     {{else}}
-    expect(hasModuleContent).toContain('Welcome to {{titleCase name}}!');
+    await expect(moduleContent).toContainText('Welcome to {{titleCase name}}!');
     {{/if}}
   });
 

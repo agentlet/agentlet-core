@@ -34,8 +34,20 @@ import { GlobalAPI } from './core/GlobalAPI.js';
 // Import external libraries (jQuery removed)
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
-import * as pdfjsLib from 'pdfjs-dist';
 import hotkeys from 'hotkeys-js';
+// `pdfjs-dist` is intentionally NOT statically imported here (unlike the
+// libraries above): evaluating it touches browser globals (`DOMMatrix`, ...)
+// as a side effect of the module body itself, before any of its exports are
+// even used. A static `import * as pdfjsLib from 'pdfjs-dist'` therefore
+// crashes a plain `require('agentlet-core')`/`import('agentlet-core')` under
+// Node (SSR, tooling, tests) with `ReferenceError: DOMMatrix is not defined`,
+// even though nothing browser-specific has happened yet - only
+// `new AgentletCore().init()` (which requires a browser) actually needs
+// PDF.js. It's loaded lazily via `await import('pdfjs-dist')` inside init()
+// instead, right before `librarySetup.initializeAll(...)`. In the single-file
+// esbuild bundles (no code splitting - see tools/build.js) this compiles to a
+// lazily-evaluated module inlined in the same output file: pdf.js ships in
+// dist/ exactly as before, its code just isn't executed until init() runs.
 
 import type {
     AgentletAPI,
@@ -352,6 +364,15 @@ class AgentletCore {
 
         try {
             console.log('🚀 Initializing Agentlet Core 📎...');
+
+            // Load PDF.js lazily (see the comment on the removed static
+            // import above) right before it's handed to librarySetup - this
+            // is the earliest point evaluating pdf.js's module body is safe,
+            // and the latest point at which window.pdfjsLib must be set for
+            // existing consumers (PDFProcessor, ai.convertPDFToImages,
+            // ai.sendPromptWithPDF, the scaffold template) to see it in the
+            // same place they always have: available once init() resolves.
+            const pdfjsLib = await import('pdfjs-dist');
 
             // Set up all libraries
             this.librarySetup.initializeAll(
