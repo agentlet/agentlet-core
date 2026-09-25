@@ -32,6 +32,7 @@
     "test:coverage": "jest --coverage",
     "test:verbose": "jest --verbose",
     "test:scaffold": "node tools/test-scaffold.js",
+    "verify:dist-types": "node tools/verify-dist-types.mjs",
     "test:examples": "playwright test --config=tests/examples/playwright.config.js",
     "test:examples:visible": "playwright test --config=tests/examples/playwright.config.js --headed",
     "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",
