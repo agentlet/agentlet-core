@@ -16,6 +16,22 @@ import { createRoot } from 'react-dom/client';
             moduleInstance.count = count;
         }, [count]);
 
+        // Same agentlet-core utils the html template's demo buttons call
+        // (see module.js's 'bubble'/'info' actions) - kept here too so
+        // both UI variants offer an equivalent working demo of the panel,
+        // message bubble, and dialog overlay APIs.
+        const showMessageBubble = () => {
+            window.agentlet?.utils?.MessageBubble?.info('Hello from a React agentlet!');
+        };
+
+        const showInfoDialog = () => {
+            window.agentlet?.utils?.Dialog?.show('info', {
+                title: 'React Agentlet',
+                message: 'This dialog was opened from a React component, using the same window.agentlet.utils.Dialog API as the html template.',
+                icon: 'ℹ️'
+            });
+        };
+
         return (
             <div className="agentlet-{{kebabCase name}}-content">
                 <h2>Welcome to {{titleCase name}}!</h2>
@@ -24,6 +40,9 @@ import { createRoot } from 'react-dom/client';
                 <hr />
                 <p>Count: <strong>{count}</strong></p>
                 <button onClick={() => setCount(count + 1)}>+1</button>
+                <hr />
+                <button onClick={showMessageBubble}>Message Bubble</button>
+                <button onClick={showInfoDialog}>Info Dialog</button>
             </div>
         );
     }
