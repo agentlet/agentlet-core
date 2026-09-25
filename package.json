@@ -5,7 +5,10 @@
   "main": "dist/agentlet-core.js",
   "types": "./dist/agentlet-core.d.ts",
   "files": [
-    "dist",
+    "dist/agentlet-core.js",
+    "dist/agentlet-core.min.js",
+    "dist/agentlet-core.esm.js",
+    "dist/agentlet-core.d.ts",
     "README.md",
     "LICENSE"
   ],
