@@ -17,6 +17,8 @@ Navigate to your agentlet's directory and install the necessary dependencies.
 npm install
 ```
 
+{{#if (eq core 'local')}}This project depends on `agentlet-core` via `"file:../{{agentletCoreFolder}}"` in `package.json`, pointing at a local checkout instead of the published npm package. This is meant for developing `agentlet-core` itself alongside this agentlet: `npm install` symlinks it in, so changes made in `../{{agentletCoreFolder}}` are picked up after rebuilding it there. Switch to the published package by replacing that line with `"^{{coreVersion}}"` (or re-scaffold without `--core=local`).{{else}}This project depends on the published `"agentlet-core": "^{{coreVersion}}"` package from npm. If you are developing `agentlet-core` itself and want this project to use a local checkout instead, re-scaffold with `--core=local` (or pass `--core=local` to `npx plop agentlet` from the `agentlet-core` repository), which points the dependency at `file:../<agentlet-core folder>` instead.{{/if}}
+
 ### 2. Build the Agentlet (Production)
 
 This command will compile your agentlet's source code and bundle it into a single, minified file located in the `dist` directory.

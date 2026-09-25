@@ -11,6 +11,13 @@ module.exports = function (plop) {
   const path = require('path');
   const currentFolderName = path.basename(process.cwd());
 
+  // Read agentlet-core's own version dynamically so the scaffolded
+  // project's default dependency always tracks whatever is published from
+  // this checkout, rather than a hardcoded string that would drift the
+  // moment this repo's package.json is bumped (see plopfile.js's `core`
+  // handling below and plop-templates/agentlet/package.json).
+  const coreVersion = require('./package.json').version;
+
   // Parse command line arguments for parameters
   const getCliParam = (paramName) => {
     const arg = process.argv.find(arg => arg.startsWith(`--${paramName}=`));
@@ -31,9 +38,15 @@ module.exports = function (plop) {
   const cliLoading = getCliParam('loading');
   const cliRegistry = getCliParam('registry');
   const cliUi = getCliParam('ui');
+  // --core=local points the scaffolded project's agentlet-core dependency
+  // at this checkout via `file:../{{agentletCoreFolder}}` instead of the
+  // published npm package, for developing agentlet-core itself alongside a
+  // scaffolded agentlet. Any other value (or omitting the flag) keeps the
+  // default of depending on the published package.
+  const cliCore = getCliParam('core');
 
   // If any CLI parameters are provided, skip prompts
-  const skipPrompts = hasDefaultsFlag || hasMinimalFlag || cliName || cliFolder || cliLibs || cliLoading || cliUi;
+  const skipPrompts = hasDefaultsFlag || hasMinimalFlag || cliName || cliFolder || cliLibs || cliLoading || cliUi || cliCore;
 
   plop.setGenerator('agentlet', {
     description: 'Create a new agentlet',
@@ -83,6 +96,22 @@ module.exports = function (plop) {
         name: 'folder',
         message: 'In which folder should the agentlet be created?',
         default: '../',
+      },
+      {
+        type: 'list',
+        name: 'core',
+        message: 'Which agentlet-core dependency should this project use?',
+        choices: [
+          {
+            name: `Published npm package (^${coreVersion}, recommended)`,
+            value: 'npm'
+          },
+          {
+            name: 'Local checkout (file:../<folder>, for developing agentlet-core itself)',
+            value: 'local'
+          }
+        ],
+        default: 'npm'
       },
       {
         type: 'list',
@@ -145,7 +174,14 @@ module.exports = function (plop) {
         // --defaults and --minimal keep the html (getContent()) template;
         // --ui=react opts into the React template otherwise.
         data.ui = (hasDefaultsFlag || hasMinimalFlag) ? 'html' : (cliUi === 'react' ? 'react' : 'html');
+        // Default to the published npm package unless --core=local was
+        // passed explicitly; --defaults and --minimal also default to npm.
+        data.core = cliCore === 'local' ? 'local' : 'npm';
       }
+
+      // Make agentlet-core's own version available to templates regardless
+      // of whether prompts or CLI flags were used.
+      data.coreVersion = coreVersion;
 
       // The minimal template only ships the getContent()-based module, so
       // 'ui' never applies to it, whether it came from a prompt (which
