@@ -22,12 +22,12 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v4
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v7
       with:
-        node-version: 20.x
+        node-version: 22.x
         cache: 'npm'
         # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
         registry-url: 'https://registry.npmjs.org'

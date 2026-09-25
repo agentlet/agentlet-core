@@ -6,7 +6,7 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 
 ### 🧪 `test.yml` - Quick Test Pipeline
 **Trigger**: Every push to any branch, PRs to main/develop
-- Runs on Node.js 20.x
+- Runs on Node.js 22.x
 - Executes Jest unit tests 
 - Builds the project
 - Runs Playwright integration tests
@@ -37,6 +37,30 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 - **GitHub Actions**: Weekly updates on Mondays  
 - Auto-assigns to maintainer
 - Limits to 10 open PRs
+
+## Node.js and Actions versions
+
+`test.yml` and `release.yml` both run on Node.js 22.x (the active LTS line)
+and use `actions/checkout@v7` and `actions/setup-node@v7` (`test.yml` also
+uses `actions/upload-artifact@v7`). These were bumped from Node.js 20.x and
+`@v4` after a `release.yml` run warned that Node.js 20 is deprecated for
+GitHub-hosted actions and that `actions/checkout@v4`/`actions/setup-node@v4`
+were being force-run on Node.js 24 as a result. `@v7` of both actions
+natively targets Node.js 24 (`runs.using: node24`), so no such forcing
+happens any more. `cache: 'npm'` and `registry-url` on `setup-node` are
+unchanged inputs in `@v7` and keep working the same way, which matters
+because `release.yml`'s npm publish step relies on `registry-url` for
+`NODE_AUTH_TOKEN` to be picked up.
+
+Both jobs run on `ubuntu-latest`. GitHub has announced that the
+`ubuntu-latest` label will migrate from Ubuntu 24.04 to Ubuntu 26.04
+starting October 19, 2026, which will also change the underlying runner
+image (vCPU count, preinstalled tooling). Neither workflow pins
+`ubuntu-24.04` today, so both will pick up that migration automatically;
+if the Playwright timing budget above (tuned for a 4 vCPU `ubuntu-latest`
+runner) or any other environment assumption in this document turns out not
+to hold on the new image, re-measure at that point rather than pinning the
+old image preemptively.
 
 ## Setup Requirements
 
