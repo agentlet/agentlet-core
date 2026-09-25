@@ -54,7 +54,6 @@ import type {
     ModuleManagerAPI,
     ModuleMountContext,
     ModuleMountTrigger,
-    ShortcutManagerAPI,
     StorageManagerAPI,
     TableExtractorAPI,
     ThemeManagerAPI,
@@ -122,7 +121,14 @@ class AgentletCore {
     formFiller: FormFillerAPI;
     tableExtractor: TableExtractorAPI;
     aiManager: AIManagerAPI;
-    shortcutManager: ShortcutManagerAPI | null;
+    /**
+     * Typed as the concrete class (not the narrower, agentlet-author-facing
+     * `ShortcutManagerAPI` from public-api.d.ts) for the same reason
+     * `librarySetup` below is: `init()` (see `LibrarySetup.initializeAll()`)
+     * calls `shortcutManager.init()`, framework-internal wiring
+     * `ShortcutManagerAPI` intentionally omits.
+     */
+    shortcutManager: ShortcutManager | null;
     /**
      * Definite assignment assertion (`!`): preserves a pre-existing
      * evaluation-order quirk. `librarySetup` is assigned further down the

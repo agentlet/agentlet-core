@@ -3,6 +3,7 @@
  * Provides easy registration and management of keyboard shortcuts for Agentlet
  */
 import type { ShortcutInfo, ShortcutManagerAPI, ShortcutRegisterOptions, ShortcutsAPI } from '../../types/public-api';
+import type { LibrarySetup } from '../../libraries/LibrarySetup.js';
 
 // Modifiers whose combinations never produce ordinary typed text. Shift is
 // deliberately excluded: shift+s is how a user types an uppercase S.
@@ -37,14 +38,10 @@ interface HotkeysLike {
 }
 
 /**
- * Minimal shape of `src/libraries/LibrarySetup.js` this file actually uses -
- * deliberately not the whole class, just the one method `ensureHotkeys()`
- * calls. `LibrarySetup.js` is untyped plain JS, so callers (GlobalAPI.js)
- * pass a real `LibrarySetup` instance duck-typed against this interface.
+ * Minimal shape of `LibrarySetup` this file actually uses - deliberately
+ * not the whole class, just the one method `ensureHotkeys()` calls.
  */
-interface LibrarySetupLike {
-    ensureLibrary(name: string): Promise<boolean>;
-}
+type LibrarySetupLike = Pick<LibrarySetup, 'ensureLibrary'>;
 
 /**
  * Accessed through this helper (via `window`) rather than a bare
