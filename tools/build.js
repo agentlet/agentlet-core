@@ -476,151 +476,138 @@ window.agentletConfig = {
     }
 
     /**
+     * Derive the identifiers used by the generated module files.
+     * `moduleName` may be kebab-case (e.g. `my-app`), so it is converted
+     * before being used as a class or global name.
+     */
+    getModuleIdentifiers(moduleName) {
+        const words = moduleName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+        const pascalName = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('');
+        const camelName = pascalName.charAt(0).toLowerCase() + pascalName.slice(1);
+
+        return {
+            className: `${pascalName}Module`,
+            // Global the registry reads back after loading the script (`module` field)
+            globalName: `${camelName}AgentletModule`,
+            title: words.join(' ')
+        };
+    }
+
+    /**
      * Generate module template
+     *
+     * Mirrors plop-templates/agentlet/src/module.js: the module extends
+     * `window.agentlet.Module` and exposes its class on `window` so the
+     * registry can instantiate it with `new ModuleClass()`.
      */
     generateModuleTemplate(moduleName) {
-        const className = moduleName.charAt(0).toUpperCase() + moduleName.slice(1) + 'Module';
-        
+        const { className, globalName, title } = this.getModuleIdentifiers(moduleName);
+
         return `/**
  * ${className} - Agentlet Core Module
  * Generated module template
  */
+(function() {
+    'use strict';
 
-export default class ${className} extends BaseModule {
-    constructor(config = {}) {
-        super({
-            name: '${moduleName}',
-            version: '1.0.0',
-            description: '${className} integration for Agentlet Core',
-            patterns: ['example.com'], // Replace with actual URL patterns
-            matchMode: 'includes',
-            capabilities: ['page-analysis', 'form-filling'], // Define capabilities
-            permissions: [], // Define required permissions
-            dependencies: [], // Define module dependencies
-            ...config
-        });
-    }
+    class ${className} extends window.agentlet.Module {
+        constructor() {
+            super({
+                name: '${moduleName}',
+                version: '1.0.0',
+                description: '${title} integration for Agentlet Core',
+                patterns: ['example.com'], // Replace with actual URL patterns
+                matchMode: 'includes'
+            });
+        }
 
-    /**
-     * Check if this module should be active for the given URL
-     */
-    checkPattern(url) {
-        // Custom pattern matching logic
-        return super.checkPattern(url);
-    }
+        async initModule() {
+            // Called once during module startup
+            this.log(\`Initializing \${this.name} module\`);
+        }
 
-    /**
-     * Perform page analysis
-     */
-    async performPageAnalysis() {
-        console.log(\`Analyzing page for \${this.name} module\`);
-        
-        // Your page analysis logic here
-        // Example: Extract form fields, detect UI elements, etc.
-        
-        this.emit('pageAnalysisCompleted', {
-            url: window.location.href,
-            timestamp: new Date().toISOString()
-        });
-    }
+        async activateModule(context = {}) {
+            // Called when the module becomes active and on URL changes
+            this.log(\`Activating \${this.name} module\`, context);
 
-    /**
-     * Perform module launching
-     */
-    async performModuleLaunch() {
-        console.log(\`Launching \${this.name} module\`);
-        
-        // Your module launching logic here
-        // Example: Initialize components, set up event listeners, etc.
-        
-        this.emit('moduleLaunchCompleted');
-    }
+            if (context.trigger === 'urlChange') {
+                this.log(\`URL changed from \${context.oldUrl} to \${context.newUrl}\`);
+            }
+        }
 
-    /**
-     * Get module-specific content for the UI
-     */
-    getContent(context = {}) {
-        const template = \`
-            <div class="agentlet-module-content" data-module="\${this.name}">
-                <div class="agentlet-module-header">
-                    <h3>\${this.name.charAt(0).toUpperCase() + this.name.slice(1)} Assistant</h3>
-                    <span class="agentlet-module-version">v\${this.version}</span>
+        async cleanupModule(context = {}) {
+            // Called when the module is deactivated or cleaned up
+            this.log(\`Cleaning up \${this.name} module\`, context);
+        }
+
+        /**
+         * Get module-specific content for the UI
+         */
+        getContent() {
+            const moduleRef = \`window.agentlet.modules.get('\${this.name}')\`;
+
+            return \`
+                <div class="agentlet-module-content" data-module="\${this.name}">
+                    <div class="agentlet-module-header">
+                        <h3>${title} assistant</h3>
+                        <span class="agentlet-module-version">v\${this.version}</span>
+                    </div>
+                    <div class="agentlet-module-body">
+                        <p><strong>Status:</strong> \${this.isActive ? 'Active' : 'Inactive'}</p>
+                        <p><strong>Current URL:</strong> \${window.location.href}</p>
+                    </div>
+                    <div class="agentlet-module-actions">
+                        <button class="agentlet-btn" onclick="\${moduleRef}.performAction('extract-forms')">
+                            Extract forms
+                        </button>
+                        <button class="agentlet-btn agentlet-btn-secondary" onclick="\${moduleRef}.performAction('refresh')">
+                            Refresh
+                        </button>
+                    </div>
                 </div>
-                <div class="agentlet-module-body">
-                    <p><strong>Status:</strong> \${this.isActive ? 'Active' : 'Inactive'}</p>
-                    <p><strong>Current URL:</strong> \${window.location.href}</p>
-                    <p><strong>Capabilities:</strong> \${this.capabilities.join(', ')}</p>
-                </div>
-                <div class="agentlet-module-actions">
-                    <button class="agentlet-btn" onclick="window.agentlet.modules.get('\${this.name}').performAction('analyze')">
-                        Analyze Page
-                    </button>
-                    <button class="agentlet-btn agentlet-btn-secondary" onclick="window.agentlet.modules.get('\${this.name}').performAction('refresh')">
-                        Refresh
-                    </button>
-                </div>
-            </div>
-        \`;
-        
-        return template;
-    }
+            \`;
+        }
 
-    /**
-     * Handle custom actions
-     */
-    async performAction(action, params = {}) {
-        switch (action) {
-            case 'analyze':
-                await this.analyzePage();
-                break;
-            case 'extract-forms':
-                return this.extractForms();
-            default:
-                return super.performAction(action, params);
+        /**
+         * Handle custom actions triggered from the UI
+         */
+        async performAction(action) {
+            switch (action) {
+                case 'extract-forms':
+                    return this.extractForms();
+                case 'refresh':
+                    window.agentlet.ui.refreshContent();
+                    return undefined;
+                default:
+                    this.warn(\`Unknown action: \${action}\`);
+                    return undefined;
+            }
+        }
+
+        /**
+         * Extract forms from the page
+         */
+        extractForms() {
+            const forms = Array.from(document.querySelectorAll('form')).map(form => ({
+                id: form.id,
+                action: form.action,
+                method: form.method,
+                fields: Array.from(form.querySelectorAll('input, select, textarea')).map(field => ({
+                    name: field.name,
+                    type: field.type,
+                    required: field.required
+                }))
+            }));
+
+            this.emit('formsExtracted', { forms });
+            return forms;
         }
     }
 
-    /**
-     * Extract forms from the page
-     */
-    extractForms() {
-        const forms = Array.from(document.querySelectorAll('form')).map(form => ({
-            id: form.id,
-            action: form.action,
-            method: form.method,
-            fields: Array.from(form.querySelectorAll('input, select, textarea')).map(field => ({
-                name: field.name,
-                type: field.type,
-                required: field.required
-            }))
-        }));
-        
-        this.emit('formsExtracted', { forms });
-        return forms;
-    }
-
-    /**
-     * Handle URL updates
-     */
-    async handleURLUpdate(newUrl) {
-        console.log(\`\${this.name} module: Handling URL update to \${newUrl}\`);
-        
-        // Your URL-specific logic here
-        
-        this.emit('urlUpdateHandled', { url: newUrl });
-    }
-
-    /**
-     * Handle localStorage changes
-     */
-    onLocalStorageChange(key, newValue) {
-        console.log(\`\${this.name} module: localStorage changed - \${key} = \${newValue}\`);
-        
-        // Your localStorage handling logic here
-        
-        this.emit('localStorageHandled', { key, newValue });
-    }
-}`;
+    // Make the module class available globally for the registry to instantiate
+    window.${globalName} = ${className};
+})();
+`;
     }
 
     /**
@@ -652,58 +639,38 @@ export default class ${className} extends BaseModule {
      * Generate README template
      */
     generateReadmeTemplate(moduleName) {
-        const className = moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
-        
-        return `# ${className} Module for Agentlet Core
+        const { className, globalName, title } = this.getModuleIdentifiers(moduleName);
+        const heading = title.charAt(0).toUpperCase() + title.slice(1);
 
-This module provides ${moduleName} integration for the Agentlet Core framework.
+        return `# ${heading} module for Agentlet Core
 
-## Installation
+This module provides ${title} integration for the Agentlet Core framework.
 
-### From NPM (if published)
-\`\`\`bash
-npm install agentlet-${moduleName}-module
-\`\`\`
+## Loading the module
 
-### From CDN
-\`\`\`javascript
-window.agentletConfig = {
-    moduleRegistry: [
-        {
-            name: '${moduleName}',
-            url: 'https://cdn.example.com/agentlet-${moduleName}-module@1.0.0/dist/module.js'
-        }
-    ]
-};
-\`\`\`
-
-## Configuration
+The built script (\`dist/module.js\`) defines \`${className}\` and exposes it as
+\`window.${globalName}\`. Reference it from an agentlets registry script, and
+point \`registryUrl\` in your Agentlet Core configuration at that registry:
 
 \`\`\`javascript
-window.agentletConfig = {
-    moduleRegistry: [
-        {
-            name: '${moduleName}',
-            url: './path/to/module.js',
-            options: {
-                // Module-specific options
-                debugMode: true,
-                customSetting: 'value'
+(function() {
+    const registry = {
+        agentlets: [
+            {
+                name: '${moduleName}',
+                url: 'https://cdn.example.com/agentlet-${moduleName}-module@1.0.0/dist/module.js',
+                module: '${globalName}'
             }
-        }
-    ]
-};
+        ]
+    };
+
+    window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', { detail: registry }));
+})();
 \`\`\`
 
-## Features
+See \`docs/registry-script-injection.md\` in agentlet-core for the registry format.
 
-- Automatic detection of ${moduleName} pages
-- Page analysis and content extraction
-- Custom UI integration
-- Form processing capabilities
-- Real-time updates
-
-## URL Patterns
+## URL patterns
 
 This module activates on URLs matching:
 - \`example.com\` (update this with actual patterns)
@@ -721,13 +688,10 @@ Load the module in Agentlet Core and test on target pages.
 
 ## API
 
-### Events Emitted
-- \`pageAnalysisCompleted\` - When page analysis is done
-- \`layoutPatchingCompleted\` - When layout modifications are complete
+### Events emitted
 - \`formsExtracted\` - When forms are extracted from the page
 
-### Actions Supported
-- \`analyze\` - Analyze the current page
+### Actions supported
 - \`extract-forms\` - Extract all forms from the page
 - \`refresh\` - Refresh module content
 
