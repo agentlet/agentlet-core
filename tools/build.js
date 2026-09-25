@@ -159,6 +159,18 @@ class AgentletCoreBuilder {
     }
 
     /**
+     * Guard rail for dist/agentlet-core.js and dist/agentlet-core.esm.js:
+     * makes sure plain `require('agentlet-core')` / `import('agentlet-core')`
+     * (no jsdom, no browser) still work after this build - see
+     * tools/verify-node-import.mjs for why this exists.
+     */
+    verifyNodeImport() {
+        const scriptPath = path.join(__dirname, 'verify-node-import.mjs');
+        const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' });
+        return { success: result.status === 0 };
+    }
+
+    /**
      * Copy PDF.js worker files to dist directory
      */
     copyPDFJSWorker() {
@@ -1451,6 +1463,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // type-checks now that every target (and the declarations copy
         // they each repeat) has finished.
         results.distTypes = this.verifyDistTypes();
+
+        // Guard rail: make sure the just-built dist/agentlet-core.js and
+        // dist/agentlet-core.esm.js still load under plain Node (no jsdom).
+        results.nodeImport = this.verifyNodeImport();
 
         console.log('\n📋 Build Summary:');
         Object.entries(results).forEach(([target, result]) => {
