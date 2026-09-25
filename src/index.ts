@@ -864,7 +864,7 @@ class AgentletCore {
                     </ul>
 
                     <h4>Module Development</h4>
-                    <p>Create modules that extend <code>BaseModule</code> and implement:</p>
+                    <p>Create modules that extend <code>Module</code> and implement:</p>
                     <ul>
                         <li><code>checkPattern(url)</code> - URL matching</li>
                         <li><code>init()</code> - Module initialization</li>
