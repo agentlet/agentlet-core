@@ -1521,6 +1521,12 @@ export interface ThemeManagerAPI {
     processThemeConfig(themeConfig: string | Partial<AgentletTheme> | undefined): AgentletTheme;
 }
 
+/** Payload of the `theme:changed` event emitted on `agentlet.eventBus` by `agentlet.setTheme()`. */
+export interface ThemeChangedEventPayload {
+    theme: AgentletTheme;
+    previousTheme: AgentletTheme;
+}
+
 /* ------------------------------------------------------------------ */
 /* Event bus (window.agentlet.eventBus)                                */
 /* ------------------------------------------------------------------ */
@@ -1530,7 +1536,9 @@ export interface ThemeManagerAPI {
  * names emitted by the framework include `module:registered`,
  * `module:activated`, `module:deactivated`, `module:initialized`,
  * `module:cleaned`, `url:changed`, `core:initialized`, `core:cleanup`,
- * `ui:contentUpdated`, `ui:error`, and `localStorage:changed`.
+ * `ui:contentUpdated`, `ui:error`, `ui:stylesRegenerated`,
+ * `localStorage:changed`, and `theme:changed` (payload:
+ * {@link ThemeChangedEventPayload}, emitted by `agentlet.setTheme()`).
  */
 export interface EventBusAPI {
     emit(event: string, data?: unknown): void;
@@ -1601,9 +1609,20 @@ export type ModuleMountTrigger = 'init' | 'moduleChange' | 'urlChange' | 'refres
 export interface ModuleMountContext {
     /** UI mount root: the shadow root when `shadowDom` is enabled, or `document.body` otherwise (same value as `window.agentlet.ui.root`). */
     root: ShadowRoot | HTMLElement;
-    /** The current theme, as returned by `window.agentlet.themeManager.getTheme()`. */
+    /**
+     * The theme in effect at the time of this mount, as returned by
+     * `window.agentlet.themeManager.getTheme()`. This is a point-in-time
+     * snapshot, not a live reference - it does not update if the theme
+     * changes later while the module stays mounted. Subscribe to
+     * `theme:changed` on `eventBus` (below) to react to a later change.
+     */
     theme: AgentletTheme;
-    /** The shared core event bus, same instance as `window.agentlet.eventBus`. */
+    /**
+     * The shared core event bus, same instance as `window.agentlet.eventBus`.
+     * Emits `theme:changed` (payload: {@link ThemeChangedEventPayload})
+     * whenever `agentlet.setTheme()` is called; see `docs/module-mount-api.md`
+     * for subscribing from `mount()`/`unmount()`.
+     */
     eventBus: EventBusAPI;
     /** The full `window.agentlet` API surface. */
     api: AgentletAPI;
@@ -1869,6 +1888,16 @@ export interface AgentletAPI {
     showModal(title: string, content: string): void;
     showEnvVarsDialog(): void;
     regenerateStyles(): void;
+    /**
+     * Changes the active theme: merges `newThemeConfig` into the theme
+     * defaults, re-injects the panel's CSS, updates `agentlet.theme`, and
+     * emits `theme:changed` (see {@link ThemeChangedEventPayload}) on
+     * `agentlet.eventBus`. This is the entry point a theme change goes
+     * through; `ThemeManager.updateTheme()` alone does not re-inject
+     * styles or notify anything.
+     * @returns The fully merged theme now in effect.
+     */
+    setTheme(newThemeConfig: string | Partial<AgentletTheme>): AgentletTheme;
     getPerformanceMetrics(): AgentletPerformanceReport;
     updateApplicationDisplay(): void;
     /** Mounts (or renders) the active module's content into the panel; see `Module.mount()`/`unmount()`. */

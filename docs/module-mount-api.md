@@ -68,10 +68,52 @@ interface ModuleMountContext {
 | Field      | Description |
 | ---------- | ----------- |
 | `root`     | The UI mount root: the shadow root when `shadowDom` is enabled (the default), or `document.body` otherwise. Same value as `window.agentlet.ui.root`. See [Shadow DOM UI](shadow-dom.md). |
-| `theme`    | The current theme, as returned by `window.agentlet.themeManager.getTheme()`. Useful for passing colors into a framework component without a second lookup. |
+| `theme`    | The theme in effect at the time of this mount, as returned by `window.agentlet.themeManager.getTheme()`. Useful for passing colors into a framework component without a second lookup. This is a point-in-time snapshot, not a live reference: it does not update if the theme changes later while the module stays mounted. See [Reacting to a theme change](#reacting-to-a-theme-change) below. |
 | `eventBus` | The shared core event bus, the same instance as `window.agentlet.eventBus`. |
 | `api`      | The full `window.agentlet` API surface, handed to `mount()` so a module does not need to rely on the `window.agentlet` global being ready yet. |
 | `trigger`  | Why this mount/unmount is happening. See [`trigger` values](#trigger-values) below. |
+
+## Reacting to a theme change
+
+`window.agentlet.setTheme(newThemeConfig)` changes the active theme: it
+merges `newThemeConfig` into the theme defaults, re-injects the panel's CSS,
+updates `window.agentlet.theme`, and emits a `theme:changed` event on the
+core event bus with the new and previous theme:
+
+```typescript
+interface ThemeChangedEventPayload {
+    theme: AgentletTheme;
+    previousTheme: AgentletTheme;
+}
+```
+
+Since `context.theme` is only a snapshot taken at mount time, a module that
+renders with a UI framework (React, Lit, ...) and wants to stay in sync with
+a later theme change should subscribe to `theme:changed` via
+`context.eventBus` in `mount()`, and unsubscribe in `unmount()` (the
+`eventBus` reference is not passed to `unmount()`, so stash it on the
+instance first):
+
+```javascript
+class ThemedPanelModule extends window.agentlet.Module {
+    async mount(container, context) {
+        this._eventBus = context.eventBus;
+        this._onThemeChanged = ({ theme }) => this._render(theme);
+        this._eventBus.on('theme:changed', this._onThemeChanged);
+
+        this._render(context.theme);
+    }
+
+    async unmount() {
+        this._eventBus?.off('theme:changed', this._onThemeChanged);
+        this._eventBus = null;
+    }
+
+    _render(theme) {
+        // update the mounted framework root/DOM with the new theme colors
+    }
+}
+```
 
 ## Lifecycle order
 

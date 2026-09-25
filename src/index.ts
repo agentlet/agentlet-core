@@ -42,6 +42,7 @@ import type {
     AgentletCoreConfig,
     AgentletModule,
     AgentletPerformanceReport,
+    AgentletTheme,
     AIManagerAPI,
     AuthManagerAPI,
     CookiesAPI,
@@ -1016,6 +1017,38 @@ class AgentletCore {
     regenerateStyles(): void {
         this.styleInjector.regenerateStyles();
         this.eventBus.emit('ui:stylesRegenerated');
+    }
+
+    /**
+     * Change the active theme and notify the rest of the framework.
+     *
+     * This is the entry point a theme change actually goes through: it
+     * merges `newThemeConfig` into the theme defaults via
+     * `ThemeManager.updateTheme()`, re-injects the panel's CSS
+     * (`regenerateStyles()`) so the change is visible immediately, keeps
+     * `this.theme`/`window.agentlet.theme` (the same object, populated by
+     * `GlobalAPI.setupGlobalAccess()`) in sync, and emits `theme:changed`
+     * on the event bus.
+     *
+     * `ModuleMountContext.theme` passed to `mount()` is only a point-in-time
+     * snapshot taken when the module was mounted; it does not update on its
+     * own. A module that needs to react to a *later* theme change (e.g. one
+     * rendered with a UI framework) should subscribe to `theme:changed` via
+     * `context.eventBus` in `mount()` and unsubscribe in `unmount()` - see
+     * `docs/module-mount-api.md`.
+     *
+     * @returns The fully merged theme now in effect.
+     */
+    setTheme(newThemeConfig: string | Partial<AgentletTheme>): AgentletTheme {
+        const previousTheme = this.themeManager.getTheme();
+        const theme = this.themeManager.updateTheme(newThemeConfig);
+
+        this.regenerateStyles();
+        this.theme = theme;
+
+        this.eventBus.emit('theme:changed', { theme, previousTheme });
+
+        return theme;
     }
 
     /**
