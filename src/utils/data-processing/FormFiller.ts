@@ -46,6 +46,79 @@ type PerformFillResult =
     | { success: true; finalValue: unknown }
     | { success: false; error: string };
 
+/**
+ * Resolves the prototype that owns the native `value` accessor for a form
+ * control, keyed off its tag name. `null` for anything else (the caller
+ * falls back to a plain assignment).
+ */
+function nativeValueOwner(element: FormFillElement): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null {
+    switch (element.tagName) {
+    case 'INPUT':
+        return HTMLInputElement.prototype;
+    case 'TEXTAREA':
+        return HTMLTextAreaElement.prototype;
+    case 'SELECT':
+        return HTMLSelectElement.prototype;
+    default:
+        return null;
+    }
+}
+
+/**
+ * Sets `element.value` through the native setter declared on the element's
+ * own prototype (`HTMLInputElement`/`HTMLTextAreaElement`/`HTMLSelectElement`),
+ * instead of a plain `element.value = value` assignment.
+ *
+ * This matters for elements a UI framework like React controls: React
+ * installs its own `value` property descriptor directly on the DOM node
+ * (shadowing the prototype's) to track what it last rendered, so a plain
+ * assignment is absorbed by that instance-level setter and React's internal
+ * value tracker never sees the change - the subsequent `input`/`change`
+ * events fire, but React treats the value as unchanged from its own
+ * perspective and the controlled component's state does not update. Calling
+ * the prototype's setter function directly (`.call(element, value)`) bypasses
+ * that instance-level override and writes straight into the browser's
+ * underlying value slot, exactly like a real user keystroke would, so
+ * React's change detection sees the new value.
+ *
+ * Falls back to a direct assignment when no native setter is found (e.g. an
+ * element type without a `value` accessor, or an environment where the
+ * descriptor is absent).
+ */
+function setNativeValue(element: FormFillElement, value: string): void {
+    const owner = nativeValueOwner(element);
+    const setter = owner && Object.getOwnPropertyDescriptor(owner, 'value')?.set;
+
+    if (setter) {
+        setter.call(element, value);
+    } else {
+        element.value = value;
+    }
+}
+
+/**
+ * Sets `element.checked` through the native setter declared on
+ * `HTMLInputElement.prototype`, for the same reason `setNativeValue()` uses
+ * the native `value` setter: React tracks checkbox/radio state the same way
+ * it tracks text values, via an instance-level property descriptor that a
+ * plain `element.checked = value` assignment would bypass.
+ *
+ * Unlike text/select inputs, this alone is not enough for React to notice:
+ * React's change-detection for a checkbox/radio is wired to the `click`
+ * event rather than `change` (a legacy IE workaround it still carries), so
+ * `performFill()` also dispatches a `click` event for these two types. See
+ * the `checkbox`/`radio` cases below.
+ */
+function setNativeChecked(element: FormFillElement, checked: boolean): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;
+
+    if (setter) {
+        setter.call(element, checked);
+    } else {
+        element.checked = checked;
+    }
+}
+
 class FormFiller implements FormFillerAPI {
     debugMode: boolean;
 
@@ -302,7 +375,7 @@ class FormFiller implements FormFillerAPI {
             case 'month':
             case 'week':
             case 'color':
-                element.value = value as string;
+                setNativeValue(element, value as string);
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'input');
@@ -311,7 +384,7 @@ class FormFiller implements FormFillerAPI {
                 break;
 
             case 'select':
-                element.value = value as string;
+                setNativeValue(element, value as string);
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'change');
@@ -320,9 +393,18 @@ class FormFiller implements FormFillerAPI {
 
             case 'checkbox': {
                 const isChecked = this.parseBoolean(value);
-                element.checked = isChecked;
+                setNativeChecked(element, isChecked);
                 finalValue = element.checked;
                 if (config.triggerEvents) {
+                    // See the comment on setNativeChecked(): React only
+                    // treats a checkbox/radio as changed in response to a
+                    // 'click' event, so that has to be dispatched alongside
+                    // 'change' for a React-controlled checkbox/radio to
+                    // actually update. A script-dispatched 'click' Event
+                    // (as opposed to calling element.click()) does not
+                    // trigger the browser's native toggle behavior, so this
+                    // does not fight with the checked value just set above.
+                    this.dispatchEvent(element, 'click');
                     this.dispatchEvent(element, 'change');
                 }
                 break;
@@ -330,9 +412,12 @@ class FormFiller implements FormFillerAPI {
 
             case 'radio':
                 if (element.value === value || this.parseBoolean(value)) {
-                    element.checked = true;
+                    setNativeChecked(element, true);
                     finalValue = element.value;
                     if (config.triggerEvents) {
+                        // See the 'checkbox' case above for why 'click' is
+                        // dispatched alongside 'change'.
+                        this.dispatchEvent(element, 'click');
                         this.dispatchEvent(element, 'change');
                     }
                 } else {
@@ -348,7 +433,7 @@ class FormFiller implements FormFillerAPI {
 
             default:
                 // Fallback for unknown types
-                element.value = value as string;
+                setNativeValue(element, value as string);
                 finalValue = element.value;
                 if (config.triggerEvents) {
                     this.dispatchEvent(element, 'change');

@@ -359,6 +359,77 @@ describe('AgentletCore behaviour', () => {
         });
     });
 
+    describe('setTheme()', () => {
+        test('merges the new theme, returns it, and updates agentlet.theme', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            const theme = agentlet.setTheme({ primaryColor: '#123456' });
+
+            expect(theme.primaryColor).toBe('#123456');
+            expect(agentlet.themeManager.getTheme().primaryColor).toBe('#123456');
+            expect(agentlet.theme.primaryColor).toBe('#123456');
+            expect(window.agentlet.theme.primaryColor).toBe('#123456');
+            // Same object identity: agentlet.theme and window.agentlet.theme
+            // are the same underlying instance (window.agentlet === agentlet).
+            expect(agentlet.theme).toBe(theme);
+        });
+
+        test('re-injects styles (delegates to regenerateStyles())', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const regenSpy = jest.spyOn(agentlet.styleInjector, 'regenerateStyles');
+
+            agentlet.setTheme({ primaryColor: '#abcdef' });
+
+            expect(regenSpy).toHaveBeenCalledTimes(1);
+        });
+
+        test('emits theme:changed with the new and previous theme', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const previousTheme = agentlet.themeManager.getTheme();
+            const emitSpy = jest.spyOn(agentlet.eventBus, 'emit');
+
+            const theme = agentlet.setTheme({ primaryColor: '#00ff00' });
+
+            expect(emitSpy).toHaveBeenCalledWith('theme:changed', { theme, previousTheme });
+        });
+
+        test('accepts a plain string (legacy theme config), same as ThemeManager.updateTheme()', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            const theme = agentlet.setTheme('dark');
+
+            // A string theme config resolves to the plain defaults (see
+            // ThemeManager.processThemeConfig()'s legacy-string branch).
+            expect(theme).toEqual(agentlet.themeManager.processThemeConfig(undefined));
+        });
+
+        test('a module subscribed to theme:changed via context.eventBus (from mount()) observes the change', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            let observed: { theme: { primaryColor: string }; previousTheme: { primaryColor: string } } | null = null;
+            const testModule = new Module({ name: 'theme-aware-module', patterns: ['*'] });
+            const originalMount = testModule.mount.bind(testModule);
+            testModule.mount = async (container, context) => {
+                context.eventBus.on('theme:changed', (data) => {
+                    observed = data as typeof observed;
+                });
+                return originalMount(container, context);
+            };
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('init');
+
+            agentlet.setTheme({ primaryColor: '#ff00ff' });
+
+            expect(observed).not.toBeNull();
+            expect(observed!.theme.primaryColor).toBe('#ff00ff');
+        });
+    });
+
     describe('onModuleChange()', () => {
         test('restores the panel width for the newly active module', async () => {
             agentlet = new AgentletCore();

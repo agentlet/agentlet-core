@@ -264,6 +264,45 @@ void contentUpdated;
 void window.agentlet.updateModuleContent();
 
 /* -------------------------------------------------------------- */
+/* Theme change (setTheme() / theme:changed)                         */
+/* -------------------------------------------------------------- */
+
+// setTheme() takes either a partial theme or (legacy) a plain string, and
+// returns the fully merged theme now in effect.
+const themeAfterPartialUpdate: import('../../src/types/public-api').AgentletTheme =
+    window.agentlet.setTheme({ primaryColor: '#000000' });
+const themeAfterStringUpdate: import('../../src/types/public-api').AgentletTheme =
+    window.agentlet.setTheme('dark');
+void themeAfterPartialUpdate;
+void themeAfterStringUpdate;
+
+// A module mounted with a UI framework subscribes to theme:changed via
+// context.eventBus in mount() and unsubscribes in unmount() (which does not
+// receive context, so the eventBus reference is stashed on the instance) -
+// see docs/module-mount-api.md.
+class ThemeAwareAgentlet extends window.agentlet.Module {
+    private mountEventBus: EventBusAPI | null = null;
+
+    private onThemeChanged = (data: unknown): void => {
+        const { theme, previousTheme } = data as import('../../src/types/public-api').ThemeChangedEventPayload;
+        void theme;
+        void previousTheme;
+    };
+
+    async mount(container: HTMLElement, context: ModuleMountContext): Promise<void> {
+        this.mountEventBus = context.eventBus;
+        this.mountEventBus.on('theme:changed', this.onThemeChanged);
+        container.innerHTML = this.getContent();
+    }
+
+    async unmount(_container: HTMLElement): Promise<void> {
+        this.mountEventBus?.off('theme:changed', this.onThemeChanged);
+        this.mountEventBus = null;
+    }
+}
+void ThemeAwareAgentlet;
+
+/* -------------------------------------------------------------- */
 /* Conformance: real classes <-> hand-written declarations          */
 /* -------------------------------------------------------------- */
 
