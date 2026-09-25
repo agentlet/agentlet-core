@@ -1559,6 +1559,13 @@ export interface LibrarySetupAPI {
 /* Module base class (window.agentlet.Module)                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * A string pattern matches by substring (`url.includes(pattern)`), except
+ * `'*'` alone matches any non-empty URL, and a string containing `*`
+ * elsewhere is a simple unanchored glob where `*` matches any run of
+ * characters (e.g. `'localhost:*' + '/admin'`). Object patterns give explicit
+ * control over the matching strategy.
+ */
 export type ModulePatternMatcher = string | { type: 'includes' | 'exact' | 'regex'; value: string };
 
 export interface ModuleConfig {
@@ -1636,6 +1643,7 @@ export declare class AgentletModule {
     /** Set by `ModuleRegistry` after the first successful `init()`; not initialized in the constructor. */
     isInitialized?: boolean;
 
+    /** See `ModulePatternMatcher` for the matching rules (substring, `'*'` wildcard, simple glob, or explicit object matcher). */
     checkPattern(url: string): boolean;
     /** Outer lifecycle entry point; calls `initModule()`. Called by the framework, not by module authors. */
     init(): Promise<void>;

@@ -14,6 +14,24 @@ import type {
 /** A single local event-listener callback, matching `AgentletModule.on`/`off`. */
 type ModuleEventListener = (data: unknown) => void;
 
+/** Regex-special characters (other than `*`, handled separately by `globPatternToRegExp()`) that must be escaped when turning a glob-style string pattern into a `RegExp`. */
+const GLOB_REGEXP_SPECIAL_CHARS = /[.+?^${}()|[\]\\]/g;
+
+/**
+ * Turns a string pattern containing at least one `*` into a `RegExp` where
+ * `*` matches any run of characters (`.*`) and every other regex-special
+ * character is escaped so it is matched literally. The result is used
+ * unanchored (via `RegExp.test()`), consistent with the existing
+ * substring (`url.includes()`) semantics for plain string patterns.
+ */
+function globPatternToRegExp(pattern: string): RegExp {
+    const escaped = pattern
+        .replace(GLOB_REGEXP_SPECIAL_CHARS, '\\$&')
+        .split('*')
+        .join('.*');
+    return new RegExp(escaped);
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- see the `interface Module` block below the class for why this merge is safe.
 class Module {
     // Core properties
@@ -98,7 +116,19 @@ class Module {
     }
 
     /**
-     * Check if this module should be active for the given URL
+     * Check if this module should be active for the given URL.
+     *
+     * String patterns match by substring (`url.includes(pattern)`), with two
+     * exceptions: `'*'` alone is a wildcard matching any non-empty URL, and
+     * a string containing `*` elsewhere is treated as a simple glob where
+     * `*` matches any run of characters - still unanchored, consistent with
+     * the substring semantics (e.g. `'localhost:*' + '/admin'` matches
+     * `'http://localhost:3000/admin'`). Every other regex-special character
+     * in a glob pattern is escaped and matched literally. A string with no
+     * `*` at all keeps the original substring behavior exactly.
+     *
+     * Object patterns (`{ type: 'includes' | 'exact' | 'regex', value }`)
+     * are unaffected by any of this.
      * @param url - URL to check
      * @returns Whether module matches
      */
@@ -107,6 +137,12 @@ class Module {
 
         return this.patterns.some(pattern => {
             if (typeof pattern === 'string') {
+                if (pattern === '*') {
+                    return true;
+                }
+                if (pattern.includes('*')) {
+                    return globPatternToRegExp(pattern).test(url);
+                }
                 return url.includes(pattern);
             }
 

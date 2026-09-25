@@ -74,8 +74,65 @@ describe('Module', () => {
                 name: 'exact-test',
                 patterns: [{ type: 'exact', value: 'https://test.com' }]
             });
-            
+
             expect(exactModule.checkPattern('https://test.com')).toBe(true);
+            expect(exactModule.checkPattern('https://test.com/page')).toBe(false);
+        });
+
+        test("'*' alone matches any non-empty URL", () => {
+            const wildcardModule = new Module({
+                name: 'wildcard-test',
+                patterns: ['*']
+            });
+
+            expect(wildcardModule.checkPattern('https://test.com')).toBe(true);
+            expect(wildcardModule.checkPattern('https://anything.example/page?x=1')).toBe(true);
+            expect(wildcardModule.checkPattern('')).toBe(false);
+        });
+
+        test('string glob pattern with * matches any run of characters, unanchored', () => {
+            const globModule = new Module({
+                name: 'glob-test',
+                patterns: ['localhost:*/admin']
+            });
+
+            expect(globModule.checkPattern('http://localhost:3000/admin')).toBe(true);
+            expect(globModule.checkPattern('http://localhost:8080/admin/users')).toBe(true);
+            expect(globModule.checkPattern('http://localhost/admin')).toBe(false);
+            expect(globModule.checkPattern('http://example.com/localhost:1/admin')).toBe(true);
+            expect(globModule.checkPattern('http://localhost:3000/other')).toBe(false);
+        });
+
+        test('plain substring pattern (no *) keeps unchanged includes() behavior', () => {
+            expect(module.checkPattern('https://test.com/page')).toBe(true);
+            expect(module.checkPattern('https://other.com/page')).toBe(false);
+        });
+
+        test('string pattern with regex-special characters but no * is matched literally', () => {
+            const literalModule = new Module({
+                name: 'literal-test',
+                patterns: ['a.b?c(d)']
+            });
+
+            expect(literalModule.checkPattern('https://example.com/a.b?c(d)')).toBe(true);
+            // A regex interpretation of '.' or '?' or '(d)' would also match
+            // these, so assert the literal (non-regex) cases specifically.
+            expect(literalModule.checkPattern('https://example.com/aXbYc')).toBe(false);
+            expect(literalModule.checkPattern('https://example.com/a.bc(d)')).toBe(false);
+        });
+
+        test('regex and exact object patterns are unaffected by glob handling', () => {
+            const regexModule = new Module({
+                name: 'regex-test-2',
+                patterns: [{ type: 'regex', value: 'https://.*\\.test\\.com' }]
+            });
+            const exactModule = new Module({
+                name: 'exact-test-2',
+                patterns: [{ type: 'exact', value: 'https://test.com/*' }]
+            });
+
+            expect(regexModule.checkPattern('https://sub.test.com')).toBe(true);
+            expect(exactModule.checkPattern('https://test.com/*')).toBe(true);
             expect(exactModule.checkPattern('https://test.com/page')).toBe(false);
         });
     });
