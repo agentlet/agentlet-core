@@ -570,4 +570,171 @@ describe('FormFiller', () => {
             });
         });
     });
+
+    describe('React-controlled fields: native setter bypasses an instance-level property (as React installs)', () => {
+        /**
+         * React (legacy DOM value tracking, still in use for controlled
+         * inputs) defines an own `value`/`checked` accessor directly on the
+         * DOM node to track what it last rendered. A plain
+         * `element.value = x` assignment is absorbed by that instance-level
+         * setter instead of reaching the browser's real value slot, so
+         * `input`/`change` events fire but React's tracker never observes a
+         * change and the controlled component's state does not update.
+         *
+         * These tests simulate that by shadowing `value`/`checked` on the
+         * element instance, then assert that FormFiller still writes through
+         * to the *prototype's* native setter (read back here via the
+         * prototype's own getter, bypassing the instance shadow) rather than
+         * only updating the instance-level tracker.
+         */
+        function shadowInstanceProperty<T>(
+            element: HTMLElement,
+            prop: 'value' | 'checked',
+            initial: T
+        ): { tracked: T; setCalls: number } {
+            const state = { tracked: initial, setCalls: 0 };
+            Object.defineProperty(element, prop, {
+                configurable: true,
+                get() {
+                    return state.tracked;
+                },
+                set(v: T) {
+                    state.tracked = v;
+                    state.setCalls++;
+                }
+            });
+            return state;
+        }
+
+        it('writes a text input value through the native prototype setter, not just the instance shadow', () => {
+            document.body.innerHTML = '<div id="root"><input id="a" name="a" type="text"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('a') as HTMLInputElement;
+
+            const nativeValueGetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.get!;
+            const tracker = shadowInstanceProperty(el, 'value', '');
+
+            const result = filler.fillForm(root, { '#a': 'hello react' });
+
+            expect(result.successful).toBe(1);
+            // The browser's real value slot (read via the prototype getter,
+            // bypassing the instance shadow) was updated...
+            expect(nativeValueGetter.call(el)).toBe('hello react');
+            // ...whereas a naive `element.value = x` would only have gone
+            // through the shadowed instance setter React installed.
+            expect(tracker.setCalls).toBe(0);
+        });
+
+        it('writes a <select> value through the native prototype setter', () => {
+            document.body.innerHTML = `
+                <div id="root">
+                    <select id="s" name="s"><option value="1">One</option><option value="2">Two</option></select>
+                </div>
+            `;
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('s') as HTMLSelectElement;
+
+            const nativeValueGetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.get!;
+            const tracker = shadowInstanceProperty(el, 'value', '1');
+
+            filler.fillForm(root, { '#s': '2' });
+
+            expect(nativeValueGetter.call(el)).toBe('2');
+            expect(tracker.setCalls).toBe(0);
+        });
+
+        it('writes a <textarea> value through the native prototype setter', () => {
+            document.body.innerHTML = '<div id="root"><textarea id="a" name="a"></textarea></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('a') as HTMLTextAreaElement;
+
+            const nativeValueGetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.get!;
+            const tracker = shadowInstanceProperty(el, 'value', '');
+
+            filler.fillForm(root, { '#a': 'multi\nline' });
+
+            expect(nativeValueGetter.call(el)).toBe('multi\nline');
+            expect(tracker.setCalls).toBe(0);
+        });
+
+        it('checks a checkbox through the native prototype setter', () => {
+            document.body.innerHTML = '<div id="root"><input id="a" name="a" type="checkbox"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('a') as HTMLInputElement;
+
+            const nativeCheckedGetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')!.get!;
+            const tracker = shadowInstanceProperty(el, 'checked', false);
+
+            filler.fillForm(root, { '#a': 'yes' });
+
+            expect(nativeCheckedGetter.call(el)).toBe(true);
+            expect(tracker.setCalls).toBe(0);
+        });
+
+        it('checks a radio through the native prototype setter', () => {
+            document.body.innerHTML = '<div id="root"><input type="radio" id="r1" name="grp" value="a"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('r1') as HTMLInputElement;
+
+            const nativeCheckedGetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')!.get!;
+            const tracker = shadowInstanceProperty(el, 'checked', false);
+
+            filler.fillForm(root, { '#r1': 'a' });
+
+            expect(nativeCheckedGetter.call(el)).toBe(true);
+            expect(tracker.setCalls).toBe(0);
+        });
+
+        it('still dispatches input and change events even though the value is set through the native setter', () => {
+            document.body.innerHTML = '<div id="root"><input id="a" name="a" type="text"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('a') as HTMLInputElement;
+            shadowInstanceProperty(el, 'value', '');
+            const events: string[] = [];
+            el.addEventListener('input', () => events.push('input'));
+            el.addEventListener('change', () => events.push('change'));
+
+            filler.fillForm(root, { '#a': 'hello' });
+
+            expect(events).toEqual(['input', 'change']);
+        });
+
+        it('also dispatches a "click" event for a checkbox, since React wires checkbox/radio change detection to click rather than change', () => {
+            document.body.innerHTML = '<div id="root"><input id="a" name="a" type="checkbox"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('a') as HTMLInputElement;
+            const events: string[] = [];
+            el.addEventListener('click', () => events.push('click'));
+            el.addEventListener('change', () => events.push('change'));
+
+            filler.fillForm(root, { '#a': true });
+
+            expect(events).toEqual(['click', 'change']);
+            // The synthetic (non-native) click must not re-toggle the
+            // checkbox out from under the value performFill() just set.
+            expect(el.checked).toBe(true);
+        });
+
+        it('also dispatches a "click" event for a radio, since React wires checkbox/radio change detection to click rather than change', () => {
+            document.body.innerHTML = '<div id="root"><input type="radio" id="r1" name="grp" value="a"></div>';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            const el = document.getElementById('r1') as HTMLInputElement;
+            const events: string[] = [];
+            el.addEventListener('click', () => events.push('click'));
+            el.addEventListener('change', () => events.push('change'));
+
+            filler.fillForm(root, { '#r1': 'a' });
+
+            expect(events).toEqual(['click', 'change']);
+            expect(el.checked).toBe(true);
+        });
+    });
 });

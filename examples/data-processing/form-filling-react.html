@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fill a React controlled form - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+    <!-- React 18 UMD builds, loaded from a CDN for this example only. A real
+         agentlet bundles React with webpack instead (see the plop scaffold's
+         react template). The form below is plain React state, not an
+         agentlet module: window.agentlet.forms.fill() works on any DOM,
+         mounted by the core or not. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> &rarr; data-processing &rarr; form-filling-react
+                </div>
+
+                <h1>Fill a React controlled form</h1>
+
+                <p>A React controlled input keeps its value in <code>useState</code> and ignores a plain <code>element.value = x</code> assignment: React tracks what it last rendered through its own property descriptor on the DOM node, so the assignment is absorbed by that tracker instead of reaching the real input. <code>window.agentlet.forms.fill()</code> writes through the native prototype setter instead, the same way a real keystroke does, so React's change detection sees it.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows</h3>
+                    <ul>
+                        <li>A form built with React 18 (no build step, <code>React.createElement</code>) where every field is controlled by <code>useState</code></li>
+                        <li>The React state printed live as JSON, so a fill can be verified without inspecting the DOM</li>
+                        <li>A naive fill (plain DOM assignment, dispatching <code>input</code>/<code>change</code> manually) that leaves the React state untouched</li>
+                        <li><code>window.agentlet.forms.fill()</code> filling the same fields correctly, updating the React state</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button id="initBtn">Initialize agentlet core</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Fill the form below</h4>
+                    <button id="fillBuggyBtn">Naive fill (plain DOM assignment)</button>
+                    <button id="fillCorrectBtn">Fill with window.agentlet.forms.fill()</button>
+                    <button id="resetBtn">Reset form</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Target form (React controlled)</h3>
+                    <div id="reactRoot"></div>
+                </div>
+
+                <div class="example-section">
+                    <h3>Form filling API reference</h3>
+                    <div class="code-block">
+                        <pre><code class="language-javascript">// Fill the controlled fields; the native prototype setter is used
+// under the hood so React's change detection sees the new values.
+const form = document.getElementById('reactControlledForm');
+const result = window.agentlet.forms.fill(form, {
+    '#reactName': 'Jordan Rivers',
+    '#reactBio': 'Loves testing controlled forms.',
+    '#reactRating': 'gold',
+    '#reactSubscribe': true
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>Console output</h3>
+                </div>
+                <div class="console-section" id="output"></div>
+
+                <h3>React state (live)</h3>
+                <pre id="reactStateOutput" class="console-section"></pre>
+
+                <h3>Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet core" to start the demo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        #reactRoot label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: 500;
+        }
+
+        #reactRoot input[type="text"],
+        #reactRoot textarea,
+        #reactRoot select {
+            width: 100%;
+            max-width: 400px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        #reactRoot input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+    </style>
+
+    <script>
+        let agentletCore = null;
+        const initialFormState = { name: '', bio: '', rating: '', subscribe: false };
+
+        function log(message, type = 'info') {
+            const el = document.getElementById('output');
+            if (!el) return;
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '[error]' : type === 'success' ? '[ok]' : type === 'warning' ? '[warn]' : '[info]';
+            el.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const el = document.getElementById('status');
+            if (!el) return;
+            el.textContent = message;
+            el.className = `status-section ${type}`;
+        }
+
+        function loadAgentletScript() {
+            return new Promise((resolve, reject) => {
+                const existing = document.querySelector('script[src*="agentlet-core.js"]');
+                if (existing) existing.remove();
+
+                const script = document.createElement('script');
+                script.src = '../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('Agentlet Core script loaded', 'success');
+                    resolve();
+                };
+                script.onerror = () => {
+                    const error = new Error('Failed to load Agentlet Core. Run "npm run build" first.');
+                    log('Failed to load Agentlet Core script', 'error');
+                    reject(error);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // React/ReactDOM come from the CDN <script> tags in <head>. Wait
+        // (bounded) for them rather than assuming the network request
+        // already finished by the time this script runs.
+        function waitForReact(timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                const start = Date.now();
+                (function poll() {
+                    if (window.React && window.ReactDOM) {
+                        resolve();
+                        return;
+                    }
+                    if (Date.now() - start > timeoutMs) {
+                        reject(new Error('React failed to load from the CDN (network unreachable?)'));
+                        return;
+                    }
+                    setTimeout(poll, 100);
+                })();
+            });
+        }
+    </script>
+
+    <script>
+        let renderControlledForm = null;
+
+        function mountControlledForm() {
+            const e = React.createElement;
+
+            function ControlledForm() {
+                const [state, setState] = React.useState(initialFormState);
+
+                // Expose the latest state / setter to the page's plain
+                // <script> world (buttons, the reset control, the JSON
+                // preview) without threading React through everything.
+                window.__reactFormState = state;
+                window.__setReactFormState = setState;
+
+                React.useEffect(() => {
+                    const output = document.getElementById('reactStateOutput');
+                    if (output) output.textContent = JSON.stringify(state, null, 2);
+                }, [state]);
+
+                return e('form', { id: 'reactControlledForm', onSubmit: (ev) => ev.preventDefault() },
+                    e('label', { htmlFor: 'reactName' }, 'Name'),
+                    e('input', {
+                        id: 'reactName', name: 'name', type: 'text', value: state.name,
+                        onChange: (ev) => setState({ ...state, name: ev.target.value })
+                    }),
+
+                    e('label', { htmlFor: 'reactBio' }, 'Bio'),
+                    e('textarea', {
+                        id: 'reactBio', name: 'bio', rows: 3, value: state.bio,
+                        onChange: (ev) => setState({ ...state, bio: ev.target.value })
+                    }),
+
+                    e('label', { htmlFor: 'reactRating' }, 'Rating'),
+                    e('select', {
+                        id: 'reactRating', name: 'rating', value: state.rating,
+                        onChange: (ev) => setState({ ...state, rating: ev.target.value })
+                    },
+                        e('option', { value: '' }, 'Select rating'),
+                        e('option', { value: 'bronze' }, 'Bronze'),
+                        e('option', { value: 'silver' }, 'Silver'),
+                        e('option', { value: 'gold' }, 'Gold')
+                    ),
+
+                    e('label', null,
+                        e('input', {
+                            id: 'reactSubscribe', name: 'subscribe', type: 'checkbox', checked: state.subscribe,
+                            onChange: (ev) => setState({ ...state, subscribe: ev.target.checked })
+                        }),
+                        ' Subscribe to newsletter'
+                    )
+                );
+            }
+
+            const root = ReactDOM.createRoot(document.getElementById('reactRoot'));
+            root.render(e(ControlledForm));
+        }
+    </script>
+
+    <script>
+        document.getElementById('initBtn').addEventListener('click', async function initialize() {
+            try {
+                updateStatus('Waiting for React to load from the CDN...', 'info');
+                log('Waiting for React/ReactDOM to be available...');
+                await waitForReact();
+                log('React and ReactDOM are available', 'success');
+
+                mountControlledForm();
+                log('React controlled form mounted', 'success');
+
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('Loading Agentlet Core...');
+                await loadAgentletScript();
+
+                const AgentletConstructor = window.AgentletCore && window.AgentletCore.default;
+                if (!AgentletConstructor) {
+                    throw new Error('AgentletCore constructor not found');
+                }
+
+                log('Creating AgentletCore instance...');
+                agentletCore = new AgentletConstructor({ debugMode: true, startMinimized: true });
+
+                log('Starting initialization...');
+                await agentletCore.init();
+
+                updateStatus('Ready. Try the naive fill, then the agentlet fill.', 'success');
+                log('Agentlet Core initialized', 'success');
+                document.getElementById('initBtn').disabled = true;
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        });
+
+        // Demonstrates the bug this example exists to show: a plain DOM
+        // assignment plus manually-dispatched events, which is exactly what
+        // FormFiller did before it started using the native property
+        // setter. React's own instance-level value tracker absorbs the
+        // assignment, so the events fire but the controlled component's
+        // state never changes.
+        document.getElementById('fillBuggyBtn').addEventListener('click', function fillBuggy() {
+            const name = document.getElementById('reactName');
+            const bio = document.getElementById('reactBio');
+            const subscribe = document.getElementById('reactSubscribe');
+
+            if (!name || !bio || !subscribe) {
+                updateStatus('Mount the form first (click "Initialize agentlet core").', 'warning');
+                return;
+            }
+
+            // Note: this intentionally only touches the text input, the
+            // textarea and the checkbox, not the <select>. React does not
+            // install the same value-tracking wrapper on <select> elements
+            // (only on <input>/<textarea>), so a naive fill of the select
+            // does update its React state - it just does not exercise the
+            // bug this demo is about. Including it here would also trigger
+            // a re-render that resets the other (still-unsynced) fields
+            // back to their old state, which would muddy the point.
+            name.value = 'Naive Nelson';
+            bio.value = 'This will not stick - React never sees a plain assignment.';
+            subscribe.checked = true;
+
+            [name, bio, subscribe].forEach((el) => {
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            log('Naive fill dispatched input/change events directly, bypassing React.', 'warning');
+            log('The DOM shows the new values, but check "React state (live)": it still shows the old ones.', 'warning');
+            updateStatus('Naive fill done - DOM changed, but React state did not.', 'warning');
+        });
+
+        document.getElementById('fillCorrectBtn').addEventListener('click', function fillCorrect() {
+            if (!window.agentlet || !window.agentlet.forms) {
+                updateStatus('Initialize agentlet core first.', 'warning');
+                return;
+            }
+
+            const form = document.getElementById('reactControlledForm');
+            if (!form) {
+                updateStatus('Mount the form first (click "Initialize agentlet core").', 'warning');
+                return;
+            }
+
+            const result = window.agentlet.forms.fill(form, {
+                '#reactName': 'Jordan Rivers',
+                '#reactBio': 'Loves testing controlled forms.',
+                '#reactRating': 'gold',
+                '#reactSubscribe': true
+            });
+
+            log(`agentlet.forms.fill(): ${result.successful} succeeded, ${result.failed} failed, ${result.skipped} skipped`, 'success');
+            log('Check "React state (live)": it now reflects the new values.', 'success');
+            updateStatus('Fill done through agentlet.forms.fill() - React state updated.', 'success');
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', function reset() {
+            if (typeof window.__setReactFormState === 'function') {
+                window.__setReactFormState(initialFormState);
+                log('Form reset to its initial state', 'info');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Fill a React controlled form example loaded', 'success');
+            updateStatus('Ready for Agentlet initialization', 'info');
+        });
+    </script>
+</body>
+</html>
