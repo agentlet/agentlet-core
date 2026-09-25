@@ -102,11 +102,13 @@ const authConfig = {
         return null;
     },
     messageHandler: (data, authManager) => {
-        // Custom message processing
+        // Custom message processing: return a result object, the
+        // authManager does not expose a method to call directly here
         if (data.type === 'custom_auth_response') {
             const token = extractCustomToken(data);
-            authManager.handleSuccess(token, data);
+            return { success: true, accessToken: token };
         }
+        return null;
     }
 };</code></pre>
             </div>

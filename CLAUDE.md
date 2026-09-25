@@ -1,5 +1,7 @@
 # CLAUDE.md - Agentlet core library memory
 
+Reference documentation for building agentlets on top of this library lives at [agentlet.io/docs](https://agentlet.io/docs/). This file covers conventions for contributing to the `agentlet-core` repository itself.
+
 ## Project overview
 **Agentlet** is a JavaScript bookmarklet framework that offers a modular foundation for building intelligent web automation tools powered by AI. It enables you to enhance and modernize your web applications in a powerful and unconventional way. The framework features a plugin-based architecture, advanced form handling, authentication management, screenshot utilities, and everything you need to quickly implement AI-powered tools via bookmarklets. Agentlet can also be embedded as a browser extension, offering a more robust alternative to the basic bookmarklet setup when your technical environment allows it.
 
@@ -26,40 +28,46 @@ These primitives enable AI developers to rapidly create agentlets that enhance t
 ## Key components
 
 ### Core architecture
-- **AgentletCore** (`src/index.js`) - Main application class with plugin architecture
-- **ModuleLoader** (`src/plugin-system/ModuleLoader.js`) - Dynamic module loading system
-- **BaseModule/BaseSubmodule** (`src/core/`) - Base classes with a simplified lifecycle (init, activate, cleanup) plus mount/unmount hooks; see `docs/module-mount-api.md`
+- **AgentletCore** (`src/index.ts`) - Main application class, wires up every manager and the global `window.agentlet` API
+- **ModuleRegistry** (`src/core/ModuleRegistry.ts`) - Tracks registered modules, matches the active module against the current URL, and drives activation/deactivation
+- **ModuleManager** (`src/core/ModuleManager.ts`) - Higher-level registration API used by `window.agentlet.modules`
+- **Module** (`src/core/Module.ts`) - Base class agentlets extend (`window.agentlet.Module`), with a simplified lifecycle (init, activate, cleanup) plus optional mount/unmount hooks; see [Module mount API](https://agentlet.io/docs/guides/mount-api/). There is no separate submodule base class.
+- **EventBus** (`src/core/EventBus.ts`) - Shared pub/sub bus, exposed as `window.agentlet.eventBus`
+- **ThemeManager** (`src/core/ThemeManager.ts`) - Resolves and merges the panel theme, exposed as `window.agentlet.themeManager`
 
-### Form automation system (Simplified)
-- **FormExtractor** (`src/utils/data-processing/FormExtractor.js`) - Simple form structure extraction with essential data
-- **FormFiller** (`src/utils/data-processing/FormFiller.js`) - Basic form filling with context scoping and event triggering
+### Form automation system
+- **FormExtractor** (`src/utils/data-processing/FormExtractor.ts`) - Simple form structure extraction with essential data
+- **FormFiller** (`src/utils/data-processing/FormFiller.ts`) - Basic form filling with context scoping and event triggering
 - **APIs**: `window.agentlet.forms.{extract, exportForAI, quickExport, fill, fillFromAI, fillMultiple}`
 
-### Table extraction system (Simplified)
-- **TableExtractor** (`src/utils/data-processing/TableExtractor.js`) - Basic table data extraction with optional Excel export
+### Table extraction system
+- **TableExtractor** (`src/utils/data-processing/TableExtractor.ts`) - Basic table data extraction with optional Excel export
 - Simple pagination support (user provides next button selector) and Excel download using SheetJS
 - **APIs**: `window.agentlet.tables.{extract, extractAll, download, extractAndDownload}`
 
 ### Authentication system
-- **AuthManager** (`src/utils/system/AuthManager.js`) - Customizable popup-based authentication
+- **AuthManager** (`src/utils/system/AuthManager.ts`) - Customizable popup-based authentication
 - Supports OIDC, OAuth2, custom IDPs with configurable token extraction
 - Optional login button in agentlet panel
 
 ### AI integration system
-- **AIManager** (`src/utils/ai/AIProvider.js`) - Direct AI API integration with provider abstraction
-- **PDFProcessor** (`src/utils/ai/PDFProcessor.js`) - PDF-to-image conversion using PDF.js for document analysis
+- **AIManager** (`src/utils/ai/AIProvider.ts`) - Direct AI API integration with provider abstraction
+- **PDFProcessor** (`src/utils/ai/PDFProcessor.ts`) - PDF-to-image conversion using PDF.js for document analysis
 - Currently supports OpenAI API with multimodal capabilities (text + images + PDFs)
 - Uses environment variables for API key management (OPENAI_API_KEY, OPENAI_MODEL, etc.)
 - **APIs**: `window.agentlet.ai.{sendPrompt, sendPromptWithPDF, convertPDFToImages, isAvailable, getStatus}`
 
-### Utility classes
-- **ElementSelector** - Advanced DOM element selection
-- **Dialog** - Unified dialog system (info, input, wait, progress)
-- **MessageBubble** - Toast notifications and status messages
-- **ScreenCapture** - Screen capture functionality
-- **ScriptInjector** - Safe script injection
-- **EnvManager** - Environment variable management
-- **CookieManager/StorageManager** - Data persistence
+### Utility classes (`src/utils/`)
+- **ElementSelector** (`ui/ElementSelector.ts`) - DOM element selection
+- **Dialog** (`ui/Dialog.ts`) - Unified dialog system (info, input, wait, progress, fullscreen, command)
+- **MessageBubble** (`ui/MessageBubble.ts`) - Toast notifications and status messages
+- **ScreenCapture** (`ui/ScreenCapture.ts`) - Screen capture functionality (html2canvas)
+- **PageHighlighter** (`ui/PageHighlighter.ts`) - Overlays, element highlights, tours and scroll helpers
+- **ShortcutManager** (`ui/ShortcutManager.ts`) - Keyboard shortcut registration (hotkeys-js)
+- **ZIndex** (`ui/ZIndex.ts`) - Z-index constants and page-safe detection, exposed as `window.agentlet.utils.zIndex`
+- **ScriptInjector** (`system/ScriptInjector.ts`) - Safe script injection
+- **EnvManager** (`config-persistence/EnvManager.ts`) - Environment variable management
+- **CookieManager/StorageManager** (`config-persistence/`) - Data persistence
 
 ## API Quick Reference
 
@@ -169,9 +177,19 @@ const agentlet = new AgentletCore({
         loginUrl: 'https://idp.example.com/auth',
         popupWidth: 500,
         popupHeight: 600,
-        tokenExtractor: (popup) => { /* custom logic */ }
+        // Raw string posted back by the popup; return the token or null.
+        tokenExtractor: (raw) => { /* custom logic */ },
+        onSuccess: (result) => { console.log('Login successful:', result.token); },
+        onError: (error) => { console.error('Login failed:', error.error); },
+        onCancel: () => { console.log('Login cancelled'); }
     }
 });
+
+// Programmatic access afterwards
+await window.agentlet.auth.startAuthentication();
+window.agentlet.auth.isEnabled();
+window.agentlet.auth.getState();
+await window.agentlet.auth.logout();
 ```
 
 ### Keyboard shortcuts
@@ -197,8 +215,12 @@ const agentlet = new AgentletCore({
 
 ### Module lifecycle
 ```javascript
-// Simplified lifecycle for modules and submodules
-class MyAgentlet extends window.agentlet.BaseModule {
+// Simplified lifecycle for modules
+class MyAgentlet extends window.agentlet.Module {
+    constructor() {
+        super({ name: 'my-agentlet', patterns: 'example.com' });
+    }
+
     async initModule() {
         // Called once during module startup
         console.log('Initializing module');
@@ -217,7 +239,7 @@ class MyAgentlet extends window.agentlet.BaseModule {
     async mount(container, context) {
         // Called on every content render (init, module/URL change, refresh).
         // Default: container.innerHTML = this.getContent(). Override to mount
-        // a UI framework root instead - see docs/module-mount-api.md.
+        // a UI framework root instead - see https://agentlet.io/docs/guides/mount-api/.
         container.innerHTML = this.getContent();
     }
 
@@ -232,6 +254,8 @@ class MyAgentlet extends window.agentlet.BaseModule {
         // Cleanup logic here
     }
 }
+
+window.agentlet.modules.register(new MyAgentlet());
 ```
 
 ### Native DOM Integration
@@ -253,7 +277,7 @@ element.addEventListener('click', handleClick);
 - Every new file under `src/` is written in TypeScript (`.ts`).
 - Any existing `.js` file under `src/` that a PR touches and that is under 300 lines is converted to `.ts` in that same PR (`git mv`, type strictly, no behaviour change, existing tests unchanged).
 - No `any`. Eslint rejects explicit `any` in `.ts` files; use `unknown` (or a precise union) with a one-line comment for genuinely dynamic values. A justified `any` needs an `eslint-disable-next-line` with the reason on the same line.
-- Client agentlets stay free to be written in JavaScript: they consume the published types (`docs/typescript.md`) and are never required to write TypeScript.
+- Client agentlets stay free to be written in JavaScript: they consume the published types (see [TypeScript support](https://agentlet.io/docs/guides/typescript/)) and are never required to write TypeScript.
 - Keep `.js` extensions in relative imports even when the target file is `.ts`. Share option/shape types with `src/types/public-api.d.ts` via `import type`, keep `tests/types/public-api.test-d.ts` up to date when a public class changes, and declare optional or duck-typed members with an interface merge, not uninitialized fields.
 - `npm run typecheck` must pass before any commit, alongside `npm test`, `npm run build`, and `npm run lint`.
 
