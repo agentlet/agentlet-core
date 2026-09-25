@@ -5,7 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - Unreleased
+## [2.0.1] - 2026-09-25
+
+### Fixed
+
+- The package can be loaded outside a browser. `require('agentlet-core')` and
+  `import('agentlet-core')` used to throw `ReferenceError: DOMMatrix is not defined`
+  under Node, because pdf.js ran browser code as soon as the bundle was evaluated.
+  pdf.js is now loaded during `init()`, so importing the package works for server
+  rendering, tooling and tests; only `new AgentletCore().init()` needs a browser.
+  `window.pdfjsLib` is still available once `init()` resolves. Every build now checks
+  that the bundles load under plain Node.
+- `require('agentlet-core/package.json')` works: `./package.json` is part of
+  `exports`.
+- A scaffolded project now depends on the published package
+  (`"agentlet-core": "^<version>"`) by default instead of a `file:` link to a local
+  checkout. `--core=local` keeps the `file:` link for developing the core itself.
+
+### Changed
+
+- CI runs on Node 22, with `actions/checkout`, `actions/setup-node` and
+  `actions/upload-artifact` at `v7` (Node 24 runtime).
+
+## [2.0.0] - 2026-09-25
 
 ### Breaking changes
 
@@ -102,3 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
+
+[2.0.1]: https://github.com/agentlet/agentlet-core/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/agentlet/agentlet-core/compare/v1.0.0...v2.0.0
