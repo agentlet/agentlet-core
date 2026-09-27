@@ -63,6 +63,13 @@ interface ModuleRegistryStatisticsStub {
     moduleList: string[];
 }
 
+interface RegistryEntryStub {
+    name: string;
+    url: string;
+    module: string;
+    lazy?: boolean;
+}
+
 interface ModuleRegistryTestInstance {
     modules: Map<string, AgentletModule>;
     activeModule: AgentletModule | null;
@@ -70,6 +77,7 @@ interface ModuleRegistryTestInstance {
     eventBus?: EventBusStub;
     registryUrl?: string;
     loadedRegistries: Set<string>;
+    registryEntries: Map<string, RegistryEntryStub>;
     metrics: {
         totalModules: number;
         activationCount: number;
@@ -92,6 +100,8 @@ interface ModuleRegistryTestInstance {
     loadFromRegistry(registryUrl?: string | null): Promise<void>;
     loadRegistryScript(url: string): Promise<unknown>;
     loadAgentletModule(config: { name: string; url: string; module: string }): Promise<void>;
+    loadModule(entry: RegistryEntryStub): Promise<AgentletModule>;
+    getRegistryEntries(): Array<RegistryEntryStub & { loaded: boolean }>;
     loadScript(url: string): Promise<void>;
     initialize(): Promise<void>;
     getAll(): string[];
@@ -512,6 +522,252 @@ describe('ModuleRegistry behaviour characterization', () => {
             const stats = registry.getStatistics();
             expect(stats.registriesLoaded).toBe(1);
             expect(stats.registryLoadFailures).toBe(0);
+        });
+
+        test('loadRegistryScript() resolves for a synchronous (zero-delay) dispatch of agentletRegistryLoaded', async () => {
+            // Regression test for the registry script format's `setTimeout(..., 10)`
+            // dispatch, which could lose the race against the 10s timeout on a busy
+            // page. The listener is attached before the script is injected (see
+            // loadRegistryScript()), so a dispatch with NO delay at all - the fixed
+            // examples/*registry.js format - must resolve correctly too.
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const promise = registry.loadRegistryScript('https://example.com/sync-registry.js');
+
+            const script = document.head.querySelector('script[src="https://example.com/sync-registry.js"]') as HTMLScriptElement;
+            const payload = { agentlets: [] };
+            // Simulate the script's own top-level, undelayed dispatch, firing as
+            // part of its (asynchronous) load rather than after any timer.
+            script.onload?.(new Event('load'));
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', { detail: payload }));
+
+            await expect(promise).resolves.toBe(payload);
+        });
+
+        test('loadRegistryScript() resolves if the event arrives just before the 10s timeout, and the timeout never fires', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const promise = registry.loadRegistryScript('https://example.com/slow-but-in-time-registry.js');
+
+            jest.advanceTimersByTime(9999);
+            const payload = { agentlets: [] };
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', { detail: payload }));
+            jest.advanceTimersByTime(1);
+
+            await expect(promise).resolves.toBe(payload);
+        });
+    });
+
+    describe('checkUrlChange() - explicit activation is not reverted by automatic re-detection', () => {
+        // Module.init()/activate() chain several of their own internal
+        // `await`s (see src/core/Module.ts), and checkUrlChange() calls
+        // activateModule()/deactivateModule() without awaiting them (it is a
+        // synchronous method driven by a timer/event callback) - so a test
+        // that lets checkUrlChange() itself drive a real activation needs to
+        // flush more than one microtask turn before asserting on the result.
+        async function flushAsync(turns = 10): Promise<void> {
+            for (let i = 0; i < turns; i++) {
+                await Promise.resolve();
+            }
+        }
+
+        test('the 1s poll does not revert an explicit activateModule() call when the URL has not changed', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const moduleA = new Module({ name: 'module-a', patterns: ['*'] });
+            const moduleB = new Module({ name: 'module-b', patterns: ['*'] });
+            // Registered directly on the map (bypassing register()'s own
+            // checkUrlChange() side effect) so the two explicit
+            // activateModule() calls below are the only activations in play.
+            registry.modules.set('module-a', moduleA);
+            registry.modules.set('module-b', moduleB);
+
+            await registry.activateModule(moduleA);
+            expect(registry.activeModule?.name).toBe('module-a');
+
+            // Explicit activation, e.g. from a "launcher" module.
+            await registry.activateModule(moduleB, { trigger: 'manual' });
+            expect(registry.activeModule?.name).toBe('module-b');
+
+            // Advance past several 1s poll ticks. The URL never changed, so
+            // findMatchingModule() re-picking module-a must not run.
+            jest.advanceTimersByTime(3000);
+            await flushAsync();
+
+            expect(registry.activeModule?.name).toBe('module-b');
+        });
+
+        test('on a URL change, keeps the active module if its own pattern still matches the new URL', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const moduleA = new Module({ name: 'module-a', patterns: ['*'] });
+            const moduleB = new Module({ name: 'module-b', patterns: ['*'] });
+            registry.modules.set('module-a', moduleA);
+            registry.modules.set('module-b', moduleB);
+            await registry.activateModule(moduleB, { trigger: 'manual' });
+            expect(registry.activeModule?.name).toBe('module-b');
+
+            const activateSpy = jest.spyOn(registry, 'activateModule');
+            history.pushState({}, '', '/after-manual-activation');
+            registry.checkUrlChange();
+            await flushAsync();
+
+            // module-a would be findMatchingModule()'s first pick (registered
+            // first), but module-b is still active and its own pattern ('*')
+            // still matches, so it must be left alone - activateModule() is
+            // never even called again.
+            expect(registry.activeModule?.name).toBe('module-b');
+            expect(activateSpy).not.toHaveBeenCalled();
+        });
+
+        test('on a URL change, switches away from the active module once it no longer matches', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const onlyOldPath = new Module({ name: 'only-old-path', patterns: ['/old-path'] });
+            const onlyNewPath = new Module({ name: 'only-new-path', patterns: ['/new-path'] });
+            registry.modules.set('only-old-path', onlyOldPath);
+            registry.modules.set('only-new-path', onlyNewPath);
+
+            history.pushState({}, '', '/old-path');
+            await registry.activateModule(onlyOldPath);
+            expect(registry.activeModule?.name).toBe('only-old-path');
+
+            history.pushState({}, '', '/new-path');
+            registry.checkUrlChange();
+            await flushAsync();
+
+            expect(registry.activeModule?.name).toBe('only-new-path');
+        });
+
+        test('hashchange navigation re-runs checkUrlChange() after 100ms, like popstate', () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+            checkUrlChangeSpy.mockClear();
+
+            window.location.hash = 'hash-nav';
+            window.dispatchEvent(new Event('hashchange'));
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
+
+            jest.advanceTimersByTime(100);
+            expect(checkUrlChangeSpy).toHaveBeenCalled();
+        });
+
+        test('stopUrlMonitoring()/cleanup() also removes the hashchange listener', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+
+            await registry.cleanup();
+            checkUrlChangeSpy.mockClear();
+
+            window.location.hash = 'after-cleanup';
+            window.dispatchEvent(new Event('hashchange'));
+            jest.advanceTimersByTime(200);
+
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('lazy registry entries and loadModule()', () => {
+        beforeEach(() => {
+            delete (document as { createElement?: unknown }).createElement;
+            delete (document as { head?: unknown }).head;
+            (global as unknown as { CustomEvent: unknown }).CustomEvent = RealCustomEvent;
+        });
+
+        afterEach(() => {
+            document.querySelectorAll('script').forEach(script => script.remove());
+            delete (window as unknown as Record<string, unknown>).LazyFakeModuleClass;
+        });
+
+        test('loadFromRegistry() skips fetching a lazy entry but records it in getRegistryEntries()', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const promise = registry.loadFromRegistry('https://example.com/lazy-registry.js');
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', {
+                detail: {
+                    agentlets: [
+                        { name: 'lazy-one', url: 'https://example.com/lazy-one.js', module: 'LazyFakeModuleClass', lazy: true }
+                    ]
+                }
+            }));
+            await promise;
+
+            // Never fetched: no <script src="https://example.com/lazy-one.js">.
+            expect(document.head.querySelector('script[src="https://example.com/lazy-one.js"]')).toBeNull();
+            expect(registry.get('lazy-one')).toBeNull();
+
+            const entries = registry.getRegistryEntries();
+            expect(entries).toEqual([
+                { name: 'lazy-one', url: 'https://example.com/lazy-one.js', module: 'LazyFakeModuleClass', lazy: true, loaded: false }
+            ]);
+        });
+
+        test('loadModule() loads and registers a lazy entry without activating it, even when its pattern matches the current URL', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+
+            class LazyFakeModuleClass {
+                name = '';
+            }
+            (window as unknown as Record<string, unknown>).LazyFakeModuleClass = LazyFakeModuleClass;
+
+            const entry = { name: 'lazy-two', url: 'https://example.com/lazy-two.js', module: 'LazyFakeModuleClass', lazy: true };
+            const loadPromise = registry.loadModule(entry);
+
+            const script = document.head.querySelector('script[src="https://example.com/lazy-two.js"]') as HTMLScriptElement;
+            expect(script).not.toBeNull();
+            script.onload?.(new Event('load'));
+
+            const loaded = await loadPromise;
+
+            expect(loaded.name).toBe('lazy-two');
+            expect(registry.get('lazy-two')).toBe(loaded);
+            // Loaded, but never activated - even though its pattern ('*' via
+            // checkPattern falling back to true for no patterns is NOT assumed
+            // here; this instance has no `patterns`/`checkPattern` override at
+            // all, so it can't match anything) - the key assertion is that
+            // loadModule() itself never calls activateModule().
+            expect(registry.activeModule).toBeNull();
+
+            const entries = registry.getRegistryEntries();
+            expect(entries).toEqual([{ ...entry, loaded: true }]);
+        });
+
+        test('loadModule() never activates even when the loaded module\'s pattern matches the current URL', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+
+            class LazyFakeModuleClass extends Module {
+                constructor() {
+                    super({ name: 'lazy-three', patterns: ['*'] });
+                }
+            }
+            (window as unknown as Record<string, unknown>).LazyFakeModuleClass = LazyFakeModuleClass;
+
+            const entry = { name: 'lazy-three', url: 'https://example.com/lazy-three.js', module: 'LazyFakeModuleClass', lazy: true };
+            const loadPromise = registry.loadModule(entry);
+            const script = document.head.querySelector('script[src="https://example.com/lazy-three.js"]') as HTMLScriptElement;
+            script.onload?.(new Event('load'));
+            const loaded = await loadPromise;
+
+            expect(registry.get('lazy-three')).toBe(loaded);
+            expect(registry.activeModule).toBeNull();
+
+            // The host activates it explicitly afterwards.
+            await registry.activateModule(loaded);
+            expect(registry.activeModule).toBe(loaded);
+        });
+
+        test('loadModule() resolves with the already-registered instance, without reloading, when called twice', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+
+            class LazyFakeModuleClass {
+                name = '';
+            }
+            (window as unknown as Record<string, unknown>).LazyFakeModuleClass = LazyFakeModuleClass;
+
+            const entry = { name: 'lazy-four', url: 'https://example.com/lazy-four.js', module: 'LazyFakeModuleClass' };
+            const firstLoad = registry.loadModule(entry);
+            (document.head.querySelector('script[src="https://example.com/lazy-four.js"]') as HTMLScriptElement).onload?.(new Event('load'));
+            const first = await firstLoad;
+
+            const second = await registry.loadModule(entry);
+
+            expect(second).toBe(first);
+            // Still only the one <script> from the first load.
+            expect(document.head.querySelectorAll('script[src="https://example.com/lazy-four.js"]').length).toBe(1);
         });
     });
 });

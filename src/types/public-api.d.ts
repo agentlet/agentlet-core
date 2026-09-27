@@ -1404,6 +1404,29 @@ export interface ModuleManagerAPI {
     initialize(): void;
 }
 
+/** A single entry inside a loaded registry's `agentlets` array; see `ModuleRegistryAPI.loadModule()` and the script injection guide. */
+export interface AgentletRegistryEntry {
+    name: string;
+    url: string;
+    module: string;
+    /**
+     * When true, this entry is skipped by `init()`'s eager registry load.
+     * It is still returned by `getRegistryEntries()` (with `loaded: false`)
+     * so a host can list it - for example to build a "load more" or
+     * launcher UI - and load it on demand with `loadModule()`. A lazy entry
+     * is not a candidate for URL-based module detection
+     * (`findMatchingModule()` / the automatic re-detection on navigation)
+     * until it has actually been loaded.
+     */
+    lazy?: boolean;
+}
+
+/** One entry as returned by `ModuleRegistryAPI.getRegistryEntries()`. */
+export interface AgentletRegistryEntryStatus extends AgentletRegistryEntry {
+    /** Whether this entry has already been loaded and registered, via `init()`'s eager load or a `loadModule()` call. */
+    loaded: boolean;
+}
+
 export interface ModuleRegistryAPI {
     readonly modules: Map<string, AgentletModule>;
     activeModule: AgentletModule | null;
@@ -1418,6 +1441,27 @@ export interface ModuleRegistryAPI {
     get(name: string): AgentletModule | null;
     getStatistics(): ModuleStatistics;
     cleanup(): Promise<void>;
+    /**
+     * Loads a single registry entry on demand: fetches `entry.url`, reads
+     * `window[entry.module]`, instantiates it and registers it - reusing
+     * the same loading code `init()`'s eager registry load uses - then
+     * resolves with the module instance. Unlike the eager load, this never
+     * activates the module, even if its pattern matches the current URL;
+     * call `activateModule()` explicitly afterwards to make it active.
+     * Resolves with the already-registered instance, without reloading, if
+     * `entry.name` is already loaded. Lets a host load a `lazy: true`
+     * registry entry - or any inline entry it constructs itself - after
+     * `init()` has already run.
+     */
+    loadModule(entry: AgentletRegistryEntry): Promise<AgentletModule>;
+    /**
+     * Lists every registry entry seen so far (both eagerly loaded and
+     * `lazy: true`), in the order the registry declared them, each
+     * annotated with whether it has actually been loaded yet. Empty when no
+     * `registryUrl` was configured, or before the registry has finished
+     * loading.
+     */
+    getRegistryEntries(): AgentletRegistryEntryStatus[];
 }
 
 /* ------------------------------------------------------------------ */

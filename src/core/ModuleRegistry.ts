@@ -5,6 +5,8 @@
 
 import type {
     AgentletModule,
+    AgentletRegistryEntry,
+    AgentletRegistryEntryStatus,
     EventBusAPI,
     ModuleActivationContext,
     ModuleRegistryAPI,
@@ -24,12 +26,13 @@ export interface ModuleRegistryConfig {
     skipRegistryModuleRegistration?: boolean;
 }
 
-/** A single entry inside a loaded registry's `agentlets` array. */
-interface AgentletRegistryEntryConfig {
-    name: string;
-    url: string;
-    module: string;
-}
+/**
+ * A single entry inside a loaded registry's `agentlets` array. Same shape
+ * as the public {@link AgentletRegistryEntry} - re-declared locally (rather
+ * than imported and used directly everywhere) only where an internal-only
+ * alias reads better; the two must stay in sync.
+ */
+type AgentletRegistryEntryConfig = AgentletRegistryEntry;
 
 /**
  * Shape of the JSON-like payload delivered via the `agentletRegistryLoaded`
@@ -69,6 +72,10 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     registryUrl?: string;
     loadedRegistries: Set<string>;
     skipRegistryModuleRegistration: boolean;
+    // Every registry entry seen so far (eager or `lazy: true`), keyed by
+    // name, in the order the registry declared them. See loadFromRegistry(),
+    // loadModule() and getRegistryEntries().
+    registryEntries: Map<string, AgentletRegistryEntry>;
 
     // Callback for module changes
     onModuleChange: ((module: AgentletModule | null, context?: ModuleActivationContext) => void) | null;
@@ -102,6 +109,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         this.registryUrl = config.registryUrl;
         this.loadedRegistries = new Set();
         this.skipRegistryModuleRegistration = config.skipRegistryModuleRegistration || false;
+        this.registryEntries = new Map();
 
         // Callback for module changes
         this.onModuleChange = null;
@@ -134,10 +142,27 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     }
 
     /**
-     * Register a module
+     * Register a module. Runs URL-based detection afterwards (a module
+     * whose pattern matches the current URL is activated automatically) -
+     * see `applyRegistration()` for the shared body used by `loadModule()`,
+     * which registers without that detection step.
      * @param module - Module instance to register
      */
     register(module: AgentletModule): void {
+        this.applyRegistration(module, true);
+    }
+
+    /**
+     * Shared registration body for `register()` and the on-demand
+     * `loadModule()` path: identical duplicate-detection, reentrancy guard,
+     * modules-map mutation and `module:registered` event, but the caller
+     * decides whether `checkUrlChange()` runs afterwards. `loadModule()`
+     * passes `false` so loading a module never activates it just because
+     * its pattern happens to match the current page.
+     * @param module - Module instance to register
+     * @param checkUrl - Whether to run URL-based detection after registering
+     */
+    private applyRegistration(module: AgentletModule, checkUrl: boolean): void {
         if (!module || !module.name) {
             throw new Error('Invalid module: name is required');
         }
@@ -171,7 +196,9 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             this.emit('module:registered', { module: module.name });
 
             // Check if this module should be active for current URL
-            this.checkUrlChange();
+            if (checkUrl) {
+                this.checkUrlChange();
+            }
         } finally {
             this._registrationInProgress.delete(module.name);
         }
@@ -519,8 +546,18 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
                 (registryData as AgentletRegistryPayload).baseUrl = baseUrl;
             }
 
-            // Load each agentlet module
+            // Load each agentlet module, except `lazy: true` entries: those
+            // are recorded (so getRegistryEntries() lists them for a host to
+            // show, e.g. a launcher UI) but not fetched here - only
+            // loadModule() loads them, on demand.
             for (const agentletConfig of agentlets as AgentletRegistryEntryConfig[]) {
+                this.registryEntries.set(agentletConfig.name, { ...agentletConfig });
+
+                if (agentletConfig.lazy) {
+                    console.log(`📦 Skipping eager load of lazy agentlet: ${agentletConfig.name}`);
+                    continue;
+                }
+
                 try {
                     await this.loadAgentletModule(agentletConfig);
                 } catch (error) {
@@ -618,25 +655,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         }
 
         try {
-            console.log(`📦 Loading agentlet module: ${name} from ${url}`);
-
-            // Dynamically import the module
-            const _moduleScript = await this.loadScript(url);
-
-            // Get the module class from global scope. `window` has no index
-            // signature for arbitrary string keys, and the class named here is
-            // genuinely dynamic (supplied by the registry payload), so it is
-            // read through an untyped view of `window`.
-            const ModuleClass = (window as unknown as Record<string, unknown>)[moduleClass] as (new () => AgentletModule) | undefined;
-            if (!ModuleClass) {
-                throw new Error(`Module class '${moduleClass}' not found in global scope after loading ${url}`);
-            }
-
-            // Create module instance
-            const moduleInstance = new ModuleClass();
-            if (!moduleInstance.name) {
-                moduleInstance.name = name; // Set name if not provided
-            }
+            const moduleInstance = await this.instantiateAgentletModule(agentletConfig);
 
             // Only register if not skipping registry module registration
             if (!this.skipRegistryModuleRegistration) {
@@ -650,6 +669,93 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             console.error(`❌ Failed to load agentlet module ${name}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Loads `entry.url` and instantiates `window[entry.module]`, without
+     * registering or activating it. Shared by `loadAgentletModule()` (the
+     * eager, `init()`-time load) and `loadModule()` (the on-demand,
+     * never-auto-activated load).
+     * @param entry - Agentlet configuration {name, url, module}
+     */
+    private async instantiateAgentletModule(entry: AgentletRegistryEntryConfig): Promise<AgentletModule> {
+        const { name, url, module: moduleClass } = entry;
+
+        console.log(`📦 Loading agentlet module: ${name} from ${url}`);
+
+        // Dynamically import the module
+        await this.loadScript(url);
+
+        // Get the module class from global scope. `window` has no index
+        // signature for arbitrary string keys, and the class named here is
+        // genuinely dynamic (supplied by the registry payload), so it is
+        // read through an untyped view of `window`.
+        const ModuleClass = (window as unknown as Record<string, unknown>)[moduleClass] as (new () => AgentletModule) | undefined;
+        if (!ModuleClass) {
+            throw new Error(`Module class '${moduleClass}' not found in global scope after loading ${url}`);
+        }
+
+        // Create module instance
+        const moduleInstance = new ModuleClass();
+        if (!moduleInstance.name) {
+            moduleInstance.name = name; // Set name if not provided
+        }
+
+        return moduleInstance;
+    }
+
+    /**
+     * Loads a single registry entry on demand: fetches `entry.url`,
+     * instantiates `window[entry.module]` and registers it - reusing
+     * `instantiateAgentletModule()`, the same code the eager, `init()`-time
+     * registry load uses - then resolves with the module instance, without
+     * activating it (see `applyRegistration(module, false)`), even if its
+     * pattern matches the current URL. Call `activateModule()` explicitly
+     * afterwards to make it active.
+     *
+     * Resolves with the already-registered instance, without reloading, if
+     * `entry.name` is already loaded. Records `entry` in `registryEntries`
+     * regardless (so `getRegistryEntries()` reflects it), whether or not it
+     * was previously declared by a loaded registry.
+     * @param entry - Agentlet configuration {name, url, module, lazy?}
+     */
+    async loadModule(entry: AgentletRegistryEntryConfig): Promise<AgentletModule> {
+        const { name, url, module: moduleClass } = entry;
+
+        if (!name || !url || !moduleClass) {
+            throw new Error('Agentlet config must have name, url, and module properties');
+        }
+
+        this.registryEntries.set(name, { ...entry });
+
+        const existing = this.modules.get(name);
+        if (existing) {
+            console.log(`📦 Agentlet already loaded: ${name}`);
+            return existing;
+        }
+
+        const moduleInstance = await this.instantiateAgentletModule(entry);
+
+        if (!this.skipRegistryModuleRegistration) {
+            this.applyRegistration(moduleInstance, false);
+            console.log(`✅ Agentlet loaded and registered: ${name}`);
+        } else {
+            console.log(`✅ Agentlet loaded (registration skipped): ${name}`);
+        }
+
+        return moduleInstance;
+    }
+
+    /**
+     * Lists every registry entry seen so far (both eagerly loaded and
+     * `lazy: true`), in the order the registry declared them, each
+     * annotated with whether it has actually been loaded yet.
+     */
+    getRegistryEntries(): AgentletRegistryEntryStatus[] {
+        return Array.from(this.registryEntries.values()).map(entry => ({
+            ...entry,
+            loaded: this.modules.has(entry.name)
+        }));
     }
 
     /**
