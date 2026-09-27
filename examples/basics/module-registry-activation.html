@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module registry activation - Agentlet Core Example</title>
+    <link rel="icon" type="image/x-icon" href="../../resources/favicons/favicon.ico">
+    <link rel="stylesheet" href="../shared/examples.css">
+    <link rel="stylesheet" href="../shared/two-column-layout.css">
+</head>
+<body>
+    <div class="container">
+        <div class="two-column-container">
+            <!-- Left Column: Content and Controls -->
+            <div class="left-column">
+                <div class="nav-breadcrumb">
+                    <a href="../">Examples</a> → basics → module-registry-activation
+                </div>
+
+                <h1>Module registry activation</h1>
+
+                <p>This example demonstrates modules loaded from a registry script: seeing them through both <code>window.agentlet.modules</code> and <code>window.agentlet.moduleRegistry</code>, activating one by hand without it being reverted by automatic URL detection, and loading a <code>lazy: true</code> entry on demand.</p>
+
+                <div class="example-section">
+                    <h3>What this example shows:</h3>
+                    <ul>
+                        <li>A module loaded from a registry script is visible from both <code>window.agentlet.modules.get()</code> and <code>window.agentlet.moduleRegistry.get()</code></li>
+                        <li>Activating a module by hand keeps it active, even while another module's pattern still matches the page</li>
+                        <li>The active module survives single-page navigation (<code>pushState</code>, hash change) as long as it still matches the new URL</li>
+                        <li>A <code>lazy: true</code> registry entry is listed but not fetched at init, and can be loaded on demand with <code>loadModule()</code> without being activated automatically</li>
+                    </ul>
+                </div>
+
+                <div class="controls">
+                    <h4>Initialize</h4>
+                    <button onclick="initAgentlet()" id="initBtn">Initialize agentlet</button>
+                </div>
+
+                <div class="controls">
+                    <h4>Module registry actions</h4>
+                    <button onclick="activateModuleB()" id="activateBBtn" disabled>Activate module B by hand</button>
+                    <button onclick="loadModuleC()" id="loadCBtn" disabled>Load lazy module C</button>
+                    <button onclick="activateModuleC()" id="activateCBtn" disabled>Activate module C</button>
+                    <button onclick="navigateWithPushState()" id="pushStateBtn" disabled>Navigate with pushState</button>
+                    <button onclick="navigateWithHash()" id="hashBtn" disabled>Navigate with hash change</button>
+                    <button onclick="refreshStatus()" id="refreshBtn" disabled>Refresh status</button>
+                </div>
+
+                <div class="example-section">
+                    <h3>Status</h3>
+                    <pre id="status-output" style="background:#f5f5f5; padding: 10px; border-radius: 4px;">Not initialized</pre>
+                </div>
+
+                <div class="example-section">
+                    <h3>API examples:</h3>
+                    <div class="code-block">
+                        <pre><code class="language-javascript">// Registry entry declared with lazy: true is not fetched at init()
+{ name: 'registry-module-c', url: '...', module: '...', lazy: true }
+
+// Load it on demand, without activating it
+const moduleC = await window.agentlet.moduleRegistry.loadModule({
+    name: 'registry-module-c',
+    url: './module-registry-activation-module-c.js',
+    module: 'ModuleRegistryActivationModuleC'
+});
+
+// Activate it explicitly afterwards
+await window.agentlet.moduleRegistry.activateModule(moduleC);</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Console and Status -->
+            <div class="right-column">
+                <div class="console-header">
+                    <h3>📟 Console output</h3>
+                    <button onclick="clearConsole()" class="console-clear-btn">🗑️ Clear</button>
+                </div>
+                <div class="console-section" id="console"></div>
+
+                <h3>📊 Status</h3>
+                <div class="status-section" id="status">
+                    Click "Initialize agentlet" to start the demo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console utilities -->
+    <script src="../shared/console-utils.js"></script>
+
+    <script>
+        window.agentletConfig = {
+            debugMode: true,
+            theme: 'default',
+            startMinimized: false,
+            registryUrl: './module-registry-activation-registry.js'
+        };
+
+        function refreshStatus() {
+            const output = document.getElementById('status-output');
+            if (!window.agentlet) {
+                output.textContent = 'Not initialized';
+                return;
+            }
+
+            const active = window.agentlet.moduleRegistry.activeModule;
+            const lines = [
+                `Active module: ${active ? active.name : 'none'}`,
+                `Registered modules (moduleRegistry): ${window.agentlet.moduleRegistry.getAll().join(', ') || 'none'}`,
+                `Registered modules (window.agentlet.modules): ${window.agentlet.modules.getAll().join(', ') || 'none'}`,
+                `Registry entries: ${JSON.stringify(window.agentlet.moduleRegistry.getRegistryEntries())}`,
+                `URL: ${window.location.href}`
+            ];
+            output.textContent = lines.join('\n');
+        }
+
+        async function initAgentlet() {
+            try {
+                setButtonLoading('initBtn', true);
+                updateStatus('Loading Agentlet Core...', 'info');
+                log('🤖 Initializing Agentlet Core...');
+
+                if (window.agentlet) {
+                    log('⚠️ Agentlet already loaded', 'warning');
+                    setButtonLoading('initBtn', false);
+                    refreshStatus();
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = '../../../dist/agentlet-core.js?' + Date.now();
+
+                script.onload = () => {
+                    log('✅ Agentlet Core script loaded successfully', 'success');
+
+                    if (window.AgentletCore) {
+                        const AgentletConstructor = window.AgentletCore.default;
+
+                        if (AgentletConstructor) {
+                            try {
+                                log('🚀 Creating AgentletCore instance...');
+                                const agentletInstance = new AgentletConstructor(window.agentletConfig);
+
+                                agentletInstance.init().then(() => {
+                                    log('✅ Agentlet Core loaded, registry entries fetched', 'success');
+                                    updateStatus('Ready! Try the module registry actions above.', 'success');
+                                    ['activateBBtn', 'loadCBtn', 'pushStateBtn', 'hashBtn', 'refreshBtn'].forEach(id => {
+                                        document.getElementById(id).disabled = false;
+                                    });
+                                    setButtonLoading('initBtn', false);
+                                    refreshStatus();
+                                }).catch(error => {
+                                    log(`❌ Initialization failed: ${error.message}`, 'error');
+                                    updateStatus('Initialization failed: ' + error.message, 'error');
+                                    setButtonLoading('initBtn', false);
+                                });
+
+                            } catch (error) {
+                                log(`❌ Error creating AgentletCore instance: ${error.message}`, 'error');
+                                setButtonLoading('initBtn', false);
+                            }
+                        }
+                    } else {
+                        log('❌ AgentletCore not found in window object', 'error');
+                        setButtonLoading('initBtn', false);
+                    }
+                };
+
+                script.onerror = () => {
+                    log('❌ Failed to load Agentlet Core script', 'error');
+                    updateStatus('Failed to load Agentlet Core', 'error');
+                    setButtonLoading('initBtn', false);
+                };
+
+                document.head.appendChild(script);
+
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                setButtonLoading('initBtn', false);
+            }
+        }
+
+        async function activateModuleB() {
+            const moduleB = window.agentlet.modules.get('registry-module-b');
+            if (!moduleB) {
+                log('❌ registry-module-b not found - is it registered?', 'error');
+                return;
+            }
+            await window.agentlet.moduleRegistry.activateModule(moduleB, { trigger: 'manual' });
+            log('🔄 Activated registry-module-b by hand', 'success');
+            refreshStatus();
+        }
+
+        async function loadModuleC() {
+            const entry = { name: 'registry-module-c', url: './module-registry-activation-module-c.js', module: 'ModuleRegistryActivationModuleC', lazy: true };
+            const moduleC = await window.agentlet.moduleRegistry.loadModule(entry);
+            log(`📦 Loaded ${moduleC.name} (not activated)`, 'success');
+            document.getElementById('activateCBtn').disabled = false;
+            refreshStatus();
+        }
+
+        async function activateModuleC() {
+            const moduleC = window.agentlet.modules.get('registry-module-c');
+            if (!moduleC) {
+                log('❌ registry-module-c not loaded yet - click "Load lazy module C" first', 'error');
+                return;
+            }
+            await window.agentlet.moduleRegistry.activateModule(moduleC, { trigger: 'manual' });
+            log('🔄 Activated registry-module-c by hand', 'success');
+            refreshStatus();
+        }
+
+        function navigateWithPushState() {
+            history.pushState({}, '', '?nav=' + Date.now());
+            log('🧭 Navigated with pushState', 'info');
+            setTimeout(refreshStatus, 200);
+        }
+
+        function navigateWithHash() {
+            window.location.hash = 'section-' + Date.now();
+            log('🧭 Navigated with hash change', 'info');
+            setTimeout(refreshStatus, 200);
+        }
+    </script>
+</body>
+</html>
