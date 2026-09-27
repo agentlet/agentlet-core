@@ -1369,7 +1369,14 @@ export interface AIManagerAPI {
 /* Modules (window.agentlet.modules / moduleManager / moduleRegistry) */
 /* ------------------------------------------------------------------ */
 
-/** The friendly proxy object built directly in GlobalAPI.js. */
+/**
+ * The friendly proxy object built directly in GlobalAPI.js. Backed by
+ * `ModuleManager`, which (like `moduleRegistry.get()`/`.getAll()`) reads
+ * straight from `ModuleRegistry`'s own module map - so this always agrees
+ * with `window.agentlet.moduleRegistry.get()`/`.getAll()` regardless of
+ * which registration path a module came in through (constructor, `register()`,
+ * an eager registry entry, or `moduleRegistry.loadModule()`).
+ */
 export interface ModulesAPI {
     get(name: string): AgentletModule | null | undefined;
     getAll(): string[];

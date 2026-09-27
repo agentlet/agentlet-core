@@ -13,7 +13,6 @@ import type ModuleRegistry from './ModuleRegistry.js';
 
 export default class ModuleManager implements ModuleManagerAPI {
     moduleRegistry: ModuleRegistry;
-    modules: Map<string, AgentletModule>;
     activeModule: AgentletModule | null;
     _isInitialized: boolean;
 
@@ -22,12 +21,25 @@ export default class ModuleManager implements ModuleManagerAPI {
 
     constructor(moduleRegistry: ModuleRegistry) {
         this.moduleRegistry = moduleRegistry;
-        this.modules = new Map();
         this.activeModule = null;
         this._isInitialized = false;
 
         // Track registration sources to prevent duplicates
         this._registrationSources = new Map();
+    }
+
+    /**
+     * The modules currently registered. Read directly from the underlying
+     * `ModuleRegistry` (rather than a separate local map ModuleManager kept
+     * in sync itself) so this always agrees with `moduleRegistry.get()`/
+     * `.getAll()`, regardless of which path a module was registered
+     * through - notably including the registry-script loader
+     * (`ModuleRegistry.loadAgentletModule()`/`loadModule()`), which
+     * registers directly on `ModuleRegistry` and previously never reached
+     * this class's own map at all.
+     */
+    get modules(): Map<string, AgentletModule> {
+        return this.moduleRegistry.modules;
     }
 
     /**
@@ -41,8 +53,8 @@ export default class ModuleManager implements ModuleManagerAPI {
         }
 
         // Enhanced duplicate detection - check if exact same instance already registered
-        if (this.modules.has(module.name)) {
-            const existing = this.modules.get(module.name);
+        if (this.moduleRegistry.modules.has(module.name)) {
+            const existing = this.moduleRegistry.modules.get(module.name);
             if (existing === module) {
                 console.warn(`ModuleManager: Module ${module.name} already registered with same instance from ${this._registrationSources.get(module.name)}, ignoring registration from ${source}`);
                 return; // Don't re-register the exact same instance
@@ -58,11 +70,9 @@ export default class ModuleManager implements ModuleManagerAPI {
 
         this._registrationSources.set(module.name, source);
 
-        // Delegate to ModuleRegistry (which now has guards)
+        // Delegate to ModuleRegistry (which now has guards, and is the
+        // single source of truth for the registered-modules map)
         this.moduleRegistry.register(module);
-
-        // Keep local reference
-        this.modules.set(module.name, module);
 
         console.log(`📦 ModuleManager: ${module.name} registered from ${source}`);
     }
@@ -72,7 +82,6 @@ export default class ModuleManager implements ModuleManagerAPI {
      * @param moduleName - Name of module to unregister
      */
     async unregister(moduleName: string): Promise<boolean> {
-        this.modules.delete(moduleName);
         this._registrationSources.delete(moduleName);
         return await this.moduleRegistry.unregister(moduleName);
     }
@@ -82,14 +91,14 @@ export default class ModuleManager implements ModuleManagerAPI {
      * @param moduleName - Name of module to get
      */
     get(moduleName: string): AgentletModule | undefined {
-        return this.modules.get(moduleName);
+        return this.moduleRegistry.get(moduleName) ?? undefined;
     }
 
     /**
      * Get all registered module names
      */
     getAll(): string[] {
-        return Array.from(this.modules.keys());
+        return this.moduleRegistry.getAll();
     }
 
     /**
