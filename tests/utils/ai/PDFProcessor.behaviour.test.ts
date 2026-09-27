@@ -145,7 +145,7 @@ describe('PDFProcessor behaviour characterization', () => {
             expect(images).toEqual(['data:image/webp;base64,mock']);
         });
 
-        test('auto-configures the CDN worker fallback and rethrows a friendlier error on a GlobalWorkerOptions.workerSrc failure', async () => {
+        test('fails with an actionable error naming pdfWorkerUrl and configurePDFWorker on a GlobalWorkerOptions.workerSrc failure, without an automatic third-party fallback', async () => {
             mockPdfjsLib.getDocument.mockReturnValue({
                 promise: Promise.reject(new Error('Setup GlobalWorkerOptions.workerSrc first.'))
             });
@@ -155,12 +155,20 @@ describe('PDFProcessor behaviour characterization', () => {
             const processor = new PDFProcessor();
 
             await expect(processor.convertPDFToImages(new ArrayBuffer(8))).rejects.toThrow(
-                'PDF worker not found. Automatically configured CDN fallback. Please try again. ' +
-                    'Original error: Setup GlobalWorkerOptions.workerSrc first.'
+                /pdfWorkerUrl/
             );
-            expect(configurePDFWorker).toHaveBeenCalledWith(
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+            await expect(processor.convertPDFToImages(new ArrayBuffer(8))).rejects.toThrow(
+                /configurePDFWorker/
             );
+            await expect(processor.convertPDFToImages(new ArrayBuffer(8))).rejects.toThrow(
+                /Setup GlobalWorkerOptions\.workerSrc first\./
+            );
+
+            // No silent fallback to a third-party CDN worker: neither an
+            // automatic call to configurePDFWorker() nor any reference to a
+            // third-party origin in the error message.
+            expect(configurePDFWorker).not.toHaveBeenCalled();
+            await expect(processor.convertPDFToImages(new ArrayBuffer(8))).rejects.not.toThrow(/cdnjs\.cloudflare\.com/);
         });
     });
 
