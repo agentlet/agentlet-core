@@ -205,12 +205,16 @@ describe('ModuleRegistry behaviour characterization', () => {
         });
 
         test('emits "application:notDetected" and deactivates when nothing matches', async () => {
-            history.pushState({}, '', '/undetected-page');
+            // registry construction (which captures lastUrl) happens BEFORE
+            // the navigation below, so checkUrlChange() sees a genuine URL
+            // change - see the "re-detection only on a real URL change" tests
+            // further down for why that ordering matters.
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
             const activeModule = new Module({ name: 'was-active', patterns: ['never-matches.example'] });
             activeModule.cleanup = jest.fn().mockResolvedValue(undefined);
             registry.activeModule = activeModule;
 
+            history.pushState({}, '', '/undetected-page');
             registry.checkUrlChange();
             await Promise.resolve();
 

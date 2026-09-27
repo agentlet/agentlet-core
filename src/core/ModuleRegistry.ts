@@ -84,6 +84,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     _urlMonitoringActive: boolean;
     _urlMonitoringIntervalId: ReturnType<typeof setInterval> | null;
     _popstateListener: (() => void) | null;
+    _hashchangeListener: (() => void) | null;
     _originalPushState: History['pushState'] | null;
     _originalReplaceState: History['replaceState'] | null;
     _pushStateWrapper: History['pushState'] | null;
@@ -122,6 +123,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         this._urlMonitoringActive = false;
         this._urlMonitoringIntervalId = null;
         this._popstateListener = null;
+        this._hashchangeListener = null;
         this._originalPushState = null;
         this._originalReplaceState = null;
         this._pushStateWrapper = null;
@@ -299,27 +301,55 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     }
 
     /**
-     * Check for URL changes and activate appropriate module
+     * Check for URL changes and activate the appropriate module.
+     *
+     * URL-based re-detection only runs when the URL actually changed, or
+     * when nothing is active yet (the initial/registration-time detection
+     * case, see `register()`). Without that guard, this method's own 1s
+     * poll (see `startUrlMonitoring()`) would re-run `findMatchingModule()`
+     * every tick regardless of navigation and immediately override a module
+     * activated explicitly via `activateModule()` - e.g. a "launcher"
+     * module letting a visitor pick a different module by hand - about a
+     * second later, even though the page never navigated.
+     *
+     * When the URL did change, if the module that is already active still
+     * matches the new URL, it is left running rather than re-running
+     * `findMatchingModule()` from scratch: `findMatchingModule()` returns
+     * the *first* registered module whose pattern matches, which is not
+     * necessarily the currently active one when several modules' patterns
+     * overlap (e.g. two modules both matching `'*'`) - re-deriving from
+     * scratch on every URL change would fight an explicit activation the
+     * same way the polling case above did.
      */
     checkUrlChange(): void {
         const currentUrl = window.location.href;
         const urlChanged = currentUrl !== this.lastUrl;
 
-        const matchingModule = this.findMatchingModule(currentUrl);
+        if (urlChanged || !this.activeModule) {
+            const activeStillMatches = Boolean(
+                this.activeModule &&
+                typeof this.activeModule.checkPattern === 'function' &&
+                this.activeModule.checkPattern(currentUrl)
+            );
 
-        if (matchingModule !== this.activeModule) {
-            const context: ModuleActivationContext = {
-                trigger: urlChanged ? 'urlChange' : 'moduleRegistration',
-                oldUrl: this.lastUrl,
-                newUrl: currentUrl
-            };
+            if (!activeStillMatches) {
+                const matchingModule = this.findMatchingModule(currentUrl);
 
-            if (matchingModule) {
-                this.activateModule(matchingModule, context);
-                this.emit('application:detected', { module: matchingModule.name, url: currentUrl });
-            } else {
-                this.deactivateModule(context);
-                this.emit('application:notDetected', { url: currentUrl });
+                if (matchingModule !== this.activeModule) {
+                    const context: ModuleActivationContext = {
+                        trigger: urlChanged ? 'urlChange' : 'moduleRegistration',
+                        oldUrl: this.lastUrl,
+                        newUrl: currentUrl
+                    };
+
+                    if (matchingModule) {
+                        this.activateModule(matchingModule, context);
+                        this.emit('application:detected', { module: matchingModule.name, url: currentUrl });
+                    } else {
+                        this.deactivateModule(context);
+                        this.emit('application:notDetected', { url: currentUrl });
+                    }
+                }
             }
         }
 
@@ -353,6 +383,18 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             }, 100);
         };
         window.addEventListener('popstate', this._popstateListener);
+
+        // Hash-only navigation (location.hash = ... / an in-page anchor
+        // click) fires neither popstate nor pushState/replaceState, so
+        // without this listener it would only be picked up by the 1s poll
+        // above. Same 100ms-delayed checkUrlChange() as popstate, for
+        // equally prompt detection of hash-based single-page navigation.
+        this._hashchangeListener = () => {
+            setTimeout(() => {
+                if (this._urlMonitoringActive) this.checkUrlChange();
+            }, 100);
+        };
+        window.addEventListener('hashchange', this._hashchangeListener);
 
         // Override pushState and replaceState
         const originalPushState = history.pushState;
@@ -399,6 +441,11 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         if (this._popstateListener) {
             window.removeEventListener('popstate', this._popstateListener);
             this._popstateListener = null;
+        }
+
+        if (this._hashchangeListener) {
+            window.removeEventListener('hashchange', this._hashchangeListener);
+            this._hashchangeListener = null;
         }
 
         if (this._originalPushState && history.pushState === this._pushStateWrapper) {
