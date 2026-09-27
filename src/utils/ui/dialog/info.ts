@@ -7,16 +7,26 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogInfoOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, ResolvedInfoConfig } from './types';
+import { dialogBackground, dialogHeaderBackground, dialogHeaderTextColor, dialogTextColor } from './themeVars';
 
-/** Applies `showInfo()`'s defaults to caller-supplied options. */
+/**
+ * Applies `showInfo()`'s defaults to caller-supplied options.
+ *
+ * `...options` is spread first (rather than last) so that an explicit
+ * `icon: ''`/`icon: null` (omit the icon) is resolved to `''` by the
+ * expression below instead of being carried through verbatim - a bare
+ * trailing spread would let a literal `null` leak into `ResolvedInfoConfig`
+ * despite its `icon: string` type. Every other field keeps the same
+ * "caller value wins, else this default" behaviour either way.
+ */
 export function resolveInfoConfig(options: DialogInfoOptions): ResolvedInfoConfig {
     return {
+        ...options,
         title: options.title || 'Information',
         message: options.message || '',
-        icon: options.icon || 'ℹ️',
+        icon: options.icon === undefined ? 'ℹ️' : (options.icon || ''),
         allowHtml: options.allowHtml || false,
-        buttons: options.buttons || [{ text: 'OK', value: 'ok', primary: true }],
-        ...options
+        buttons: options.buttons || [{ text: 'OK', value: 'ok', primary: true }]
     } as ResolvedInfoConfig;
 }
 
@@ -25,7 +35,7 @@ export function buildInfoDialog(theme: DialogTheme, config: ResolvedInfoConfig, 
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-info-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '8px'};
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         max-width: ${config.maxWidth || '500px'};
@@ -49,31 +59,33 @@ export function buildInfoDialog(theme: DialogTheme, config: ResolvedInfoConfig, 
         align-items: center;
         justify-content: center;
         gap: 10px;
-        background: ${theme.headerBackground || 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+        background: ${dialogHeaderBackground(theme)};
         flex-shrink: 0;
     `;
 
-    const icon = document.createElement('span');
-    icon.textContent = config.icon;
-    icon.style.cssText = 'font-size: 24px;';
+    if (config.icon) {
+        const icon = document.createElement('span');
+        icon.textContent = config.icon;
+        icon.style.cssText = 'font-size: 24px;';
+        header.appendChild(icon);
+    }
 
     const title = document.createElement('h3');
     title.textContent = config.title;
     title.style.cssText = `
         margin: 0;
-        color: ${theme.dialogHeaderTextColor || theme.headerTextColor || '#333333'};
+        color: ${dialogHeaderTextColor(theme)};
         font-size: 18px;
         font-weight: 600;
     `;
 
-    header.appendChild(icon);
     header.appendChild(title);
 
     const content = document.createElement('div');
     content.className = 'agentlet-info-content';
     content.style.cssText = `
         padding: 20px;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         line-height: 1.5;
         flex: 1;
         overflow-y: auto;

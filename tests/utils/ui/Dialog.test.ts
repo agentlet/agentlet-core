@@ -236,6 +236,21 @@ describe('Dialog', () => {
             expect(dialog.isActive).toBe(false);
         });
 
+        it('omits the icon span entirely when icon is an empty string or null, but keeps the default when icon is omitted', () => {
+            dialog.showInfo({ icon: '' }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-info-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showInfo({ icon: null }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-info-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showInfo({}, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-info-header span')?.textContent).toBe('ℹ️');
+        });
+
         it('renders message as HTML when allowHtml is true, as text (escaped) otherwise', () => {
             dialog.showInfo({ message: '<b>bold</b>', allowHtml: true }, jest.fn());
             expect(dialogEl(dialog).querySelector('.agentlet-info-content')?.innerHTML).toBe('<b>bold</b>');
@@ -494,8 +509,13 @@ describe('Dialog', () => {
             expect(dlg.querySelector('.agentlet-wait-buttons')).toBeNull();
         });
 
-        it('omits the icon span entirely when icon is empty', () => {
+        it('omits the icon span entirely when icon is empty or null', () => {
             dialog.showWait({ icon: '' }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-wait-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showWait({ icon: null }, jest.fn());
             expect(dialogEl(dialog).querySelector('.agentlet-wait-header span')).toBeNull();
         });
 
@@ -609,6 +629,21 @@ describe('Dialog', () => {
             expect(dialogEl(dialog).querySelector('.agentlet-command-message')).toBeNull();
         });
 
+        it('omits the icon span entirely when icon is an empty string or null, but keeps the default when icon is omitted', () => {
+            dialog.showCommandPrompt({ icon: '' }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-command-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showCommandPrompt({ icon: null }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-command-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showCommandPrompt({}, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-command-header span')?.textContent).toBe('⚡');
+        });
+
         it('commandPrompt() accepts the legacy (placeholder-string, callback) form', () => {
             const cb = jest.fn();
             dialog.commandPrompt('legacy placeholder', cb);
@@ -700,6 +735,21 @@ describe('Dialog', () => {
             const dlg2 = dialogEl(dialog);
             expect(dlg2.querySelector('.agentlet-progress-header button')).toBeNull();
             expect(dlg2.querySelector('.agentlet-progress-info')).toBeNull();
+        });
+
+        it('omits the icon span entirely when icon is an empty string or null, but keeps the default when icon is omitted', () => {
+            dialog.showProgress({ icon: '' });
+            expect(dialogEl(dialog).querySelector('.agentlet-progress-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showProgress({ icon: null });
+            expect(dialogEl(dialog).querySelector('.agentlet-progress-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showProgress({});
+            expect(dialogEl(dialog).querySelector('.agentlet-progress-header span')?.textContent).toBe('📊');
         });
 
         it('renders numbered steps with the right icon/color for done/current/pending', () => {
@@ -850,6 +900,21 @@ describe('Dialog', () => {
         it('omits the header close button when showHeaderCloseButton is false', () => {
             dialog.showFullscreen({ showHeaderCloseButton: false }, jest.fn());
             expect(dialogEl(dialog).querySelector('.agentlet-fullscreen-header button')).toBeNull();
+        });
+
+        it('omits the icon span entirely when icon is an empty string or null, but keeps the default when icon is omitted', () => {
+            dialog.showFullscreen({ icon: '' }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-fullscreen-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showFullscreen({ icon: null }, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-fullscreen-header span')).toBeNull();
+            dialog.hide();
+
+            dialog = makeDialog();
+            dialog.showFullscreen({}, jest.fn());
+            expect(dialogEl(dialog).querySelector('.agentlet-fullscreen-header span')?.textContent).toBe('🔍');
         });
 
         it('footer buttons resolve the callback with their configured value', () => {

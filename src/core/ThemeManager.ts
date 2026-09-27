@@ -6,6 +6,32 @@
 import { Z_INDEX } from '../utils/ui/ZIndex.js';
 import type { AgentletTheme, AgentletCoreConfig, ThemeManagerAPI } from '../types/public-api';
 
+/**
+ * Small contrast heuristic used only as a last-resort safeguard when a
+ * caller sets a header background without ever specifying a matching text
+ * colour (see `processThemeConfig()`). Only understands `#rgb`/`#rrggbb`
+ * hex colours, which covers every built-in/example theme; anything else
+ * (gradients, `rgba()`, named colours) falls back to the framework's
+ * pre-existing dark default so behaviour for those callers is unchanged.
+ */
+export function contrastingTextColor(backgroundColor: string): string {
+    const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(backgroundColor.trim());
+    if (!match) {
+        return '#333333';
+    }
+
+    const hex = match[1];
+    const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+
+    // Perceptual (not linear) luminance approximation - good enough for a
+    // black-or-white pick, not a WCAG contrast-ratio computation.
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#000000' : '#ffffff';
+}
+
 export class ThemeManager implements ThemeManagerAPI {
     /**
      * The full `AgentletCore` config object is passed in by reference
@@ -102,6 +128,38 @@ export class ThemeManager implements ThemeManagerAPI {
             ...defaultTheme,
             ...themeConfig
         };
+
+        // A dialog header's background and text colour must always come
+        // from the same pair: either both dialog-specific
+        // (dialogHeaderBackground/dialogHeaderTextColor) or both panel
+        // header values (headerBackground/headerTextColor) - see the
+        // Dialog builders under src/utils/ui/dialog/. Without this, a
+        // caller that customizes only the panel header (e.g.
+        // `{ headerBackground: '#0f3350', headerTextColor: '#ffffff' }`)
+        // would get dialog headers colored from the panel background but
+        // texted from the unrelated dialog-specific default (`#333333`),
+        // which can be unreadable.
+        const setsHeaderBackground = themeConfig.headerBackground !== undefined;
+        const setsHeaderTextColor = themeConfig.headerTextColor !== undefined;
+        const setsDialogHeaderBackground = themeConfig.dialogHeaderBackground !== undefined;
+        const setsDialogHeaderTextColor = themeConfig.dialogHeaderTextColor !== undefined;
+
+        if (!setsDialogHeaderBackground && setsHeaderBackground) {
+            mergedTheme.dialogHeaderBackground = mergedTheme.headerBackground;
+        }
+        if (!setsDialogHeaderTextColor && setsHeaderTextColor) {
+            mergedTheme.dialogHeaderTextColor = mergedTheme.headerTextColor;
+        } else if (
+            (setsDialogHeaderBackground || setsHeaderBackground) &&
+            !setsDialogHeaderTextColor &&
+            !setsHeaderTextColor
+        ) {
+            // A header background was customized (directly, or inherited
+            // from the panel above) but no matching text colour was ever
+            // given: derive a readable one instead of falling through to
+            // the fixed dark default.
+            mergedTheme.dialogHeaderTextColor = contrastingTextColor(mergedTheme.dialogHeaderBackground);
+        }
 
         // Update panel width based on configuration
         const minimumWidth = this.config?.minimumPanelWidth || 320;

@@ -6,16 +6,20 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogWaitOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, ResolvedWaitConfig } from './types';
+import { dialogBackground, dialogHeaderBackground, dialogHeaderTextColor, dialogTextColor } from './themeVars';
 
-/** Applies `showWait()`'s defaults to caller-supplied options. */
+/**
+ * Applies `showWait()`'s defaults to caller-supplied options. `...options`
+ * is spread first - see the equivalent comment on `resolveInfoConfig()`.
+ */
 export function resolveWaitConfig(options: DialogWaitOptions): ResolvedWaitConfig {
     return {
+        ...options,
         title: options.title || 'AI Processing',
         message: options.message || 'Please wait...',
-        icon: options.icon || '🤖',
+        icon: options.icon === undefined ? '🤖' : (options.icon || ''),
         showSpinner: options.showSpinner !== false,
-        allowCancel: options.allowCancel || false,
-        ...options
+        allowCancel: options.allowCancel || false
     } as ResolvedWaitConfig;
 }
 
@@ -29,7 +33,7 @@ export function buildWaitDialog(
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-wait-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '8px'};
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         max-width: 400px;
@@ -49,7 +53,7 @@ export function buildWaitDialog(
         align-items: center;
         justify-content: center;
         gap: 10px;
-        background: ${theme.headerBackground || 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+        background: ${dialogHeaderBackground(theme)};
     `;
 
     if (config.icon) {
@@ -66,7 +70,7 @@ export function buildWaitDialog(
     title.textContent = config.title;
     title.style.cssText = `
         margin: 0;
-        color: ${theme.dialogHeaderTextColor || theme.headerTextColor || '#333333'};
+        color: ${dialogHeaderTextColor(theme)};
         font-size: 18px;
         font-weight: 600;
     `;
@@ -97,7 +101,7 @@ export function buildWaitDialog(
     message.textContent = config.message;
     message.style.cssText = `
         margin: 0;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         line-height: 1.5;
     `;
 

@@ -6,6 +6,7 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogInputOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, InputDialogResult, ResolvedInputConfig } from './types';
+import { dialogBackground, dialogTextColor } from './themeVars';
 
 /** Applies `showInput()`'s defaults to caller-supplied options. */
 export function resolveInputConfig(options: DialogInputOptions): ResolvedInputConfig {
@@ -26,7 +27,7 @@ export function buildInputDialog(theme: DialogTheme, config: ResolvedInputConfig
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-input-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '8px'};
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         max-width: 500px;
@@ -47,7 +48,7 @@ export function buildInputDialog(theme: DialogTheme, config: ResolvedInputConfig
     title.textContent = config.title;
     title.style.cssText = `
         margin: 0;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         font-size: 18px;
         font-weight: 600;
     `;
@@ -63,7 +64,7 @@ export function buildInputDialog(theme: DialogTheme, config: ResolvedInputConfig
         message.textContent = config.message;
         message.style.cssText = `
             margin: 0 0 15px 0;
-            color: ${theme.textColor || '#333333'};
+            color: ${dialogTextColor(theme)};
             line-height: 1.5;
         `;
         content.appendChild(message);
