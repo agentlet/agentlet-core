@@ -29,11 +29,13 @@
             cancelable: false
         });
 
-        // Small delay to ensure the event listener is set up
-        setTimeout(() => {
-            window.dispatchEvent(event);
-            console.log('📦 Example registry data dispatched via agentletRegistryLoaded event');
-        }, 10);
+        // Dispatch synchronously. ModuleRegistry.loadRegistryScript() attaches
+        // its listener before this script is injected, so the listener is
+        // always in place by the time this (dynamically loaded) script runs -
+        // a delay here is unnecessary and, on a busy page, can push the
+        // dispatch past the loader's 10-second timeout.
+        window.dispatchEvent(event);
+        console.log('📦 Example registry data dispatched via agentletRegistryLoaded event');
 
     } catch (error) {
         console.error('📦 Failed to dispatch registry event:', error);
