@@ -215,13 +215,13 @@ describe('LibraryLoader characterization', () => {
             expect(windowGlobals().pdfjsLib?.GlobalWorkerOptions.verbosity).toBe(0);
         });
 
-        test('falls back to "./pdf.worker.min.js" when no pdfjs-worker URL is registered', () => {
+        test('falls back to "./pdf.worker.min.mjs" when no pdfjs-worker URL is registered', () => {
             windowGlobals().pdfjsLib = { GlobalWorkerOptions: { workerSrc: '' } };
             const loader = makeLoader();
 
             loader.setupLibraryGlobals('pdfjs');
 
-            expect(windowGlobals().pdfjsLib?.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.js');
+            expect(windowGlobals().pdfjsLib?.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
         });
 
         test('does not overwrite an already-configured workerSrc', () => {

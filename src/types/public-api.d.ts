@@ -1764,7 +1764,20 @@ export interface AgentletCoreConfig {
     env?: Record<string, string>;
     theme?: string | Partial<AgentletTheme>;
     skipRegistryModuleRegistration?: boolean;
-    /** Forwarded to `LibrarySetup`, which reads it while configuring PDF.js. */
+    /**
+     * URL of the `pdf.worker.min.mjs` file matching the bundled `pdfjs-dist`
+     * version, forwarded to `LibrarySetup`. Always applied when set,
+     * including in a normal bundled build (`pdfjs-dist` assigns
+     * `window.pdfjsLib` itself before this is read, so this is not gated on
+     * whether `window.pdfjsLib` looks "already set up"). Without it, the
+     * worker resolves to `'./pdf.worker.min.mjs'` relative to the *page's*
+     * URL, not to wherever the core script itself is served from - set this
+     * whenever the two differ. The npm package ships the matching worker at
+     * `dist/pdf.worker.min.mjs`; copy it next to wherever you serve the core
+     * bundle. There is no automatic third-party (CDN) fallback: if no worker
+     * is reachable, PDF conversion fails with an error naming this option and
+     * `configurePDFWorker()`.
+     */
     pdfWorkerUrl?: string;
     /** Consumers may pass additional keys; the constructor spreads the raw config object over its defaults. */
     [key: string]: unknown;

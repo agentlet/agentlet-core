@@ -121,14 +121,14 @@ describe('LibrarySetup characterization', () => {
             return { GlobalWorkerOptions: { workerSrc: '' } };
         }
 
-        test('assigns the module onto window.pdfjsLib and defaults the worker URL to "./pdf.worker.min.js"', () => {
+        test('assigns the module onto window.pdfjsLib and defaults the worker URL to "./pdf.worker.min.mjs"', () => {
             const setup = makeSetup();
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
 
             expect(windowGlobals().pdfjsLib).toBe(module);
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
             expect(module.GlobalWorkerOptions.verbosity).toBe(0);
         });
 
@@ -147,7 +147,7 @@ describe('LibrarySetup characterization', () => {
 
             setup.setupPDFJS(module);
 
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('https://example.com/static/pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('https://example.com/static/pdf.worker.min.mjs');
         });
 
         test('config.pdfWorkerUrl takes priority over config.registryUrl when both are set', () => {
@@ -168,19 +168,40 @@ describe('LibrarySetup characterization', () => {
 
             setup.setupPDFJS(module);
 
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
         });
 
-        test('does nothing at all when window.pdfjsLib is already set, even with a different config', () => {
+        test('still applies config.pdfWorkerUrl onto an already-set window.pdfjsLib, without replacing its object reference', () => {
+            // Regression test: in a bundled build, pdfjs-dist assigns
+            // `globalThis.pdfjsLib` itself as a side effect of evaluating its
+            // own module body, *before* `setupPDFJS()` ever runs - so
+            // `window.pdfjsLib` is always already set by this point in that
+            // build. The worker URL must still be configured in that case,
+            // or a configured `pdfWorkerUrl` is silently never applied and
+            // PDF conversion fails with pdf.js's own "No
+            // GlobalWorkerOptions.workerSrc specified".
             const existing = pdfjsModule();
-            existing.GlobalWorkerOptions.workerSrc = 'https://already.example.com/worker.js';
+            existing.GlobalWorkerOptions.workerSrc = '';
             windowGlobals().pdfjsLib = existing;
             const setup = makeSetup({ pdfWorkerUrl: 'https://new.example.com/worker.js' });
 
             setup.setupPDFJS(pdfjsModule());
 
+            // The already-set object reference is kept (not replaced)...
             expect(windowGlobals().pdfjsLib).toBe(existing);
-            expect(existing.GlobalWorkerOptions.workerSrc).toBe('https://already.example.com/worker.js');
+            // ...but the configured worker URL is still applied onto it.
+            expect(existing.GlobalWorkerOptions.workerSrc).toBe('https://new.example.com/worker.js');
+        });
+
+        test('applies the default worker URL onto an already-set window.pdfjsLib when no pdfWorkerUrl/registryUrl is configured', () => {
+            const existing = pdfjsModule();
+            existing.GlobalWorkerOptions.workerSrc = '';
+            windowGlobals().pdfjsLib = existing;
+            const setup = makeSetup();
+
+            setup.setupPDFJS(pdfjsModule());
+
+            expect(existing.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
         });
     });
 
