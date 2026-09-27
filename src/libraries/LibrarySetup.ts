@@ -209,9 +209,20 @@ export class LibrarySetup implements LibrarySetupAPI {
         }
 
         if (this.config.registryUrl) {
-            // e.g., https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.mjs
+            // Resolved against the page's URL (falling back to an absolute
+            // parse when there is no `window`, e.g. this module evaluated
+            // outside a DOM) so a *relative* registryUrl - e.g.
+            // '/cdn/v1/agentlets-registry.js', as agentlet.io configures -
+            // derives an absolute worker URL instead of `new URL()` throwing
+            // on it. A host that serves its registry next to the core script
+            // and the worker then needs no `pdfWorkerUrl` at all.
+            // e.g. (absolute) https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.mjs
+            // e.g. (relative, resolved against the page) /cdn/v1/agentlets-registry.js -> https://agentlet.io/cdn/v1/pdf.worker.min.mjs
             try {
-                const registryUrl = new URL(this.config.registryUrl);
+                const pageUrl = typeof window !== 'undefined' && window.location ? window.location.href : undefined;
+                const registryUrl = pageUrl
+                    ? new URL(this.config.registryUrl, pageUrl)
+                    : new URL(this.config.registryUrl);
                 registryUrl.pathname = registryUrl.pathname.replace(/[^/]+$/, 'pdf.worker.min.mjs');
                 return registryUrl.toString();
             } catch (error) {

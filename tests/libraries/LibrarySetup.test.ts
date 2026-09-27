@@ -141,13 +141,30 @@ describe('LibrarySetup characterization', () => {
             expect(module.GlobalWorkerOptions.workerSrc).toBe('https://cdn.example.com/pdf.worker.min.js');
         });
 
-        test('derives the worker URL from config.registryUrl by replacing the last path segment', () => {
+        test('derives the worker URL from an absolute config.registryUrl by replacing the last path segment', () => {
             const setup = makeSetup({ registryUrl: 'https://example.com/static/agentlets-registry.json' });
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
 
             expect(module.GlobalWorkerOptions.workerSrc).toBe('https://example.com/static/pdf.worker.min.mjs');
+        });
+
+        test('derives the worker URL from a relative config.registryUrl, resolved against the page (e.g. agentlet.io\'s own config)', () => {
+            // Regression test: `new URL(registryUrl)` with no base throws for
+            // a relative registryUrl, so this used to silently fall back to
+            // the page-relative default instead of deriving an absolute
+            // worker URL next to the registry - which is exactly what a host
+            // serving its registry (and the worker) next to the page, like
+            // agentlet.io's `registryUrl: '/cdn/v1/agentlets-registry.js'`,
+            // needs in order to skip setting `pdfWorkerUrl` explicitly.
+            const setup = makeSetup({ registryUrl: '/cdn/v1/agentlets-registry.js' });
+            const module = pdfjsModule();
+
+            setup.setupPDFJS(module);
+
+            // jsdom's default test document URL is http://localhost/.
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('http://localhost/cdn/v1/pdf.worker.min.mjs');
         });
 
         test('config.pdfWorkerUrl takes priority over config.registryUrl when both are set', () => {
@@ -162,8 +179,12 @@ describe('LibrarySetup characterization', () => {
             expect(module.GlobalWorkerOptions.workerSrc).toBe('https://explicit.example.com/worker.js');
         });
 
-        test('quirk: falls back to the default worker URL (not registryUrl itself) when registryUrl fails to parse as a URL', () => {
-            const setup = makeSetup({ registryUrl: 'not a valid url' });
+        test('quirk: falls back to the default worker URL (not registryUrl itself) when registryUrl still fails to parse even resolved against the page', () => {
+            // 'not a valid url' no longer triggers this path: resolved
+            // against the page it's a valid (if nonsensical) relative
+            // reference. Use a string that looks like an absolute URL
+            // attempt but isn't one, which still throws even with a base.
+            const setup = makeSetup({ registryUrl: 'http://' });
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
