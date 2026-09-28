@@ -131,6 +131,14 @@ agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `te
 - `tests/types/public-api.test-d.ts` (checked by `npm run typecheck`) is the conformance contract: it imports both `public-api.d.ts` and the real implementation classes and asserts they stay compatible in both directions. Keep it up to date whenever a public class's shape changes; that is what protects the hand-written declarations from drifting out of sync with the code, not code generation.
 - As a cheap guard rail, `npm run build` compiles a small standalone consumer file against the built `dist/agentlet-core.d.ts` (see `tools/verify-dist-types.mjs`) to catch a declarations file that fails to parse or load, without requiring a full generation pipeline.
 
+### Dependency maintenance
+
+- Almost every dependency is a normal npm registry package and gets its usual update tooling.
+- `xlsx` (SheetJS) is the one exception: SheetJS stopped publishing to the npm registry after 0.18.5, so `package.json` points `xlsx` at a tarball URL on the project's own CDN (`https://cdn.sheetjs.com/xlsx-<version>/xlsx-<version>.tgz`) instead of a registry version range. Automated dependency update tooling (Dependabot, Renovate, `npm outdated`, etc.) does not see new SheetJS releases through this pin, so upgrades have to be done by hand:
+  - Check the latest version at [sheetjs.com](https://sheetjs.com/) (or the CDN listing at `cdn.sheetjs.com`).
+  - Run `npm install --save https://cdn.sheetjs.com/xlsx-<version>/xlsx-<version>.tgz`, replacing `<version>` with the version you want.
+  - Review the SheetJS changelog for breaking changes, then run the full verification suite (`npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run verify:dist-types`, `npm run verify:node-import`, `npm run verify:tarball-import`) before committing.
+
 ### Module Development
 
 When creating new modules:

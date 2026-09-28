@@ -12,21 +12,12 @@ If you discover a security vulnerability in Agentlet Core, please report it by e
 
 ## Known Security Issues
 
-### Non-Critical Dependencies
+### Resolved
 
-The following dependencies have known security vulnerabilities that are accepted risks:
-
-#### xlsx (SheetJS) - High Severity
-- **CVE**: GHSA-4r6h-8v6p-xvw6 (Prototype Pollution)
-- **CVE**: GHSA-5pgg-2g8v-p4x9 (Regular Expression Denial of Service)
-- **Risk Assessment**: Low risk in our use case
-- **Justification**: 
-  - Used only for Excel export functionality in TableExtractor
-  - Not exposed to untrusted user input in typical usage
-  - Prototype pollution requires specific attack vectors unlikely in bookmarklet context
-  - ReDoS requires malicious Excel files, which users control
-- **Mitigation**: Excel export is optional functionality; users can disable if concerned
-- **Status**: Monitoring for patches; considering alternative libraries
+#### xlsx (SheetJS)
+- **CVE**: GHSA-4r6h-8v6p-xvw6 (Prototype Pollution) - fixed upstream in 0.19.3
+- **CVE**: GHSA-5pgg-2g8v-p4x9 (Regular Expression Denial of Service) - fixed upstream in 0.20.2
+- **Status**: Resolved. `xlsx` is upgraded to 0.20.3, which includes both fixes. The npm registry's last published release is 0.18.5, so 0.20.3 is installed from the SheetJS project's own CDN (cdn.sheetjs.com) rather than from npm.
 
 ## Security Measures
 
