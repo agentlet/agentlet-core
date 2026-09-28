@@ -984,6 +984,64 @@ describe('AgentletCore behaviour', () => {
             expect(emitSpy).toHaveBeenCalledWith('core:cleanup');
         });
 
+        test('leaves the page as it found it: no leftover window listeners, timers, or Storage patches', async () => {
+            // Snapshots what is patchable/leakable before init() and again
+            // after cleanup() - Storage methods, pending timers (via fake
+            // timers) and window listener counts by event type - and
+            // exercises the opt-in features (cookie/storage change
+            // listeners) that DO install something, so cleanup() has real
+            // patches and an interval to undo, not just the always-on
+            // module-registry URL polling.
+            jest.useFakeTimers();
+            try {
+                const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
+                const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
+                const timerCountBefore = jest.getTimerCount();
+
+                agentlet = new AgentletCore();
+                await agentlet.init();
+
+                // Exercise features that patch/poll only when actually used.
+                const cookieListener = jest.fn();
+                agentlet.cookieManager.addChangeListener(cookieListener);
+                const storageListener = jest.fn();
+                agentlet.storageManager.addChangeListener(storageListener);
+
+                // Sanity: confirm those two calls actually installed
+                // something, so restoring it below is a real assertion.
+                expect(jest.getTimerCount()).toBeGreaterThan(timerCountBefore);
+                window.localStorage.setItem('sanity-check-key', 'value');
+                expect(storageListener).toHaveBeenCalled();
+
+                const addedListenerTypes = addEventListenerSpy.mock.calls.map(call => call[0] as string);
+
+                await agentlet.cleanup();
+
+                // No timers left running (module registry's URL poll and
+                // the cookie poll started above are both stopped).
+                expect(jest.getTimerCount()).toBe(timerCountBefore);
+
+                // Every window listener type init() added has a matching
+                // removeEventListener() call of the same type.
+                const removedListenerTypes = removeEventListenerSpy.mock.calls.map(call => call[0] as string);
+                const addedCounts = new Map<string, number>();
+                addedListenerTypes.forEach(type => addedCounts.set(type, (addedCounts.get(type) || 0) + 1));
+                addedCounts.forEach((count, type) => {
+                    const removedCount = removedListenerTypes.filter(t => t === type).length;
+                    expect(removedCount).toBeGreaterThanOrEqual(count);
+                });
+
+                // Storage methods no longer notify the (removed) listener -
+                // the patch installed by storageManager.addChangeListener()
+                // above was undone.
+                storageListener.mockClear();
+                window.localStorage.setItem('after-cleanup-key', 'value');
+                expect(storageListener).not.toHaveBeenCalled();
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
         test('a second cleanup() call (already torn down) does not throw', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
