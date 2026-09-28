@@ -6,13 +6,17 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  checks:
+    name: checks
     runs-on: ubuntu-latest
-    # The Playwright e2e suite alone budgets up to 45 minutes on CI (see
-    # .github/WORKFLOWS.md), so give the whole job enough headroom above
-    # that for npm ci / jest / build / browser install.
-    timeout-minutes: 60
+    # npm ci / jest / lint / typecheck / build together run in well under a
+    # minute on a green run; this leaves generous headroom without hiding a
+    # hang.
+    timeout-minutes: 10
 
     steps:
     - name: Checkout code
@@ -23,10 +27,10 @@ jobs:
       with:
         node-version: 22.x
         cache: 'npm'
-        
+
     - name: Install dependencies
       run: npm ci
-      
+
     - name: Run Jest tests
       run: npm test
 
@@ -38,18 +42,44 @@ jobs:
 
     - name: Build project
       run: npm run build
-      
-    - name: Install Playwright browsers
-      run: npx playwright install --with-deps
-      
-    - name: Run Playwright tests
-      run: npm run test:examples
-      
+
+  e2e:
+    name: e2e (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    # One browser project is roughly a third of the full e2e suite. The
+    # config's own globalTimeout budgets 20 minutes per project (see
+    # .github/WORKFLOWS.md); this gives extra room above that for checkout,
+    # npm ci and the browser install.
+    timeout-minutes: 25
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@v7
+      with:
+        node-version: 22.x
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browser (${{ matrix.project }})
+      run: npx playwright install --with-deps ${{ matrix.project }}
+
+    - name: Run Playwright tests (${{ matrix.project }})
+      run: npm run test:examples -- --project=${{ matrix.project }}
+
     - name: Upload test artifacts on failure
       uses: actions/upload-artifact@v7
       if: failure()
       with:
-        name: test-artifacts
+        name: test-artifacts-${{ matrix.project }}
         path: |
           tests/examples/test-results/
         retention-days: 3
