@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- `xlsx` is upgraded to 0.20.3, fixing GHSA-4r6h-8v6p-xvw6 (prototype
+  pollution) and GHSA-5pgg-2g8v-p4x9 (regular expression denial of
+  service). The npm registry's last published `xlsx` release is 0.18.5, so
+  0.20.3 is now installed from the SheetJS project's own CDN
+  (cdn.sheetjs.com) instead of the npm registry. If your install goes
+  through a registry-only proxy, allow that host or `npm install` will fail
+  to fetch this dependency.
+
 ## [2.1.0] - 2026-09-28
 
 ### Added
