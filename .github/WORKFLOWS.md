@@ -148,6 +148,60 @@ E2E_PORT=3131 npm run test:examples
 CI always uses the default port, since each job runs in its own isolated
 environment.
 
+### Running a targeted e2e recheck in Docker
+
+`npm run test:examples` needs Playwright's own browser builds, downloaded by
+`npx playwright install`. Upstream Playwright periodically drops browser
+support for older host operating systems (for example macOS 13), so
+`playwright install` can start refusing to fetch a compatible browser on a
+machine that used to run the suite fine. When that happens, `npm run
+test:examples:docker` runs one or a few specs, in one browser, inside the
+official Playwright Docker image instead, which always ships a matching,
+working set of browsers for its own Playwright version:
+
+```bash
+npm run test:examples:docker -- tests/examples/specs/ui-dialogs.spec.js --project=chromium
+E2E_PORT=3131 npm run test:examples:docker -- tests/examples/specs/ui-dialogs.spec.js --project=chromium
+```
+
+This is a targeted recheck tool, not a substitute for a full local run of
+the suite. Running the full 537-test suite through it is slow and
+timing-sensitive: Docker Desktop's default macOS VM only gets 2 CPUs, well
+below what CI and a real host provide, and the resulting resource
+contention causes tests to time out that pass fine elsewhere. A full run
+through this script took 55 minutes and produced 517 passed, 17 failed, 3
+skipped, with every failure a timeout, mostly in webkit; the same suite
+passes cleanly and quickly in CI. CI (`ubuntu-latest`, a fresh
+`playwright install --with-deps` every run) is the reference result for the
+full suite, not a local Docker run. Use a draft PR to get a full CI run
+before merging.
+
+This is implemented by `tools/e2e-docker.sh`, which:
+- reads the exact `@playwright/test` version resolved in `package-lock.json`
+  and pulls the matching `mcr.microsoft.com/playwright:v<version>-noble`
+  image, so the container's Playwright client and browsers are always the
+  same version as the one CI and `npm run test:examples` use locally;
+- mounts the repository into the container and keeps the container's
+  `node_modules` in a separate named Docker volume (one per checkout path),
+  so Linux-only native binaries such as `esbuild`'s platform binaries never
+  collide with whatever is in the host's `node_modules`;
+- runs `npm ci` and the build inside the container (the suite's
+  `globalSetup` already runs `npm run build` before the tests, so no
+  separate build step is needed on the host or in the script);
+- checks for `python3` (the suite's `webServer` shells out to
+  `python3 -m http.server`) and installs it if a future or different image
+  tag doesn't ship it; the `-noble` tags used here already include it, so
+  this is normally a no-op;
+- runs as root inside the container (the image's default user, also needed
+  for the `python3` check above to be able to install anything), then
+  `chown`s `dist/` and `tests/examples/test-results/` back to the host user
+  afterwards so the checkout isn't left with root-owned files;
+- sets `PW_TEST_HTML_REPORT_OPEN=never`, so a run with failures never tries
+  to spawn Playwright's HTML report server. Without it, Playwright opens
+  that server (and blocks) whenever a run outside CI mode has failures;
+  inside a non-interactive container this just hangs the run indefinitely
+  after the tests themselves are done.
+
 ## Status Badges
 Add these to your README.md:
 ```markdown
