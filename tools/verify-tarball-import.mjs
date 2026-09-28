@@ -13,11 +13,11 @@
  * This is deliberately NOT wired into `npm run build` /
  * tools/build.js (unlike tools/verify-node-import.mjs, which checks the
  * same import/require/package.json shape directly against dist/ and runs
- * on every build): package.json's "dependencies" (hotkeys-js, html2canvas,
- * pdfjs-dist, xlsx - all inlined by the published dist/ bundles, which need
- * nothing at install time) still get installed into the throwaway project
- * by `npm install`, which is slow and needs network/registry access. Run it
- * explicitly instead:
+ * on every build): packing and installing the tarball is slow and needs
+ * network/registry access. The package has no runtime "dependencies" since
+ * 2.1.1 (hotkeys-js, html2canvas, pdfjs-dist and xlsx are inlined by the
+ * dist/ bundles and live in devDependencies), so this also proves the
+ * bundles need nothing installed next to them. Run it explicitly instead:
  *
  *   npm run verify:tarball-import
  *
