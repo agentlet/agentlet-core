@@ -22,7 +22,7 @@ If you discover a security vulnerability in Agentlet Core, please report it by e
 
 ## Security Measures
 
-- **Dependency Auditing**: dependency vulnerability scanning in CI is being added; it is not yet part of the pipeline today
+- **Dependency Auditing**: every pull request and push to `main` scans the dependencies bundled into the published build for known vulnerabilities, and blocks on critical or high findings that have a fix or are known to be exploited. The scan also runs nightly on `main` and on the latest release, and each release attaches an SBOM of the bundled dependencies. See `.github/WORKFLOWS.md`
 - **Content Security Policy**: Respects CSP headers in target applications
 - **Cross-Origin Security**: Implements proper CORS handling
 - **Input Validation**: Form filling includes value validation
