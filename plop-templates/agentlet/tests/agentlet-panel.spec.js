@@ -31,35 +31,31 @@ test.describe('Agentlet panel', () => {
   });
 
   test('opens module help when clicking on the help button', async ({ page}) => {
-    // Set up console message interception
-    const consoleMessages = [];
-    page.on('console', message => {
-      consoleMessages.push(message.text());
-    });
-
     await initializeAgentlet(page);
 
     // Use the correct help button selector - it's the "❓" button in actions
     const helpButton = page.locator('#agentlet-actions button').filter({ hasText: '❓' });
     await helpButton.waitFor({ timeout: 5000 });
-    
+
     // Click help button
     await helpButton.click();
 
     // Wait for help dialog to appear
-    await page.waitForSelector('.agentlet-dialog-overlay', { 
+    await page.waitForSelector('.agentlet-dialog-overlay', {
       timeout: 5000,
       state: 'visible'
     });
 
-    // Verify help function was called by checking console messages
-    const helpRequestedMessage = consoleMessages.find(msg => msg.includes('❓ Help requested'));
-    expect(helpRequestedMessage).toBeTruthy();
-
-    // Verify dialog exists and has content
+    // Verify the help action had a visible effect: the dialog exists and
+    // has content (not asserted via a console message - agentlet-core only
+    // logs this informationally when debugMode is enabled, which this
+    // scaffold does not turn on just to satisfy a test).
     const dialogExists = await page.isVisible('.agentlet-dialog-overlay');
     expect(dialogExists).toBe(true);
-    
+
+    const dialogContent = await page.textContent('.agentlet-dialog-overlay');
+    expect(dialogContent).toBeTruthy();
+
     // Close the dialog with Escape (more reliable)
     await page.keyboard.press('Escape');
 
