@@ -131,6 +131,18 @@ agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `te
 - `tests/types/public-api.test-d.ts` (checked by `npm run typecheck`) is the conformance contract: it imports both `public-api.d.ts` and the real implementation classes and asserts they stay compatible in both directions. Keep it up to date whenever a public class's shape changes; that is what protects the hand-written declarations from drifting out of sync with the code, not code generation.
 - As a cheap guard rail, `npm run build` compiles a small standalone consumer file against the built `dist/agentlet-core.d.ts` (see `tools/verify-dist-types.mjs`) to catch a declarations file that fails to parse or load, without requiring a full generation pipeline.
 
+### Dependency vulnerability scanning
+
+`npm run build && npm run security:sbom && npm run security:scan` checks
+what agentlet-core's published bundles actually ship against known
+vulnerabilities and blocks on high/critical findings with a fix or KEV
+listing (see `.github/WORKFLOWS.md`'s "Dependency vulnerability scanning"
+section for the full design). Requires `osv-scanner` on `PATH`
+(`brew install osv-scanner`). Do not add a bundled runtime dependency
+without checking this passes, and never widen
+`security/vulnerability-exceptions.json` without a real owner and a
+realistic expiry date.
+
 ### Module Development
 
 When creating new modules:

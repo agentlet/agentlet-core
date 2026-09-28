@@ -32,6 +32,18 @@ This directory contains the GitHub Actions workflows and configuration for Agent
   - npm audit for vulnerabilities
   - Dependency review for PRs
 
+### 🔒 `security.yml` - Dependency vulnerability scan
+**Trigger**: PRs to main, pushes to main, nightly schedule (03:17 UTC), manual dispatch
+- Builds the project, then generates a CycloneDX SBOM of what the published
+  bundles actually ship (`npm run security:sbom`)
+- Scans that SBOM with `osv-scanner` and gates the job on the result
+  (`npm run security:scan`) - see "Dependency vulnerability scanning" below
+  for the full design and how to run it locally
+- Uploads results to the GitHub Security tab (SARIF) and as build artifacts
+- On the nightly run only, also rescans the SBOM attached to the latest
+  published GitHub release, and opens/updates a `security`-labeled issue if
+  that rescan fails
+
 ### 📦 `dependabot.yml` - Dependency Updates
 - **npm dependencies**: Weekly updates on Mondays
 - **GitHub Actions**: Weekly updates on Mondays  
@@ -275,3 +287,153 @@ release, confirm the `NPM_TOKEN` secret described above has been added,
 and that `package.json`'s `version` matches the tag about to be pushed.
 The workflow verifies that last point itself and fails early if it does
 not hold, but checking before tagging avoids a pointless failed run.
+
+## Dependency vulnerability scanning (`security.yml`)
+
+### Why not just run a scanner on `dist/`
+
+`agentlet-core`'s published bundles (`dist/agentlet-core.js` and friends)
+are built with esbuild, which inlines every bundled dependency into a
+single file. A filesystem/container SBOM scanner finds zero components in
+`dist/` or in the `npm pack` tarball: there is nothing that looks like a
+`node_modules` tree to scan. `package-lock.json` lists every installed
+package, but most of them (the build toolchain, test runners, linters) are
+never shipped, so scanning only the lockfile would both miss nothing that
+matters and constantly flag things that can't affect a consumer.
+
+The gate therefore scans two different things:
+
+- **`bundle` scope (blocking)** - a CycloneDX SBOM built from the esbuild
+  metafiles (`tools/build.js` passes `metafile: true` for every
+  npm-published target plus the bookmarklet and extension builds, and
+  writes each one to `reports/security/meta/*.meta.json`, which is
+  gitignored and never published). `tools/security/sbom.mjs` reads those
+  metafiles, maps every `node_modules` input back to the nearest owning
+  package's `package.json` (handling scoped and nested `node_modules`
+  correctly, so two different versions of the same package pulled in via
+  different dependents are not conflated), and writes
+  `reports/security/sbom-bundle.cdx.json`. This is what a consumer of
+  `agentlet-core` actually runs.
+- **`lockfile` scope (reporting only)** - `package-lock.json` scanned
+  directly, full install tree. Useful for visibility (a compromised build
+  tool is still a supply-chain risk) but never blocks a PR, since nothing
+  in it necessarily ships.
+
+### Running the scan locally
+
+```bash
+brew install osv-scanner
+npm run build           # writes reports/security/meta/*.meta.json
+npm run security:sbom   # reads them, writes reports/security/sbom-bundle.cdx.json
+npm run security:scan   # runs osv-scanner against both scopes and gates
+```
+
+`npm run security:scan` accepts `--min-severity=<low|medium|high|critical>`
+(default `high`), `--skip-lockfile`, and `--offline` (skips the EPSS/KEV
+network calls, marking both as unknown) - see the header comment in
+`tools/security/scan.mjs` for the full flag list. Reports land in
+`reports/security/` (gitignored): `results.sarif`, `scan-report.json`, and
+`scan-summary.md`.
+
+### Gate rule
+
+A finding in the **bundle** scope fails the gate when:
+
+- it is `high` or `critical` severity **and** a fixed version is known
+  (from OSV's `fixed` event or, for GHSA-sourced advisories without one,
+  the affected-range hint), **or**
+- it is listed in CISA's Known Exploited Vulnerabilities (KEV) catalog,
+  regardless of severity,
+
+unless a valid, unexpired entry in `security/vulnerability-exceptions.json`
+covers it. An **expired** exception is treated as if it did not exist for
+matching purposes, and additionally fails the gate on its own (to force
+either renewing or removing it) - see
+`tools/security/lib/gate-core.js`'s `evaluateGate`. The lockfile scope
+never blocks, regardless of severity.
+
+Severity comes from OSV's `database_specific.severity` (GHSA advisories)
+when present, falling back to a base-score calculation from the CVSS v3.x
+vector when it is not.
+
+### Vulnerability exceptions (`security/vulnerability-exceptions.json`)
+
+```json
+{
+  "exceptions": [
+    {
+      "id": "GHSA-xxxx-xxxx-xxxx",
+      "package": "some-package",
+      "reason": "Why this is accepted temporarily",
+      "expires": "2026-12-31",
+      "owner": "github-handle"
+    }
+  ]
+}
+```
+
+- `id` - a GHSA or CVE id. Matches a finding on **any** of its OSV
+  aliases, so either id works.
+- `package` - optional; when present, the exception only applies to that
+  package name.
+- `reason` - required, human-readable.
+- `expires` - required, `YYYY-MM-DD`. Once past, the entry stops matching
+  and instead fails the gate itself until it is renewed (a new `expires`
+  date) or removed.
+- `owner` - optional, for review follow-up.
+
+Review policy: an exception is a deliberate, time-boxed decision to accept
+a known risk (e.g. no upstream fix exists yet and the affected code path is
+unreachable from a bundled build). It should name a real owner and a
+realistic expiry, not a far-future date used to silence the gate
+permanently. An unused exception (nothing matched it on a given run)
+produces a warning in the scan output so stale entries get noticed and
+removed.
+
+### EPSS and KEV enrichment
+
+Findings are enriched, best-effort, with:
+
+- **EPSS** (Exploit Prediction Scoring System) from
+  `https://api.first.org/data/v1/epss`, keyed by CVE id (GHSA ids are
+  mapped to CVE ids via OSV's `aliases`).
+- **CISA KEV** (Known Exploited Vulnerabilities) from
+  `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`.
+
+Both calls are wrapped so a network failure (offline dev machine, an
+outage, a firewalled CI runner) prints a warning and marks that data as
+unknown rather than failing the scan; the gate rule does not require EPSS,
+and a `kev: false` from a failed KEV fetch means a real KEV finding could
+be under-flagged for that run rather than the scan crashing.
+
+### Installing `osv-scanner` in CI
+
+`security.yml` downloads the official release binary
+(`osv-scanner_linux_amd64`) for a pinned version
+(`env.OSV_SCANNER_VERSION`) directly from `google/osv-scanner`'s GitHub
+releases, and verifies it against that same release's `SHA256SUMS` file
+before running it - no `curl | sh`. Bump `OSV_SCANNER_VERSION` deliberately
+and re-check `osv-scanner scan source --help` for flag changes when doing
+so, since `tools/security/scan.mjs` depends on the exact CLI surface of the
+pinned version.
+
+### Nightly rescan of the latest published release
+
+New CVEs are disclosed after a version has already shipped, so a clean scan
+at release time does not stay true forever. The nightly run of
+`security.yml` downloads the `sbom-bundle.cdx.json` asset from the most
+recent GitHub release (attached by `release.yml`, see below) and rescans it
+independently of the current `main` branch. If that rescan fails the gate,
+the workflow opens (or comments on, if one is already open) a single
+issue labeled `security` rather than opening a duplicate every night.
+
+### SBOM attached to GitHub releases (`release.yml`)
+
+After `npm publish` succeeds, `release.yml` creates (or updates) the GitHub
+release for the pushed tag and attaches the same `sbom-bundle.cdx.json`
+generated for that build. SBOM generation happens *before* `npm publish` so
+a failure there stops before anything is published; the upload to the
+release happens *after* publish so a failure there (network blip, the
+release already exists in an unexpected way) never leaves npm in a
+half-published state - it can be retried on its own with
+`gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
