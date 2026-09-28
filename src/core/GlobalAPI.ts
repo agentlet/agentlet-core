@@ -14,7 +14,8 @@ import PageHighlighter from '../utils/ui/PageHighlighter.js';
 import { Z_INDEX, createZIndexConstants, detectMaxZIndex, suggestAgentletZIndexBase, analyzeZIndexDistribution } from '../utils/ui/ZIndex.js';
 import type {
     AgentletAPI,
-    AgentletUtils
+    AgentletUtils,
+    ThemeChangedEventPayload
 } from '../types/public-api';
 
 export class GlobalAPI {
@@ -56,9 +57,16 @@ export class GlobalAPI {
         // since its constructor can throw) - it exists purely so this object
         // satisfies `AgentletUtils` without a cast; nothing reads
         // `utils.PageHighlighter` in between.
+        // Held as the concrete `Dialog` class (rather than inlined into
+        // `utils` below) purely so the `theme:changed` listener a few lines
+        // down can still reach its `theme` field, which - unlike the rest
+        // of this class's surface - isn't part of the public `DialogAPI`
+        // type `AgentletUtils.Dialog` is declared as.
+        const dialogInstance = new Dialog({ theme: this.core.themeManager.getTheme() });
+
         const utils: AgentletUtils = {
             ElementSelector: new ElementSelector(),
-            Dialog: new Dialog({ theme: this.core.themeManager.getTheme() }),
+            Dialog: dialogInstance,
             MessageBubble: new MessageBubble(),
             ScreenCapture: new ScreenCapture(this.core.librarySetup),
             ScriptInjector: new ScriptInjector(),
@@ -75,6 +83,18 @@ export class GlobalAPI {
             PageHighlighter: null
         };
         window.agentlet.utils = utils;
+
+        // Keep the shared Dialog instance's theme in sync with setTheme().
+        // Dialog.theme is a plain snapshot captured above at construction
+        // time, not a live reference into ThemeManager, so without this a
+        // dialog *opened after* a theme change would still build from the
+        // old theme (only an already-open dialog's header/background/text
+        // restyle live, via the `--agentlet-dialog-*`/`--agentlet-*` CSS
+        // custom properties - see src/utils/ui/dialog/themeVars.ts).
+        this.core.eventBus.on('theme:changed', (data) => {
+            const { theme } = data as ThemeChangedEventPayload;
+            dialogInstance.theme = theme;
+        });
 
         // Point Dialog/MessageBubble at the UI root immediately if it already
         // exists (defensive: setupGlobalAccess() normally runs from the

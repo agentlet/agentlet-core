@@ -7,13 +7,19 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogProgressOptions } from '../../../types/public-api';
 import type { DialogTheme, ProgressDialogHandlers, ResolvedProgressConfig } from './types';
+import { dialogBackground, dialogTextColor } from './themeVars';
 
-/** Applies `showProgress()`'s defaults to caller-supplied options. */
+/**
+ * Applies `showProgress()`'s defaults to caller-supplied options.
+ * `...options` is spread first - see the equivalent comment on
+ * `resolveInfoConfig()`.
+ */
 export function resolveProgressConfig(options: DialogProgressOptions): ResolvedProgressConfig {
     return {
+        ...options,
         title: options.title || 'Processing',
         message: options.message || 'Processing...',
-        icon: options.icon || '📊',
+        icon: options.icon === undefined ? '📊' : (options.icon || ''),
         showPercentage: options.showPercentage !== false,
         showETA: options.showETA !== false,
         showSteps: options.showSteps !== false,
@@ -23,8 +29,7 @@ export function resolveProgressConfig(options: DialogProgressOptions): ResolvedP
         initialProgress: options.initialProgress || 0,
         totalSteps: options.totalSteps || 1,
         stepLabels: options.stepLabels || [],
-        currentStep: options.currentStep || 0,
-        ...options
+        currentStep: options.currentStep || 0
     } as ResolvedProgressConfig;
 }
 
@@ -39,7 +44,7 @@ export function buildProgressDialog(theme: DialogTheme, config: ResolvedProgress
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-progress-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '8px'};
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         max-width: 500px;
@@ -59,21 +64,23 @@ export function buildProgressDialog(theme: DialogTheme, config: ResolvedProgress
         gap: 10px;
     `;
 
-    const icon = document.createElement('span');
-    icon.textContent = config.icon;
-    icon.style.cssText = 'font-size: 24px;';
+    if (config.icon) {
+        const icon = document.createElement('span');
+        icon.textContent = config.icon;
+        icon.style.cssText = 'font-size: 24px;';
+        header.appendChild(icon);
+    }
 
     const title = document.createElement('h3');
     title.textContent = config.title;
     title.style.cssText = `
         margin: 0;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         font-size: 18px;
         font-weight: 600;
         flex: 1;
     `;
 
-    header.appendChild(icon);
     header.appendChild(title);
 
     if (config.closable) {
@@ -122,7 +129,7 @@ export function buildProgressDialog(theme: DialogTheme, config: ResolvedProgress
     message.textContent = config.message;
     message.style.cssText = `
         margin: 0 0 20px 0;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         line-height: 1.5;
     `;
 

@@ -110,11 +110,15 @@ window.agentlet.ui.regenerateStyles();</code></pre>
          * `window.agentlet.ui.regenerateStyles()` (see the "Theme
          * switching API examples" section below).
          *
-         * Known limitation: dialogs (Info, Fullscreen, ...) are painted
-         * with inline styles built once from a theme snapshot captured at
-         * init time (see src/utils/ui/Dialog.js), not from these custom
-         * properties, so they keep the theme that was active when Agentlet
-         * Core was initialized. Likewise, `.panel-action-btn`/
+         * Dialogs (Info, Fullscreen, ...) are also painted with inline
+         * styles built from a theme snapshot (see src/utils/ui/Dialog.ts),
+         * but their header/background/main text colours reference these
+         * same `--agentlet-dialog-*`/`--agentlet-*` custom properties (see
+         * src/utils/ui/dialog/themeVars.ts), so an already-open dialog
+         * restyles live too, and a dialog opened after `setTheme()` always
+         * reflects the current theme (AgentletCore keeps the shared
+         * `Dialog` instance's snapshot in sync via the `theme:changed`
+         * event - see GlobalAPI.ts). Likewise, `.panel-action-btn`/
          * `.panel-demo-btn` used to be page-defined classes applied to
          * buttons rendered inside the panel; since that panel content now
          * lives in the shadow root too, this example instead uses the

@@ -6,20 +6,25 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogButton, DialogFullscreenOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, ResolvedFullscreenConfig } from './types';
+import { dialogBackground, dialogHeaderBackground, dialogHeaderTextColor, dialogTextColor } from './themeVars';
 
-/** Applies `showFullscreen()`'s defaults to caller-supplied options. */
+/**
+ * Applies `showFullscreen()`'s defaults to caller-supplied options.
+ * `...options` is spread first - see the equivalent comment on
+ * `resolveInfoConfig()`.
+ */
 export function resolveFullscreenConfig(options: DialogFullscreenOptions): ResolvedFullscreenConfig {
     return {
+        ...options,
         title: options.title || 'Fullscreen Dialog',
         message: options.message || '',
-        icon: options.icon || '🔍',
+        icon: options.icon === undefined ? '🔍' : (options.icon || ''),
         allowHtml: options.allowHtml || false,
         buttons: options.buttons || [{ text: 'Close', value: 'close', primary: true }] as DialogButton[],
         customContent: options.customContent || null,
         scrollable: options.scrollable !== false,
         closeOnOverlay: options.closeOnOverlay !== false,
-        showHeaderCloseButton: options.showHeaderCloseButton !== false,
-        ...options
+        showHeaderCloseButton: options.showHeaderCloseButton !== false
     } as ResolvedFullscreenConfig;
 }
 
@@ -28,7 +33,7 @@ export function buildFullscreenDialog(theme: DialogTheme, config: ResolvedFullsc
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-fullscreen-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '12px'};
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         width: 90%;
@@ -51,25 +56,27 @@ export function buildFullscreenDialog(theme: DialogTheme, config: ResolvedFullsc
         align-items: center;
         gap: 15px;
         flex-shrink: 0;
-        background: ${theme.headerBackground || 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+        background: ${dialogHeaderBackground(theme)};
         border-radius: ${theme.borderRadius || '12px'} ${theme.borderRadius || '12px'} 0 0;
     `;
 
-    const icon = document.createElement('span');
-    icon.textContent = config.icon;
-    icon.style.cssText = 'font-size: 32px;';
+    if (config.icon) {
+        const icon = document.createElement('span');
+        icon.textContent = config.icon;
+        icon.style.cssText = 'font-size: 32px;';
+        header.appendChild(icon);
+    }
 
     const title = document.createElement('h2');
     title.textContent = config.title;
     title.style.cssText = `
         margin: ${theme.dialogHeaderTextMargin || '0'};
-        color: ${theme.dialogHeaderTextColor || theme.headerTextColor || '#333333'};
+        color: ${dialogHeaderTextColor(theme)};
         font-size: 24px;
         font-weight: 700;
         flex: 1;
     `;
 
-    header.appendChild(icon);
     header.appendChild(title);
 
     if (config.showHeaderCloseButton) {
@@ -113,7 +120,7 @@ export function buildFullscreenDialog(theme: DialogTheme, config: ResolvedFullsc
     content.className = 'agentlet-fullscreen-content';
     content.style.cssText = `
         padding: 30px;
-        color: ${theme.textColor || '#333333'};
+        color: ${dialogTextColor(theme)};
         line-height: 1.6;
         font-size: 16px;
         flex: 1;

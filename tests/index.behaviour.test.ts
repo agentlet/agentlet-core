@@ -428,6 +428,27 @@ describe('AgentletCore behaviour', () => {
             expect(observed).not.toBeNull();
             expect(observed!.theme.primaryColor).toBe('#ff00ff');
         });
+
+        test('a dialog opened after setTheme() uses the new theme, not the one captured when AgentletCore started', async () => {
+            // Regression test for the shared window.agentlet.utils.Dialog
+            // instance: its `theme` field is a snapshot taken once by
+            // GlobalAPI.setupGlobalAccess(), not a live reference into
+            // ThemeManager, so without GlobalAPI subscribing to
+            // `theme:changed` (see src/core/GlobalAPI.ts) a dialog built
+            // *after* setTheme() would still render with the old colours.
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            agentlet.setTheme({ headerBackground: '#0f3350', headerTextColor: '#ffffff' });
+
+            window.agentlet.utils.Dialog.showInfo({ title: 'Hi', message: 'there' }, jest.fn());
+            const header = agentlet.ui.query('.agentlet-info-header h3');
+            expect(header).not.toBeNull();
+            // dialogHeaderTextColor was resolved from the pairing fix in
+            // ThemeManager - if Dialog.theme were still the pre-setTheme
+            // snapshot, this would be the framework default ('#333333').
+            expect((header as HTMLElement).style.color).toContain('#ffffff');
+        });
     });
 
     describe('onModuleChange()', () => {

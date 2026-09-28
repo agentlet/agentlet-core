@@ -51,6 +51,37 @@ describe('ThemeManager.updateTheme() + ui.regenerateStyles()', () => {
     expect(document.querySelectorAll('#agentlet-core-theme').length).toBe(1);
   });
 
+  test('setTheme() updates the panel content area background and text colour, not only the header', async () => {
+    // Regression coverage for a site report ("after a light to dark switch
+    // the content area stayed dark") that the coordinator could not
+    // reproduce: `.agentlet-content` (see StyleInjector.generateComponentStyles())
+    // reads its background from `--agentlet-content-background`, and text
+    // colour inherits from `--agentlet-text-color` set on `:host` (see
+    // generateHostResetStyles()) - both of which setTheme()'s
+    // regenerateStyles() call already re-injects. This test pins that down
+    // so a future regression here is caught even though the underlying
+    // mechanism (CSS custom properties, not re-rendered content) can't be
+    // fully exercised in jsdom - see the Playwright coverage for the actual
+    // computed-style assertion in a real browser.
+    const agentlet = new AgentletCore();
+    await agentlet.init();
+
+    const uiStyle = agentlet.ui.query('#agentlet-core-styles');
+    expect(uiStyle.textContent).toContain('.agentlet-content');
+    expect(uiStyle.textContent).toMatch(/\.agentlet-content\s*{[^}]*background:\s*var\(--agentlet-content-background\)/);
+
+    agentlet.setTheme({ contentBackground: '#111111', textColor: '#eeeeee' });
+
+    const themeStyle = document.getElementById('agentlet-core-theme');
+    expect(themeStyle.textContent).toContain('--agentlet-content-background: #111111');
+    expect(themeStyle.textContent).toContain('--agentlet-text-color: #eeeeee');
+
+    // Still the same rule referencing the (now-updated) custom property -
+    // regenerateStyles() didn't drop or hardcode it along the way.
+    const uiStyleAfter = agentlet.ui.query('#agentlet-core-styles');
+    expect(uiStyleAfter.textContent).toMatch(/\.agentlet-content\s*{[^}]*background:\s*var\(--agentlet-content-background\)/);
+  });
+
   test('the regenerated UI stylesheet still reaches the shadow root (fallback path), via the ui.root/query() helpers', async () => {
     const agentlet = new AgentletCore();
     await agentlet.init();

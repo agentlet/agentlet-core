@@ -45,7 +45,8 @@ export interface DialogButton {
 export interface DialogInfoOptions {
     title?: string;
     message?: string;
-    icon?: string;
+    /** Defaults to an information icon. Pass `''` or `null` to omit the icon entirely. */
+    icon?: string | null;
     /** Render `message` as HTML instead of plain text. */
     allowHtml?: boolean;
     /** Defaults to a single "OK" button. */
@@ -70,10 +71,11 @@ export interface DialogInputOptions {
 export interface DialogWaitOptions {
     title?: string;
     message?: string;
-    icon?: string;
+    /** Defaults to a robot icon. Pass `''` or `null` to omit the icon entirely. */
+    icon?: string | null;
     showSpinner?: boolean;
     allowCancel?: boolean;
-    /** Only read by `showAIProcessing()`: set false to omit the icon entirely (overridden by an empty `icon`). */
+    /** Only read by `showAIProcessing()`: set false to omit the icon entirely (overridden by a non-empty `icon`). */
     showIcon?: boolean;
 }
 
@@ -86,7 +88,8 @@ export interface DialogProgressCallbacks {
 export interface DialogProgressOptions extends DialogProgressCallbacks {
     title?: string;
     message?: string;
-    icon?: string;
+    /** Defaults to a chart icon. Pass `''` or `null` to omit the icon entirely. */
+    icon?: string | null;
     showPercentage?: boolean;
     showETA?: boolean;
     showSteps?: boolean;
@@ -107,7 +110,8 @@ export interface DialogProgressOptions extends DialogProgressCallbacks {
 export interface DialogFullscreenOptions {
     title?: string;
     message?: string;
-    icon?: string;
+    /** Defaults to a magnifying-glass icon. Pass `''` or `null` to omit the icon entirely. */
+    icon?: string | null;
     allowHtml?: boolean;
     /** Defaults to a single "Close" button. */
     buttons?: DialogButton[];
@@ -120,7 +124,8 @@ export interface DialogFullscreenOptions {
 export interface DialogCommandOptions {
     title?: string;
     message?: string;
-    icon?: string;
+    /** Defaults to a lightning-bolt icon (hidden along with the rest of the header when `showHeader` is false). Pass `''` or `null` to omit the icon while keeping the header. */
+    icon?: string | null;
     placeholder?: string;
     defaultValue?: string;
     inputType?: 'text' | 'textarea' | string;
@@ -1553,6 +1558,17 @@ export interface AgentletTheme {
     dialogBorderRadius: string;
     dialogBoxShadow: string;
     dialogHeaderBackground: string;
+    /**
+     * `ThemeManager.processThemeConfig()` derives this automatically (by
+     * luminance, black or white) when a caller sets a header background
+     * - `headerBackground` or `dialogHeaderBackground` - without ever
+     * setting a matching text colour anywhere. That safeguard only
+     * understands hex colours (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) and
+     * functional `rgb()`/`rgba()` notation; a background given as a CSS
+     * custom property, a gradient, `hsl()`/`oklch()`/etc, or a named
+     * colour falls back to the framework's fixed dark default instead
+     * (see `contrastingTextColor()` in `ThemeManager.ts`).
+     */
     dialogHeaderTextColor: string;
     dialogHeaderTextMargin: string;
     dialogContentBackground: string;

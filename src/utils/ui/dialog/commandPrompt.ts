@@ -6,17 +6,20 @@
 import { Z_INDEX } from '../ZIndex.js';
 import type { DialogCommandOptions } from '../../../types/public-api';
 import type { DialogTheme, HideFn, InputDialogResult, ResolvedCommandConfig } from './types';
+import { dialogBackground, dialogHeaderBackground, dialogHeaderTextColor, dialogTextColor } from './themeVars';
 
 /**
  * Applies `showCommandPrompt()`'s defaults to caller-supplied options.
  * The legacy bare-string call form is resolved by the caller first, so
- * this only ever sees an options object.
+ * this only ever sees an options object. `...options` is spread first -
+ * see the equivalent comment on `resolveInfoConfig()`.
  */
 export function resolveCommandConfig(options: DialogCommandOptions): ResolvedCommandConfig {
     return {
+        ...options,
         title: options.title || 'Command Prompt',
         message: options.message || '',
-        icon: options.icon || '⚡',
+        icon: options.icon === undefined ? '⚡' : (options.icon || ''),
         placeholder: options.placeholder || 'Enter command...',
         defaultValue: options.defaultValue || '',
         inputType: options.inputType || 'text',
@@ -24,8 +27,7 @@ export function resolveCommandConfig(options: DialogCommandOptions): ResolvedCom
         showHeader: options.showHeader !== false,
         showMessage: options.showMessage !== false,
         allowHtml: options.allowHtml || false,
-        closeOnOverlay: options.closeOnOverlay !== false,
-        ...options
+        closeOnOverlay: options.closeOnOverlay !== false
     } as ResolvedCommandConfig;
 }
 
@@ -34,7 +36,7 @@ export function buildCommandPromptDialog(theme: DialogTheme, config: ResolvedCom
     const dialog = document.createElement('div');
     dialog.className = 'agentlet-command-dialog';
     dialog.style.cssText = `
-        background: ${theme.backgroundColor || '#ffffff'};
+        background: ${dialogBackground(theme)};
         border-radius: ${theme.borderRadius || '12px'};
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         max-width: 800px;
@@ -57,25 +59,27 @@ export function buildCommandPromptDialog(theme: DialogTheme, config: ResolvedCom
             align-items: center;
             justify-content: center;
             gap: 15px;
-            background: ${theme.headerBackground || 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+            background: ${dialogHeaderBackground(theme)};
             border-radius: ${theme.borderRadius || '12px'} ${theme.borderRadius || '12px'} 0 0;
             flex-shrink: 0;
         `;
 
-        const icon = document.createElement('span');
-        icon.textContent = config.icon;
-        icon.style.cssText = 'font-size: 32px;';
+        if (config.icon) {
+            const icon = document.createElement('span');
+            icon.textContent = config.icon;
+            icon.style.cssText = 'font-size: 32px;';
+            header.appendChild(icon);
+        }
 
         const title = document.createElement('h2');
         title.textContent = config.title;
         title.style.cssText = `
             margin: 0;
-            color: ${theme.dialogHeaderTextColor || theme.headerTextColor || '#333333'};
+            color: ${dialogHeaderTextColor(theme)};
             font-size: 24px;
             font-weight: 700;
         `;
 
-        header.appendChild(icon);
         header.appendChild(title);
         dialog.appendChild(header);
     }
@@ -95,7 +99,7 @@ export function buildCommandPromptDialog(theme: DialogTheme, config: ResolvedCom
         const message = document.createElement('div');
         message.className = 'agentlet-command-message';
         message.style.cssText = `
-            color: ${theme.textColor || '#333333'};
+            color: ${dialogTextColor(theme)};
             font-size: 18px;
             line-height: 1.5;
             text-align: center;
