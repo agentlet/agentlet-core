@@ -13,12 +13,14 @@ jobs:
     timeout-minutes: 20
 
     # npm publish --provenance needs to mint an OIDC token to attest where
-    # the package was built (id-token: write), and needs to check out the
-    # repository to build and publish it (contents: read). Without
-    # id-token: write, `npm publish --provenance` fails outright.
+    # the package was built (id-token: write). contents: write is needed to
+    # create/attach to the GitHub release for this tag (see "Attach SBOM to
+    # the GitHub release" below) - the nightly job in security.yml reads
+    # that asset back to rescan already-published versions against newly
+    # disclosed CVEs.
     permissions:
       id-token: write
-      contents: read
+      contents: write
 
     steps:
     - name: Checkout code
@@ -56,7 +58,30 @@ jobs:
     - name: Build project
       run: npm run build
 
+    - name: Generate shipped-inventory SBOM
+      # Generated before publish so a failure here stops before anything is
+      # published - see "Attach SBOM to the GitHub release" for why the
+      # upload itself happens after publish instead.
+      run: npm run security:sbom
+
     - name: Publish to npm
       run: npm publish --provenance --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    - name: Attach SBOM to the GitHub release
+      # Runs after the npm publish succeeds: if creating/uploading to the
+      # GitHub release fails, the package is already published (the
+      # important, hard-to-undo step) and this step can simply be re-run
+      # (gh release upload --clobber) without re-publishing to npm.
+      # security.yml's nightly job downloads this asset to rescan the
+      # published version against newly disclosed CVEs.
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+          gh release upload "${GITHUB_REF_NAME}" reports/security/sbom-bundle.cdx.json --repo "${GITHUB_REPOSITORY}" --clobber
+        else
+          gh release create "${GITHUB_REF_NAME}" reports/security/sbom-bundle.cdx.json --repo "${GITHUB_REPOSITORY}" --generate-notes
+        fi

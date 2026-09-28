@@ -1,0 +1,156 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  schedule:
+    # Nightly rescan: new CVEs/EPSS/KEV data can make an unchanged bundle
+    # (including an already-published release, see the "nightly-release"
+    # job) newly non-compliant even without a code change.
+    - cron: '17 3 * * *'
+  workflow_dispatch: {}
+
+env:
+  # Pinned osv-scanner release (see "Install osv-scanner" below for the
+  # checksum verification). Bump deliberately, alongside a re-check of the
+  # CLI flags this workflow and tools/security/scan.mjs rely on.
+  OSV_SCANNER_VERSION: '2.6.0'
+
+jobs:
+  scan:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install osv-scanner
+        # Official release binary, pinned version, checksum-verified
+        # against the release's own SHA256SUMS file - no curl|sh.
+        run: |
+          set -euo pipefail
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          curl -sSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
+          grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          osv-scanner --version
+
+      - name: Build project
+        run: npm run build
+
+      - name: Generate shipped-inventory SBOM
+        run: npm run security:sbom
+
+      - name: Run vulnerability scan and gate
+        id: scan
+        run: npm run security:scan
+        continue-on-error: true
+
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/security/results.sarif
+          category: dependency-vulnerabilities
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: security-scan-reports
+          path: |
+            reports/security/sbom-bundle.cdx.json
+            reports/security/scan-report.json
+            reports/security/scan-summary.md
+            reports/security/results.sarif
+          retention-days: 30
+
+      - name: Fail the job if the gate failed
+        if: steps.scan.outcome == 'failure'
+        run: |
+          echo "Dependency vulnerability gate failed - see the job summary and the uploaded reports." >&2
+          exit 1
+
+  nightly-release-scan:
+    name: Rescan latest published release
+    # Only meaningful on the nightly schedule (or a manual dispatch meant to
+    # reproduce it): re-checks a version that already shipped against
+    # vulnerabilities disclosed since it was published. A PR or a push to
+    # main is already covered by the `scan` job above.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install osv-scanner
+        run: |
+          set -euo pipefail
+          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          curl -sSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
+          grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
+          chmod +x osv-scanner
+          sudo mv osv-scanner /usr/local/bin/osv-scanner
+
+      - name: Fetch latest release's SBOM asset, if published
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/security
+          latest_tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -z "${latest_tag}" ]; then
+            echo "No published release found; skipping." >&2
+            echo "has_sbom=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh release download "${latest_tag}" --repo "${GITHUB_REPOSITORY}" --pattern 'sbom-bundle.cdx.json' --dir reports/security --clobber 2>/dev/null; then
+            echo "tag=${latest_tag}" >> "$GITHUB_OUTPUT"
+            echo "has_sbom=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Latest release ${latest_tag} has no sbom-bundle.cdx.json asset yet; skipping." >&2
+            echo "has_sbom=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan the published release's SBOM
+        if: steps.fetch.outputs.has_sbom == 'true'
+        id: release_scan
+        run: node tools/security/scan.mjs --bundle-sbom=reports/security/sbom-bundle.cdx.json --skip-lockfile
+        continue-on-error: true
+
+      - name: Open or update a tracking issue on failure
+        if: steps.fetch.outputs.has_sbom == 'true' && steps.release_scan.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Nightly scan: published release ${{ steps.fetch.outputs.tag }} has a blocking vulnerability"
+          body_file="reports/security/scan-summary.md"
+          gh label create security --color b60205 --description "Security related issues" --repo "${GITHUB_REPOSITORY}" 2>/dev/null || true
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" --label security --state open --search "in:title \"Nightly scan: published release\"" --json number --jq '.[0].number' || true)"
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --repo "${GITHUB_REPOSITORY}" --body-file "${body_file}"
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --label security --body-file "${body_file}"
+          fi
