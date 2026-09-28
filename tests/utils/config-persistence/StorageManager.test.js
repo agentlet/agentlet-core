@@ -114,6 +114,86 @@ describe('StorageManager', () => {
     });
   });
 
+  describe('Lazy patching of native Storage methods', () => {
+    // Regression coverage: StorageManager used to patch localStorage's and
+    // sessionStorage's setItem/removeItem/clear unconditionally in its
+    // constructor, rewriting how the HOST PAGE's own (unrelated) storage
+    // calls behave even when nothing ever calls addChangeListener(). The
+    // patch is now installed lazily, per storage type, only while at least
+    // one listener is registered for it.
+    test('does not patch either storage type until addChangeListener() is called', () => {
+      expect(storageManager.originalMethods.size).toBe(0);
+    });
+
+    test('addChangeListener() patches only the requested storage type', () => {
+      storageManager.addChangeListener(jest.fn(), 'localStorage');
+
+      expect(storageManager.originalMethods.has('localStorage_setItem')).toBe(true);
+      expect(storageManager.originalMethods.has('sessionStorage_setItem')).toBe(false);
+    });
+
+    test('addChangeListener(cb, "both") patches both storage types', () => {
+      storageManager.addChangeListener(jest.fn(), 'both');
+
+      expect(storageManager.originalMethods.has('localStorage_setItem')).toBe(true);
+      expect(storageManager.originalMethods.has('sessionStorage_setItem')).toBe(true);
+    });
+
+    test('restores the native method once the last listener for a type is removed', () => {
+      const originalSetItem = localStorage.setItem;
+      const listener = jest.fn();
+
+      storageManager.addChangeListener(listener, 'localStorage');
+      expect(localStorage.setItem).not.toBe(originalSetItem);
+
+      storageManager.removeChangeListener(listener, 'localStorage');
+
+      // Restoring re-binds the saved original (see ensurePatched()), so the
+      // function reference itself differs from the pre-patch one even once
+      // restored - assert on behavior instead: the bookkeeping is gone and
+      // the wrapper that used to call the (now-removed) listener is too.
+      expect(storageManager.originalMethods.has('localStorage_setItem')).toBe(false);
+      localStorage.setItem('after_restore', 'value');
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test('a second listener keeps the patch installed after the first is removed', () => {
+      const originalSetItem = localStorage.setItem;
+      const listener1 = jest.fn();
+      const listener2 = jest.fn();
+
+      storageManager.addChangeListener(listener1, 'localStorage');
+      storageManager.addChangeListener(listener2, 'localStorage');
+      storageManager.removeChangeListener(listener1, 'localStorage');
+
+      expect(localStorage.setItem).not.toBe(originalSetItem);
+
+      localStorage.setItem('still_watched', 'value');
+      expect(listener2).toHaveBeenCalled();
+    });
+
+    test('cleanup() restores any storage type still patched', () => {
+      const listener = jest.fn();
+      storageManager.addChangeListener(listener, 'localStorage');
+
+      storageManager.cleanup();
+
+      expect(storageManager.originalMethods.size).toBe(0);
+      localStorage.setItem('after_cleanup', 'value');
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test('cleanup() removes the cross-tab "storage" event listener', () => {
+      const removeSpy = jest.spyOn(window, 'removeEventListener');
+
+      storageManager.cleanup();
+
+      expect(removeSpy).toHaveBeenCalledWith('storage', expect.any(Function));
+      expect(storageManager.boundStorageEventListener).toBeNull();
+      removeSpy.mockRestore();
+    });
+  });
+
   describe('Error Handling', () => {
     test('should handle invalid storage type', () => {
       expect(() => {

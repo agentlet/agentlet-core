@@ -8,6 +8,7 @@ import type {
     StorageType,
     BoundStorageAPI
 } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /** A single storage change-listener callback, matching {@link StorageManagerAPI}. */
 type StorageChangeListener = (
@@ -31,11 +32,14 @@ export default class StorageManager implements StorageManagerAPI {
     listeners: Map<StorageType, Set<StorageChangeListener>>;
     storageSnapshot: Map<StorageType, Map<string, string>>;
     originalMethods: Map<string, StorageOriginalMethod>;
+    /** Bound reference to the `storage` event listener, so `cleanup()` can remove exactly it. */
+    boundStorageEventListener: ((event: StorageEvent) => void) | null;
 
     constructor() {
         this.listeners = new Map(); // Map of storage type to Set of listeners
         this.storageSnapshot = new Map(); // Map of storage type to Map of key-value pairs
         this.originalMethods = new Map();
+        this.boundStorageEventListener = null;
 
         // Initialize listeners and snapshots for both storage types
         this.listeners.set('localStorage', new Set());
@@ -47,13 +51,22 @@ export default class StorageManager implements StorageManagerAPI {
         this.updateSnapshot('localStorage');
         this.updateSnapshot('sessionStorage');
 
-        // Override storage methods for same-tab change detection
-        this.overrideStorageMethods();
-
-        // Listen for storage events (changes from other tabs/windows)
+        // Listen for storage events (changes from other tabs/windows). This
+        // is a plain `addEventListener()`, not a monkey-patch: it has no
+        // effect at all on the host page's own reads/writes, so - unlike
+        // `overrideStorageMethods()` below - it is safe to always install.
         this.setupStorageEventListener();
 
-        console.log('StorageManager initialized');
+        // Native Storage methods (`setItem`/`removeItem`/`clear`) are NOT
+        // patched here anymore. Patching them globally rewrites how the
+        // *host page's own code* behaves (see the module doc comment at the
+        // top of this file) even when nothing ever calls
+        // `addChangeListener()` - most agentlet-core embeds never do.
+        // `addChangeListener()`/`removeChangeListener()` below install and
+        // remove the patch lazily instead, per storage type, only while at
+        // least one listener is registered for that type; `cleanup()`
+        // restores anything still patched.
+        logger.log('StorageManager initialized');
     }
 
     /**
@@ -108,7 +121,7 @@ export default class StorageManager implements StorageManagerAPI {
             this.updateSnapshot(storageType);
             this.notifyChange(storageType, key, stringValue, oldValue);
 
-            console.log(`${storageType} set: ${key} = ${this.maskSensitive(key, stringValue)}`);
+            logger.log(`${storageType} set: ${key} = ${this.maskSensitive(key, stringValue)}`);
         } catch (error) {
             console.error(`Failed to set ${storageType} item:`, error);
             throw new Error(`Failed to set ${storageType} item: ${(error as Error).message}`);
@@ -139,7 +152,7 @@ export default class StorageManager implements StorageManagerAPI {
                 this.updateSnapshot(storageType);
                 this.notifyChange(storageType, key, null, oldValue);
 
-                console.log(`${storageType} removed: ${key}`);
+                logger.log(`${storageType} removed: ${key}`);
                 return true;
             }
 
@@ -186,7 +199,7 @@ export default class StorageManager implements StorageManagerAPI {
             this.updateSnapshot(storageType);
             this.notifyChange(storageType, '*', null, null);
 
-            console.log(`${storageType} cleared: ${count} items`);
+            logger.log(`${storageType} cleared: ${count} items`);
             return count;
         } catch (error) {
             console.error(`Failed to clear ${storageType}:`, error);
@@ -300,7 +313,11 @@ export default class StorageManager implements StorageManagerAPI {
     }
 
     /**
-     * Add a change listener
+     * Add a change listener. Lazily patches `localStorage`/`sessionStorage`'s
+     * `setItem`/`removeItem`/`clear` for the affected type(s) the first time
+     * a listener is registered for that type - same-tab writes can only be
+     * observed by intercepting them, but that side effect on the host page
+     * only exists while a caller has actually opted into it here.
      * @param callback - Callback function (storageType, key, newValue, oldValue) => void
      * @param storageType - 'localStorage', 'sessionStorage', or 'both'
      */
@@ -310,18 +327,23 @@ export default class StorageManager implements StorageManagerAPI {
         }
 
         if (storageType === 'both') {
+            this.ensurePatched('localStorage');
+            this.ensurePatched('sessionStorage');
             this.listeners.get('localStorage')!.add(callback);
             this.listeners.get('sessionStorage')!.add(callback);
         } else {
             this.validateStorageType(storageType);
+            this.ensurePatched(storageType);
             this.listeners.get(storageType)!.add(callback);
         }
 
-        console.log(`Storage change listener added for ${storageType}`);
+        logger.log(`Storage change listener added for ${storageType}`);
     }
 
     /**
-     * Remove a change listener
+     * Remove a change listener. Once the last listener for a storage type is
+     * removed, that type's native methods are restored (see
+     * `maybeUnpatch()`) - mirroring `addChangeListener()`'s lazy install.
      * @param callback - Callback function to remove
      * @param storageType - 'localStorage', 'sessionStorage', or 'both'
      */
@@ -331,72 +353,108 @@ export default class StorageManager implements StorageManagerAPI {
         if (storageType === 'both') {
             removed = this.listeners.get('localStorage')!.delete(callback) || removed;
             removed = this.listeners.get('sessionStorage')!.delete(callback) || removed;
+            this.maybeUnpatch('localStorage');
+            this.maybeUnpatch('sessionStorage');
         } else {
             this.validateStorageType(storageType);
             removed = this.listeners.get(storageType)!.delete(callback);
+            this.maybeUnpatch(storageType);
         }
 
         if (removed) {
-            console.log(`Storage change listener removed for ${storageType}`);
+            logger.log(`Storage change listener removed for ${storageType}`);
         }
 
         return removed;
     }
 
     /**
-     * Override storage methods for same-tab change detection
+     * Patches one storage type's `setItem`/`removeItem`/`clear` for same-tab
+     * change detection, if not already patched. Called lazily by
+     * `addChangeListener()` rather than unconditionally from the
+     * constructor - see the constructor's comment.
      * @private
      */
-    overrideStorageMethods(): void {
-        const storageTypes: StorageType[] = ['localStorage', 'sessionStorage'];
+    ensurePatched(storageType: StorageType): void {
+        if (this.originalMethods.has(`${storageType}_setItem`)) {
+            return; // Already patched for this type.
+        }
 
-        storageTypes.forEach(storageType => {
-            const storage = this.getStorage(storageType);
+        const storage = this.getStorage(storageType);
+        if (!storage) return;
 
-            if (!storage) return;
+        // Store original methods
+        this.originalMethods.set(`${storageType}_setItem`, storage.setItem.bind(storage));
+        this.originalMethods.set(`${storageType}_removeItem`, storage.removeItem.bind(storage));
+        this.originalMethods.set(`${storageType}_clear`, storage.clear.bind(storage));
 
-            // Store original methods
-            this.originalMethods.set(`${storageType}_setItem`, storage.setItem.bind(storage));
-            this.originalMethods.set(`${storageType}_removeItem`, storage.removeItem.bind(storage));
-            this.originalMethods.set(`${storageType}_clear`, storage.clear.bind(storage));
+        // Override setItem
+        storage.setItem = (key: string, value: string): void => {
+            const oldValue = storage.getItem(key);
+            // Retrieved by the key it was stored under above, so this is really a Storage['setItem'].
+            (this.originalMethods.get(`${storageType}_setItem`) as Storage['setItem'])(key, value);
+            this.handleStorageChange(storageType, key, value, oldValue);
+        };
 
-            // Override setItem
-            storage.setItem = (key: string, value: string): void => {
-                const oldValue = storage.getItem(key);
-                // Retrieved by the key it was stored under above, so this is really a Storage['setItem'].
-                (this.originalMethods.get(`${storageType}_setItem`) as Storage['setItem'])(key, value);
-                this.handleStorageChange(storageType, key, value, oldValue);
-            };
+        // Override removeItem
+        storage.removeItem = (key: string): void => {
+            const oldValue = storage.getItem(key);
+            (this.originalMethods.get(`${storageType}_removeItem`) as Storage['removeItem'])(key);
+            this.handleStorageChange(storageType, key, null, oldValue);
+        };
 
-            // Override removeItem
-            storage.removeItem = (key: string): void => {
-                const oldValue = storage.getItem(key);
-                (this.originalMethods.get(`${storageType}_removeItem`) as Storage['removeItem'])(key);
-                this.handleStorageChange(storageType, key, null, oldValue);
-            };
+        // Override clear
+        storage.clear = (): void => {
+            (this.originalMethods.get(`${storageType}_clear`) as Storage['clear'])();
+            this.handleStorageChange(storageType, '*', null, null);
+        };
 
-            // Override clear
-            storage.clear = (): void => {
-                (this.originalMethods.get(`${storageType}_clear`) as Storage['clear'])();
-                this.handleStorageChange(storageType, '*', null, null);
-            };
-        });
-
-        console.log('Storage methods overridden for change detection');
+        logger.log(`Storage methods overridden for change detection (${storageType})`);
     }
 
     /**
-     * Set up storage event listener for cross-tab changes
+     * Restores one storage type's native `setItem`/`removeItem`/`clear` once
+     * nothing is listening for its changes any more. No-op if that type
+     * isn't currently patched, or still has listeners.
+     * @private
+     */
+    maybeUnpatch(storageType: StorageType): void {
+        if (this.listeners.get(storageType)!.size > 0) {
+            return; // Still in use.
+        }
+        if (!this.originalMethods.has(`${storageType}_setItem`)) {
+            return; // Not patched.
+        }
+
+        const storage = this.getStorage(storageType);
+        if (storage) {
+            storage.setItem = this.originalMethods.get(`${storageType}_setItem`) as Storage['setItem'];
+            storage.removeItem = this.originalMethods.get(`${storageType}_removeItem`) as Storage['removeItem'];
+            storage.clear = this.originalMethods.get(`${storageType}_clear`) as Storage['clear'];
+        }
+
+        this.originalMethods.delete(`${storageType}_setItem`);
+        this.originalMethods.delete(`${storageType}_removeItem`);
+        this.originalMethods.delete(`${storageType}_clear`);
+
+        logger.log(`Storage methods restored, no more listeners (${storageType})`);
+    }
+
+    /**
+     * Set up storage event listener for cross-tab changes. A plain
+     * `addEventListener()`, not a monkey-patch (see the constructor's
+     * comment) - always installed, and removed again in `cleanup()`.
      * @private
      */
     setupStorageEventListener(): void {
-        window.addEventListener('storage', (event: StorageEvent) => {
+        this.boundStorageEventListener = (event: StorageEvent): void => {
             // Storage events only fire for changes from other tabs/windows
             const storageType: StorageType = event.storageArea === localStorage ? 'localStorage' : 'sessionStorage';
             this.handleStorageChange(storageType, event.key, event.newValue, event.oldValue);
-        });
+        };
+        window.addEventListener('storage', this.boundStorageEventListener);
 
-        console.log('Storage event listener set up for cross-tab change detection');
+        logger.log('Storage event listener set up for cross-tab change detection');
     }
 
     /**
@@ -613,7 +671,10 @@ export default class StorageManager implements StorageManagerAPI {
     }
 
     /**
-     * Cleanup method
+     * Cleanup method. Leaves the page exactly as `overrideStorageMethods()`/
+     * `setupStorageEventListener()` found it: restores any storage type still
+     * patched (regardless of how it got that way) and removes the `storage`
+     * event listener added in the constructor.
      */
     cleanup(): void {
         // Restore original storage methods
@@ -628,10 +689,17 @@ export default class StorageManager implements StorageManagerAPI {
                 storage.clear = this.originalMethods.get(`${storageType}_clear`) as Storage['clear'];
             }
         });
+        this.originalMethods.clear();
+
+        // Remove the cross-tab `storage` event listener
+        if (this.boundStorageEventListener) {
+            window.removeEventListener('storage', this.boundStorageEventListener);
+            this.boundStorageEventListener = null;
+        }
 
         // Clear listeners
         this.listeners.forEach(listenerSet => listenerSet.clear());
 
-        console.log('StorageManager cleaned up');
+        logger.log('StorageManager cleaned up');
     }
 }

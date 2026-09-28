@@ -28,7 +28,8 @@
 import AgentletCore from '../src/index.js';
 import Module from '../src/core/Module.js';
 import * as entry from '../src/index.js';
-import type { AgentletModule } from '../src/types/public-api';
+import type { AgentletModule, EnvAPI } from '../src/types/public-api';
+import { logger, setDebugMode, isDebugMode } from '../src/utils/system/Logger.js';
 
 describe('AgentletCore behaviour', () => {
     let agentlet: AgentletCore | undefined;
@@ -215,6 +216,36 @@ describe('AgentletCore behaviour', () => {
             agentlet = new AgentletCore();
 
             expect(window.agentlet).toBe(agentlet);
+        });
+    });
+
+    describe('debugMode wiring to the shared logger', () => {
+        afterEach(() => {
+            setDebugMode(false);
+        });
+
+        test('constructing with debugMode: false (the default) gates informational logging off', () => {
+            agentlet = new AgentletCore();
+
+            expect(isDebugMode()).toBe(false);
+            logger.log('should not print');
+            expect(console.log).not.toHaveBeenCalledWith('should not print');
+        });
+
+        test('constructing with debugMode: true lets informational logging through', () => {
+            agentlet = new AgentletCore({ debugMode: true });
+
+            expect(isDebugMode()).toBe(true);
+            logger.log('should print');
+            expect(console.log).toHaveBeenCalledWith('should print');
+        });
+
+        test('a later instance with debugMode: false turns logging back off (module-level flag)', () => {
+            agentlet = new AgentletCore({ debugMode: true });
+            expect(isDebugMode()).toBe(true);
+
+            agentlet = new AgentletCore({ debugMode: false });
+            expect(isDebugMode()).toBe(false);
         });
     });
 
@@ -737,42 +768,137 @@ describe('AgentletCore behaviour', () => {
     });
 
     describe('localStorage monitoring', () => {
+        // Regression coverage: the core used to patch native localStorage
+        // methods globally and call handleLocalStorageChange() (which
+        // unmounts/remounts the active module) for ANY key, including ones
+        // the host page owns (e.g. a theme toggle writing its own
+        // localStorage key). Monitoring is now scoped to the env manager's
+        // own localStorage key (default: 'agentlet') and uses no
+        // monkey-patching - see setupLocalStorageListener()'s doc comment.
+
         test('setupLocalStorageListener() logs that monitoring is enabled', () => {
-            agentlet = new AgentletCore();
+            agentlet = new AgentletCore({ debugMode: true });
 
             agentlet.setupLocalStorageListener();
 
             expect(console.log).toHaveBeenCalledWith('📦 localStorage monitoring enabled');
         });
 
-        test('a same-tab localStorage.setItem() triggers handleLocalStorageChange() with the new value', async () => {
+        test('getMonitoredLocalStorageKey() returns the default env manager\'s storage key', () => {
             agentlet = new AgentletCore();
-            await agentlet.init();
-            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
-            window.localStorage.setItem('some-key', 'some-value');
-
-            expect(handleSpy).toHaveBeenCalledWith('some-key', 'some-value');
+            expect(agentlet.getMonitoredLocalStorageKey()).toBe('agentlet');
         });
 
-        test('a same-tab localStorage.removeItem() triggers handleLocalStorageChange() with a null new value', async () => {
-            agentlet = new AgentletCore();
-            await agentlet.init();
-            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+        test('getMonitoredLocalStorageKey() returns null for a custom EnvAPI without a storageKey', () => {
+            const custom: EnvAPI = {
+                name: () => 'custom',
+                get: () => undefined,
+                set: () => {},
+                has: () => false,
+                remove: () => false,
+                clear: () => {},
+                getAll: () => ({}),
+                setMultiple: () => {},
+                loadFromObject: () => {},
+                addChangeListener: () => {},
+                removeChangeListener: () => {},
+                createProxy(): EnvAPI { return custom; }
+            };
+            agentlet = new AgentletCore({ envManager: custom });
 
-            window.localStorage.removeItem('some-key');
-
-            expect(handleSpy).toHaveBeenCalledWith('some-key', null);
+            expect(agentlet.getMonitoredLocalStorageKey()).toBeNull();
         });
 
-        test('a same-tab localStorage.clear() triggers handleLocalStorageChange() with null/null', async () => {
+        test('getMonitoredLocalStorageKey() returns null when envManager is disabled', () => {
+            agentlet = new AgentletCore();
+            agentlet.envManager = null;
+
+            expect(agentlet.getMonitoredLocalStorageKey()).toBeNull();
+        });
+
+        test('does not patch native localStorage methods (no monkey-patching)', async () => {
+            const originalSetItem = window.localStorage.setItem;
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            expect(window.localStorage.setItem).toBe(originalSetItem);
+        });
+
+        test('the host page writing an unrelated localStorage key does not call handleLocalStorageChange()', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
             const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
-            window.localStorage.clear();
+            window.localStorage.setItem('starlight-theme', 'dark');
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'starlight-theme',
+                newValue: 'dark'
+            }));
 
-            expect(handleSpy).toHaveBeenCalledWith(null, null);
+            expect(handleSpy).not.toHaveBeenCalled();
+        });
+
+        test('agentlet.env.X = value calls handleLocalStorageChange() with the env variable\'s own key/value', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            agentlet.envManager?.set('MY_VAR', 'hello');
+
+            expect(handleSpy).toHaveBeenCalledWith('MY_VAR', 'hello');
+        });
+
+        test('agentlet.env.remove()/clear() call handleLocalStorageChange() too', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            agentlet.envManager?.set('MY_VAR', 'hello');
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            agentlet.envManager?.remove('MY_VAR');
+            expect(handleSpy).toHaveBeenCalledWith('MY_VAR', null);
+
+            agentlet.envManager?.clear();
+            expect(handleSpy).toHaveBeenCalledWith('*', null);
+        });
+
+        test('a cross-tab "storage" event for the env manager\'s own key calls handleLocalStorageChange()', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'agentlet',
+                newValue: '{"MY_VAR":"hello"}'
+            }));
+
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', '{"MY_VAR":"hello"}');
+        });
+
+        test('a cross-tab "storage" event for an unrelated key does not call handleLocalStorageChange()', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'starlight-theme',
+                newValue: 'dark'
+            }));
+
+            expect(handleSpy).not.toHaveBeenCalled();
+        });
+
+        test('cleanup() removes the storage listener and unsubscribes from the env manager', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const envManager = agentlet.envManager;
+            const removeChangeListenerSpy = jest.spyOn(envManager!, 'removeChangeListener');
+
+            await agentlet.cleanup();
+
+            expect(agentlet.boundStorageEventListener).toBeNull();
+            expect(agentlet.boundEnvChangeListener).toBeNull();
+            expect(removeChangeListenerSpy).toHaveBeenCalledTimes(1);
         });
 
         test('handleLocalStorageChange() emits localStorage:changed and refreshes the display/content', async () => {

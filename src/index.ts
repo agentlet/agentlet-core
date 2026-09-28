@@ -71,6 +71,7 @@ import type {
     ThemeManagerAPI,
     UIAPI
 } from './types/public-api';
+import { logger, setDebugMode } from './utils/system/Logger.js';
 
 /**
  * `_beforeMount()`/`_afterUnmount()` are internal `Module` lifecycle hooks
@@ -183,6 +184,19 @@ class AgentletCore {
     performanceMetrics: { initTime: number; moduleLoadTime: number; uiRenderTime: number };
     /** Only set while the environment-variables dialog is open. */
     currentEnvVarsDialog?: { close: () => void } | null;
+    /**
+     * Bound reference to the cross-tab `storage` event listener installed by
+     * `setupLocalStorageListener()`, so `cleanup()` can remove exactly it.
+     * Only set when there is a localStorage key to monitor - see
+     * `getMonitoredLocalStorageKey()`.
+     */
+    boundStorageEventListener: ((event: StorageEvent) => void) | null;
+    /**
+     * Bound reference to the env-manager change listener installed by
+     * `setupLocalStorageListener()`, so `cleanup()` can remove exactly it via
+     * `this.envManager.removeChangeListener()`.
+     */
+    boundEnvChangeListener: ((key: string, newValue: string | undefined, oldValue: string | undefined) => void) | null;
 
     constructor(config: AgentletCoreConfig = {}) {
         this.initialized = false;
@@ -207,6 +221,13 @@ class AgentletCore {
             shadowDom: config.shadowDom !== false, // Mount the panel UI inside an open shadow root (isolates host page/agentlet CSS)
             ...config
         };
+
+        // Gate every `logger.log()`/`logger.info()` call across the codebase
+        // (see src/utils/system/Logger.ts) for the lifetime of this instance,
+        // before constructing any manager below - several of them
+        // (CookieManager, StorageManager, the env manager, ...) log during
+        // their own constructor.
+        setDebugMode(Boolean(this.config.debugMode));
 
         // Event system
         this.eventBus = new EventBus(this.config.debugMode);
@@ -313,6 +334,10 @@ class AgentletCore {
         // teardown.
         this.mountedModule = null;
 
+        // See setupLocalStorageListener()/cleanup().
+        this.boundStorageEventListener = null;
+        this.boundEnvChangeListener = null;
+
         // UI management (delegated to UIManager)
 
         // Performance tracking
@@ -325,7 +350,7 @@ class AgentletCore {
         // Set up global access - will be finalized after UI is created
         this.globalAPI.setupGlobalAccess();
 
-        console.log('AgentletCore 📎 initialized with config:', this.config);
+        logger.log('AgentletCore 📎 initialized with config:', this.config);
     }
 
     /**
@@ -335,18 +360,18 @@ class AgentletCore {
     initializeEnvManager(): EnvAPI | null {
         // If explicitly set to null, disable environment variables
         if (this.config.envManager === null) {
-            console.log('🔧 Environment variables disabled');
+            logger.log('🔧 Environment variables disabled');
             return null;
         }
 
         // If a custom instance is provided, use it
         if (this.config.envManager && typeof this.config.envManager === 'object') {
-            console.log('🔧 Using custom EnvironmentVariablesManager instance');
+            logger.log('🔧 Using custom EnvironmentVariablesManager instance');
             return this.config.envManager;
         }
 
         // Use default LocalStorageEnvironmentVariablesManager
-        console.log('🔧 Using default LocalStorageEnvironmentVariablesManager');
+        logger.log('🔧 Using default LocalStorageEnvironmentVariablesManager');
         return new LocalStorageEnvironmentVariablesManager();
     }
 
@@ -363,7 +388,7 @@ class AgentletCore {
         const startTime = performance.now();
 
         try {
-            console.log('🚀 Initializing Agentlet Core 📎...');
+            logger.log('🚀 Initializing Agentlet Core 📎...');
 
             // Load PDF.js lazily (see the comment on the removed static
             // import above) right before it's handed to librarySetup - this
@@ -414,11 +439,11 @@ class AgentletCore {
             // Trigger initial content update for any active modules after DOM is ready
             const activeModule = this.moduleRegistry.activeModule;
             if (activeModule) {
-                console.log('🔄 Initial content update for active module:', activeModule.name);
-                console.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
+                logger.log('🔄 Initial content update for active module:', activeModule.name);
+                logger.log('🖥️ Content element at trigger time:', this.ui.content ? 'exists' : 'null');
                 // Use requestAnimationFrame to ensure DOM is fully ready
                 window.requestAnimationFrame(() => {
-                    console.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
+                    logger.log('🖥️ Content element in requestAnimationFrame:', this.ui.content ? 'exists' : 'null');
                     this.onModuleChange(activeModule).catch(error => {
                         console.error('Error handling initial module change:', error);
                     });
@@ -457,8 +482,8 @@ class AgentletCore {
                 config: this.config
             });
 
-            console.log(`✅ Agentlet Core 📎 initialized successfully in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
-            console.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
+            logger.log(`✅ Agentlet Core 📎 initialized successfully in ${this.performanceMetrics.initTime.toFixed(2)}ms`);
+            logger.log(`📊 Performance: UI=${this.performanceMetrics.uiRenderTime.toFixed(2)}ms, Modules=${this.performanceMetrics.moduleLoadTime.toFixed(2)}ms`);
 
         } catch (error) {
             console.error('❌ Failed to initialize Agentlet Core:', error);
@@ -493,12 +518,12 @@ class AgentletCore {
 
         this.eventBus.on('application:detected', (data) => {
             const detected = data as { module: string; url: string };
-            console.log(`🎯 Application detected: ${detected.module} for ${detected.url}`);
+            logger.log(`🎯 Application detected: ${detected.module} for ${detected.url}`);
         });
 
         this.eventBus.on('application:notDetected', (data) => {
             const notDetected = data as { url: string };
-            console.log(`❓ No application detected for: ${notDetected.url}`);
+            logger.log(`❓ No application detected for: ${notDetected.url}`);
         });
 
         // Error handling
@@ -511,7 +536,7 @@ class AgentletCore {
         // URL change events
         this.eventBus.on('url:changed', (data) => {
             const urlChange = data as { oldUrl: string; newUrl: string };
-            console.log(`🔄 URL changed: ${urlChange.oldUrl} → ${urlChange.newUrl}`);
+            logger.log(`🔄 URL changed: ${urlChange.oldUrl} → ${urlChange.newUrl}`);
             this.updateApplicationDisplay();
         });
     }
@@ -522,7 +547,7 @@ class AgentletCore {
      * @param context - Forwarded by ModuleRegistry; used to tell a urlChange-driven change (same module, new URL) from an actual module switch
      */
     async onModuleChange(activeModule: AgentletModule | null, context: ModuleActivationContext = {}): Promise<void> {
-        console.log('onModuleChange', activeModule);
+        logger.log('onModuleChange', activeModule);
         // TODO: check if issue with activeModule not being yet the moduleLoader.activeModule
         this.updateApplicationDisplay();
         await this.updateModuleContent(context.trigger === 'urlChange' ? 'urlChange' : 'moduleChange');
@@ -733,42 +758,75 @@ class AgentletCore {
     }
 
     /**
-     * Enhanced localStorage monitoring
+     * The single localStorage key this core's env manager persists to, if
+     * any - the only localStorage key agentlet-core itself ever owns (see
+     * `src/utils/config-persistence/EnvManager.ts`'s
+     * `LocalStorageEnvironmentVariablesManager`). Used by
+     * `setupLocalStorageListener()` to scope monitoring to that key: a
+     * `storageKey` field is specific to that class, so a fully custom
+     * `EnvAPI` implementation (or `envManager: null`) has nothing here to
+     * monitor.
+     */
+    getMonitoredLocalStorageKey(): string | null {
+        // Duck-typed: `storageKey` isn't part of the public `EnvAPI`
+        // surface (see public-api.d.ts), only of the concrete
+        // LocalStorageEnvironmentVariablesManager class.
+        const manager = this.envManager as unknown as { storageKey?: unknown } | null;
+        return manager && typeof manager.storageKey === 'string' ? manager.storageKey : null;
+    }
+
+    /**
+     * Notifies `handleLocalStorageChange()` of localStorage changes to the
+     * env manager's own key - and only that key, never one the host page or
+     * some other script owns (see the module doc comment on
+     * `src/utils/config-persistence/StorageManager.ts` for the same
+     * principle applied there). Two non-invasive sources, no monkey-patching
+     * of native `Storage` methods:
+     *
+     * - Cross-tab: the native `storage` event, which only fires for writes
+     *   from another tab/window and so has no effect on this page at all.
+     * - Same-tab: agentlet's own env manager already knows synchronously
+     *   when `agentlet.env.X = ...`/`.remove()`/`.clear()` runs (it is what
+     *   performs the write), so this subscribes to its existing
+     *   `addChangeListener()` instead of intercepting `localStorage` itself.
+     *   `key`/`newValue` are therefore the env variable's own name/value
+     *   here, not the raw localStorage key/JSON blob - see the doc comment
+     *   on `onLocalStorageChange` in `src/types/public-api.d.ts`.
+     *
+     * A change made by some other script directly to the env manager's
+     * localStorage key, in the same tab, bypassing `agentlet.env`, is not
+     * observed - matching "never patch native methods unless a documented
+     * feature needs it": nothing here is documented to require that.
      */
     setupLocalStorageListener(): void {
-        // Listen for storage events (changes from other tabs/windows)
-        window.addEventListener('storage', (event) => {
-            this.handleLocalStorageChange(event.key, event.newValue);
-        });
+        const monitoredKey = this.getMonitoredLocalStorageKey();
 
-        // Override localStorage methods for same-tab detection
-        const originalSetItem = localStorage.setItem;
-        const originalRemoveItem = localStorage.removeItem;
-        const originalClear = localStorage.clear;
+        if (monitoredKey) {
+            this.boundStorageEventListener = (event: StorageEvent): void => {
+                // event.key is null for a cross-tab localStorage.clear(),
+                // which necessarily also wipes the monitored key.
+                if (event.key === monitoredKey || event.key === null) {
+                    this.handleLocalStorageChange(event.key, event.newValue);
+                }
+            };
+            window.addEventListener('storage', this.boundStorageEventListener);
+        }
 
-        localStorage.setItem = (key, value) => {
-            originalSetItem.call(localStorage, key, value);
-            this.handleLocalStorageChange(key, value);
-        };
+        if (this.envManager && monitoredKey) {
+            this.boundEnvChangeListener = (key, newValue): void => {
+                this.handleLocalStorageChange(key, newValue ?? null);
+            };
+            this.envManager.addChangeListener(this.boundEnvChangeListener);
+        }
 
-        localStorage.removeItem = (key) => {
-            originalRemoveItem.call(localStorage, key);
-            this.handleLocalStorageChange(key, null);
-        };
-
-        localStorage.clear = () => {
-            originalClear.call(localStorage);
-            this.handleLocalStorageChange(null, null);
-        };
-
-        console.log('📦 localStorage monitoring enabled');
+        logger.log('📦 localStorage monitoring enabled');
     }
 
     /**
      * Handle localStorage changes
      */
     handleLocalStorageChange(key: string | null, newValue: string | null): void {
-        console.log(`📦 localStorage changed: ${key} = ${newValue}`);
+        logger.log(`📦 localStorage changed: ${key} = ${newValue}`);
 
         this.eventBus.emit('localStorage:changed', { key, newValue });
 
@@ -782,7 +840,7 @@ class AgentletCore {
         if (this.moduleRegistry.activeModule) {
             if (this.moduleRegistry.activeModule.requiresLocalStorageChangeNotification
                 && typeof this.moduleRegistry.activeModule.onLocalStorageChange === 'function') {
-                console.log(`📦 Notifying module ${this.moduleRegistry.activeModule.name} about localStorage change`);
+                logger.log(`📦 Notifying module ${this.moduleRegistry.activeModule.name} about localStorage change`);
                 this.moduleRegistry.activeModule.onLocalStorageChange(key, newValue);
             }
         }
@@ -792,17 +850,17 @@ class AgentletCore {
      * Action handlers
      */
     async refreshContent(): Promise<void> {
-        console.log('🔄 Refreshing content');
+        logger.log('🔄 Refreshing content');
         this.updateApplicationDisplay();
         await this.updateModuleContent('refresh');
     }
 
     showSettings(): void {
-        console.log('⚙️ Settings requested');
+        logger.log('⚙️ Settings requested');
 
         // Check if active module has custom settings handler
         if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showSettings === 'function') {
-            console.log(`📦 Using module settings: ${this.moduleRegistry.activeModule.name}`);
+            logger.log(`📦 Using module settings: ${this.moduleRegistry.activeModule.name}`);
             this.moduleRegistry.activeModule.showSettings();
             return;
         }
@@ -853,11 +911,11 @@ class AgentletCore {
     }
 
     showHelp(): void {
-        console.log('❓ Help requested');
+        logger.log('❓ Help requested');
 
         // Check if active module has custom help handler
         if (this.moduleRegistry.activeModule && typeof this.moduleRegistry.activeModule.showHelp === 'function') {
-            console.log(`📦 Using module help: ${this.moduleRegistry.activeModule.name}`);
+            logger.log(`📦 Using module help: ${this.moduleRegistry.activeModule.name}`);
             this.moduleRegistry.activeModule.showHelp();
             return;
         }
@@ -935,7 +993,7 @@ class AgentletCore {
                         ]
                     }, (debugResult) => {
                         if (debugResult === 'copy') {
-                            console.log('Agentlet Debug Info 📎:', debugInfo);
+                            logger.log('Agentlet Debug Info 📎:', debugInfo);
                             Dialog.success('Debug info copied to console!', 'Copied');
                         }
                     });
@@ -1175,6 +1233,18 @@ class AgentletCore {
                 this.storageManager.cleanup();
             }
 
+            // Undo setupLocalStorageListener(): remove the cross-tab
+            // `storage` listener and unsubscribe from the env manager's own
+            // change notifications.
+            if (this.boundStorageEventListener) {
+                window.removeEventListener('storage', this.boundStorageEventListener);
+                this.boundStorageEventListener = null;
+            }
+            if (this.boundEnvChangeListener && this.envManager) {
+                this.envManager.removeChangeListener(this.boundEnvChangeListener);
+                this.boundEnvChangeListener = null;
+            }
+
             // Cleanup authentication manager
             if (this.authManager) {
                 this.authManager.cleanup();
@@ -1234,7 +1304,7 @@ class AgentletCore {
             Reflect.deleteProperty(window, 'agentlet');
 
             this.eventBus.emit('core:cleanup');
-            console.log('🧹 Agentlet Core 📎 cleaned up');
+            logger.log('🧹 Agentlet Core 📎 cleaned up');
 
         } catch (error) {
             console.error('Error during cleanup:', error);
@@ -1245,7 +1315,7 @@ class AgentletCore {
      * Show environment variables dialog
      */
     showEnvVarsDialog(): void {
-        console.log('🔧 Environment variables dialog requested');
+        logger.log('🔧 Environment variables dialog requested');
 
         if (!this.envManager) {
             console.warn('Environment variables manager not available');
@@ -1558,19 +1628,19 @@ class AgentletCore {
      * Refresh environment variables dialog by updating content in place
      */
     refreshEnvVarsDialog(): void {
-        console.log('🔧 Refreshing environment variables dialog content');
+        logger.log('🔧 Refreshing environment variables dialog content');
 
         // Try to update the content in place first (the container lives inside
         // the Dialog content, itself mounted in the UI root)
         const envVarsContainer = this.ui.query('.env-vars-list');
         if (envVarsContainer) {
-            console.log('🔧 Updating environment variables list in place');
+            logger.log('🔧 Updating environment variables list in place');
             envVarsContainer.innerHTML = this.generateEnvVarsListHTML();
             return;
         }
 
         // Fallback to full dialog refresh if container not found
-        console.log('🔧 Container not found, falling back to full dialog refresh');
+        logger.log('🔧 Container not found, falling back to full dialog refresh');
         if (this.currentEnvVarsDialog && typeof this.currentEnvVarsDialog.close === 'function') {
             this.currentEnvVarsDialog.close();
             setTimeout(() => {
