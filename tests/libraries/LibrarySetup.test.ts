@@ -121,14 +121,14 @@ describe('LibrarySetup characterization', () => {
             return { GlobalWorkerOptions: { workerSrc: '' } };
         }
 
-        test('assigns the module onto window.pdfjsLib and defaults the worker URL to "./pdf.worker.min.js"', () => {
+        test('assigns the module onto window.pdfjsLib and defaults the worker URL to "./pdf.worker.min.mjs"', () => {
             const setup = makeSetup();
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
 
             expect(windowGlobals().pdfjsLib).toBe(module);
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
             expect(module.GlobalWorkerOptions.verbosity).toBe(0);
         });
 
@@ -141,13 +141,30 @@ describe('LibrarySetup characterization', () => {
             expect(module.GlobalWorkerOptions.workerSrc).toBe('https://cdn.example.com/pdf.worker.min.js');
         });
 
-        test('derives the worker URL from config.registryUrl by replacing the last path segment', () => {
+        test('derives the worker URL from an absolute config.registryUrl by replacing the last path segment', () => {
             const setup = makeSetup({ registryUrl: 'https://example.com/static/agentlets-registry.json' });
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
 
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('https://example.com/static/pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('https://example.com/static/pdf.worker.min.mjs');
+        });
+
+        test('derives the worker URL from a relative config.registryUrl, resolved against the page (e.g. agentlet.io\'s own config)', () => {
+            // Regression test: `new URL(registryUrl)` with no base throws for
+            // a relative registryUrl, so this used to silently fall back to
+            // the page-relative default instead of deriving an absolute
+            // worker URL next to the registry - which is exactly what a host
+            // serving its registry (and the worker) next to the page, like
+            // agentlet.io's `registryUrl: '/cdn/v1/agentlets-registry.js'`,
+            // needs in order to skip setting `pdfWorkerUrl` explicitly.
+            const setup = makeSetup({ registryUrl: '/cdn/v1/agentlets-registry.js' });
+            const module = pdfjsModule();
+
+            setup.setupPDFJS(module);
+
+            // jsdom's default test document URL is http://localhost/.
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('http://localhost/cdn/v1/pdf.worker.min.mjs');
         });
 
         test('config.pdfWorkerUrl takes priority over config.registryUrl when both are set', () => {
@@ -162,25 +179,50 @@ describe('LibrarySetup characterization', () => {
             expect(module.GlobalWorkerOptions.workerSrc).toBe('https://explicit.example.com/worker.js');
         });
 
-        test('quirk: falls back to the default worker URL (not registryUrl itself) when registryUrl fails to parse as a URL', () => {
-            const setup = makeSetup({ registryUrl: 'not a valid url' });
+        test('quirk: falls back to the default worker URL (not registryUrl itself) when registryUrl still fails to parse even resolved against the page', () => {
+            // 'not a valid url' no longer triggers this path: resolved
+            // against the page it's a valid (if nonsensical) relative
+            // reference. Use a string that looks like an absolute URL
+            // attempt but isn't one, which still throws even with a base.
+            const setup = makeSetup({ registryUrl: 'http://' });
             const module = pdfjsModule();
 
             setup.setupPDFJS(module);
 
-            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.js');
+            expect(module.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
         });
 
-        test('does nothing at all when window.pdfjsLib is already set, even with a different config', () => {
+        test('still applies config.pdfWorkerUrl onto an already-set window.pdfjsLib, without replacing its object reference', () => {
+            // Regression test: in a bundled build, pdfjs-dist assigns
+            // `globalThis.pdfjsLib` itself as a side effect of evaluating its
+            // own module body, *before* `setupPDFJS()` ever runs - so
+            // `window.pdfjsLib` is always already set by this point in that
+            // build. The worker URL must still be configured in that case,
+            // or a configured `pdfWorkerUrl` is silently never applied and
+            // PDF conversion fails with pdf.js's own "No
+            // GlobalWorkerOptions.workerSrc specified".
             const existing = pdfjsModule();
-            existing.GlobalWorkerOptions.workerSrc = 'https://already.example.com/worker.js';
+            existing.GlobalWorkerOptions.workerSrc = '';
             windowGlobals().pdfjsLib = existing;
             const setup = makeSetup({ pdfWorkerUrl: 'https://new.example.com/worker.js' });
 
             setup.setupPDFJS(pdfjsModule());
 
+            // The already-set object reference is kept (not replaced)...
             expect(windowGlobals().pdfjsLib).toBe(existing);
-            expect(existing.GlobalWorkerOptions.workerSrc).toBe('https://already.example.com/worker.js');
+            // ...but the configured worker URL is still applied onto it.
+            expect(existing.GlobalWorkerOptions.workerSrc).toBe('https://new.example.com/worker.js');
+        });
+
+        test('applies the default worker URL onto an already-set window.pdfjsLib when no pdfWorkerUrl/registryUrl is configured', () => {
+            const existing = pdfjsModule();
+            existing.GlobalWorkerOptions.workerSrc = '';
+            windowGlobals().pdfjsLib = existing;
+            const setup = makeSetup();
+
+            setup.setupPDFJS(pdfjsModule());
+
+            expect(existing.GlobalWorkerOptions.workerSrc).toBe('./pdf.worker.min.mjs');
         });
     });
 

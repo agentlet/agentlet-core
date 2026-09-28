@@ -171,13 +171,19 @@ class AgentletCoreBuilder {
     }
 
     /**
-     * Copy PDF.js worker files to dist directory
+     * Copy the PDF.js worker file to the dist directory. Kept as
+     * `pdf.worker.min.mjs` (its real name in pdfjs-dist, and a module worker
+     * pdf.js always loads with `new Worker(url, { type: 'module' })`) rather
+     * than renamed to `.js`, to match `LibrarySetup.ts`'s default
+     * `pdfWorkerUrl` resolution and to keep a host's copy of this file
+     * indistinguishable from the one it could take directly from its own
+     * `node_modules/pdfjs-dist/build/`.
      */
     copyPDFJSWorker() {
         try {
             const workerSrcPath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
-            const workerDestPath = path.join(this.distDir, 'pdf.worker.min.js');
-            
+            const workerDestPath = path.join(this.distDir, 'pdf.worker.min.mjs');
+
             if (fs.existsSync(workerSrcPath)) {
                 fs.copyFileSync(workerSrcPath, workerDestPath);
                 console.log(`📄 PDF.js worker copied to: ${workerDestPath}`);
@@ -801,7 +807,7 @@ MIT
         // Copy PDF.js worker to extension directory
         try {
             const workerSrcPath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
-            const workerDestPath = path.join(extensionDir, 'pdf.worker.min.js');
+            const workerDestPath = path.join(extensionDir, 'pdf.worker.min.mjs');
             
             if (fs.existsSync(workerSrcPath)) {
                 fs.copyFileSync(workerSrcPath, workerDestPath);

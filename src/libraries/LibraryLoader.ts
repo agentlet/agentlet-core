@@ -198,7 +198,7 @@ class LibraryLoader {
             // Configure PDF.js worker if not already configured
             const pdfjsLib = getPdfjsLibGlobal();
             if (pdfjsLib && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                const workerUrl = this.getLibraryUrl('pdfjs-worker') || './pdf.worker.min.js';
+                const workerUrl = this.getLibraryUrl('pdfjs-worker') || './pdf.worker.min.mjs';
                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                 // `verbosity` is not part of pdfjs-dist's own `GlobalWorkerOptions`
                 // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`)

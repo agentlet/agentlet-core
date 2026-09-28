@@ -225,22 +225,21 @@ export default class PDFProcessor implements PDFProcessorAPI {
 
             const errorMessage = (error as Error).message;
 
-            // Check if it's a worker-related error and provide helpful guidance
+            // Check if it's a worker-related error and provide helpful,
+            // actionable guidance. There is deliberately no automatic
+            // fallback to a third-party (e.g. CDN) worker here: silently
+            // loading code from a third-party origin would break under a
+            // strict CSP (script-src/connect-src 'self') and is a security
+            // concern on its own. The host must resolve this explicitly.
             if (errorMessage && errorMessage.includes('GlobalWorkerOptions.workerSrc')) {
-                console.error('📄 PDF.js worker configuration issue. You can fix this by:');
-                console.error('1. Setting pdfWorkerPath in agentletConfig before initialization');
-                console.error('2. Or calling window.agentlet.configurePDFWorker("/path/to/pdf.worker.min.js")');
-                console.error('3. Or using the CDN fallback: window.agentlet.configurePDFWorker("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js")');
-
-                // Try to automatically fallback to CDN worker
-                if (window.agentlet && window.agentlet.configurePDFWorker) {
-                    console.log('📄 Attempting automatic fallback to CDN worker...');
-                    const cdnWorker = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                    window.agentlet.configurePDFWorker(cdnWorker);
-
-                    // Suggest user to retry
-                    throw new Error(`PDF worker not found. Automatically configured CDN fallback. Please try again. Original error: ${errorMessage}`);
-                }
+                throw new Error(
+                    'PDF conversion failed: no PDF.js worker is configured or reachable. ' +
+                    'Set `pdfWorkerUrl` in the AgentletCore config to the URL of the ' +
+                    'pdf.worker.min.mjs matching the bundled pdfjs-dist version (see ' +
+                    'dist/pdf.worker.min.mjs), or call ' +
+                    'window.agentlet.configurePDFWorker("/path/to/pdf.worker.min.mjs") and retry. ' +
+                    `Original error: ${errorMessage}`
+                );
             }
 
             throw new Error(`PDF conversion failed: ${errorMessage}`);

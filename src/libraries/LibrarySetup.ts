@@ -12,6 +12,16 @@ import type { LibrarySetupAPI } from '../types/public-api';
 export interface LibrarySetupConfig {
     /** `'bundled'` (the default) sets up libraries handed to `initializeAll()` directly; `'registry'` defers to a `LibraryLoader` for on-demand loading and makes `initializeAll()` a no-op. */
     loadingMode?: 'bundled' | 'registry';
+    /**
+     * URL of the `pdf.worker.min.mjs` file matching the bundled `pdfjs-dist`
+     * version. Applied to `pdfjsLib.GlobalWorkerOptions.workerSrc` every time
+     * `setupPDFJS()` runs, including when `window.pdfjsLib` was already set
+     * before this runs (the common case in a bundled build - see
+     * `setupPDFJS()`). Without it, the worker resolves to the default
+     * `'./pdf.worker.min.mjs'`, relative to the *page's* URL - set this
+     * explicitly whenever the page is not served from the same path as the
+     * core bundle and the `dist/pdf.worker.min.mjs` copied next to it.
+     */
     pdfWorkerUrl?: string;
     registryUrl?: string;
 }
@@ -145,44 +155,82 @@ export class LibrarySetup implements LibrarySetupAPI {
      * Set up PDF.js library for PDF processing functionality
      */
     setupPDFJS(pdfjsLib: PdfjsLibModule): void {
-        // Make PDF.js available globally for PDFProcessor
+        // Make PDF.js available globally for PDFProcessor. Guarded: don't
+        // replace an existing window.pdfjsLib reference.
         const globals = getLibraryGlobals();
-        if (typeof globals.pdfjsLib === 'undefined') {
+        const isFirstSetup = typeof globals.pdfjsLib === 'undefined';
+        if (isFirstSetup) {
             globals.pdfjsLib = pdfjsLib;
-
-            // Configure worker URL - prioritize explicit config, then derive from registry URL
-            let workerSrc = './pdf.worker.min.js'; // fallback
-
-            if (this.config.pdfWorkerUrl) {
-                // Explicit worker URL provided
-                workerSrc = this.config.pdfWorkerUrl;
-            } else if (this.config.registryUrl) {
-                // Derive worker URL from registry URL
-                // e.g., https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.js
-                try {
-                    const registryUrl = new URL(this.config.registryUrl);
-                    registryUrl.pathname = registryUrl.pathname.replace(/[^/]+$/, 'pdf.worker.min.js');
-                    workerSrc = registryUrl.toString();
-                } catch (error) {
-                    console.warn('Failed to derive PDF worker URL from registry URL:', error);
-                }
-            }
-
-            globals.pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-            // `verbosity` is not part of pdfjs-dist's own `GlobalWorkerOptions`
-            // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`)
-            // but the pre-conversion code has always set it anyway - kept as a
-            // narrow cast rather than widening `PdfjsLibModule` itself (likely
-            // a no-op against modern pdfjs-dist, since nothing in the library
-            // reads `GlobalWorkerOptions.verbosity` for logging).
-            (globals.pdfjsLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
-
             console.log('📄 PDF.js library loaded for PDF processing functionality');
-            console.log('📄 PDF.js worker URL set to:', workerSrc);
-
-            // Verify the setting worked
-            console.log('📄 PDF.js GlobalWorkerOptions.workerSrc:', globals.pdfjsLib.GlobalWorkerOptions.workerSrc);
         }
+
+        // Configure the worker URL every time this runs, even when
+        // window.pdfjsLib was already set. In a bundled build, `pdfjs-dist`
+        // assigns `globalThis.pdfjsLib` itself as a side effect of evaluating
+        // its own module body (see `node_modules/pdfjs-dist/build/pdf.mjs`),
+        // which happens before `initializeAll()`/`setupPDFJS()` ever run -
+        // `window.pdfjsLib` is therefore *always* already defined by this
+        // point in that build. The previous `if (typeof globals.pdfjsLib ===
+        // 'undefined')` guard wrapped this whole method, so `pdfWorkerUrl`
+        // was silently never applied there, and PDF conversion failed with
+        // pdf.js's own "No GlobalWorkerOptions.workerSrc specified" until a
+        // host called `configurePDFWorker()` by hand.
+        const activeLib = globals.pdfjsLib as PdfjsLibModule;
+        const workerSrc = this.resolvePDFWorkerSrc();
+
+        activeLib.GlobalWorkerOptions.workerSrc = workerSrc;
+        // `verbosity` is not part of pdfjs-dist's own `GlobalWorkerOptions`
+        // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`)
+        // but the pre-conversion code has always set it anyway - kept as a
+        // narrow cast rather than widening `PdfjsLibModule` itself (likely
+        // a no-op against modern pdfjs-dist, since nothing in the library
+        // reads `GlobalWorkerOptions.verbosity` for logging).
+        (activeLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
+
+        console.log('📄 PDF.js worker URL set to:', workerSrc);
+
+        // Verify the setting worked
+        console.log('📄 PDF.js GlobalWorkerOptions.workerSrc:', activeLib.GlobalWorkerOptions.workerSrc);
+    }
+
+    /**
+     * Resolve the PDF.js worker URL: an explicit `config.pdfWorkerUrl` wins,
+     * then one derived from `config.registryUrl` (replacing its last path
+     * segment), then the default `'./pdf.worker.min.mjs'` - the module
+     * worker file pdfjs-dist 5.x ships, which `tools/build.js` copies next to
+     * the built core bundle in `dist/` (and into the npm package's `files`).
+     * That default resolves relative to the *page's* URL, not to wherever
+     * the core script itself is served from, so a host serving its page from
+     * a different path must set `pdfWorkerUrl` explicitly.
+     */
+    resolvePDFWorkerSrc(): string {
+        if (this.config.pdfWorkerUrl) {
+            return this.config.pdfWorkerUrl;
+        }
+
+        if (this.config.registryUrl) {
+            // Resolved against the page's URL (falling back to an absolute
+            // parse when there is no `window`, e.g. this module evaluated
+            // outside a DOM) so a *relative* registryUrl - e.g.
+            // '/cdn/v1/agentlets-registry.js', as agentlet.io configures -
+            // derives an absolute worker URL instead of `new URL()` throwing
+            // on it. A host that serves its registry next to the core script
+            // and the worker then needs no `pdfWorkerUrl` at all.
+            // e.g. (absolute) https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.mjs
+            // e.g. (relative, resolved against the page) /cdn/v1/agentlets-registry.js -> https://agentlet.io/cdn/v1/pdf.worker.min.mjs
+            try {
+                const pageUrl = typeof window !== 'undefined' && window.location ? window.location.href : undefined;
+                const registryUrl = pageUrl
+                    ? new URL(this.config.registryUrl, pageUrl)
+                    : new URL(this.config.registryUrl);
+                registryUrl.pathname = registryUrl.pathname.replace(/[^/]+$/, 'pdf.worker.min.mjs');
+                return registryUrl.toString();
+            } catch (error) {
+                console.warn('Failed to derive PDF worker URL from registry URL:', error);
+            }
+        }
+
+        return './pdf.worker.min.mjs';
     }
 
     /**

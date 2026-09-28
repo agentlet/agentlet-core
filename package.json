@@ -9,6 +9,7 @@
     "dist/agentlet-core.min.js",
     "dist/agentlet-core.esm.js",
     "dist/agentlet-core.d.ts",
+    "dist/pdf.worker.min.mjs",
     "README.md",
     "LICENSE"
   ],
