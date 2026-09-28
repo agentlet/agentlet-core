@@ -5,12 +5,13 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 ## Workflows
 
 ### 🧪 `test.yml` - Quick Test Pipeline
-**Trigger**: Every push to any branch, PRs to main/develop
+**Trigger**: Every push to `main`, PRs to `main`
 - Runs on Node.js 22.x
-- Executes Jest unit tests 
-- Builds the project
-- Runs Playwright integration tests
-- Uploads test artifacts on failure
+- Two jobs run in parallel, with no dependency between them:
+  - `checks`: `npm ci`, Jest unit tests, lint, typecheck, build
+  - `e2e`: a 3-way matrix (`chromium`, `firefox`, `webkit`), each running
+    the Playwright suite for a single browser project
+- Uploads test artifacts (per browser project) on e2e failure
 
 ### 🚀 `ci.yml` - Full CI/CD Pipeline  
 **Trigger**: Push to main/develop, PRs to main/develop
@@ -76,10 +77,16 @@ Recommended settings for `main` branch:
 - Require status checks to pass before merging
 - Require branches to be up to date before merging
 - Required status checks:
-  - `test`
+  - `checks`
+  - `e2e (chromium)`, `e2e (firefox)`, `e2e (webkit)`
   - `test (20.x, 22.x)` from CI pipeline
   - `build-and-package`
   - `security-audit`
+
+  (`main` currently has no branch protection rule configured, so these names
+  aren't enforced anywhere; keep this list in sync with the job/matrix names
+  in `test.yml` if it's ever turned on, since GitHub matches required checks
+  by exact name.)
 
 ### 3. Environment Variables
 The workflows use these environment variables:
@@ -209,6 +216,70 @@ single-key shortcut, since `preventDefault` defaults to `true`.
 If the suite grows significantly, re-measure with
 `CI=true npx playwright test --config=tests/examples/playwright.config.js`
 before assuming the existing budget still holds.
+
+## Splitting e2e across a per-browser matrix (`test.yml`)
+
+The fix above got CI green, but the `test` job still ran all 3 Playwright
+projects serially after `npm ci` / jest / lint / typecheck / build, in a
+single job: ~19s for everything else plus a measured 22m13s for Playwright
+(after a 47s `playwright install --with-deps`), for a total of roughly
+24 minutes of wall time per run.
+
+`test.yml` now splits that single job into two, running in parallel (no
+`needs` between them):
+
+- `checks`: checkout, setup-node, `npm ci`, jest, lint, typecheck, build.
+  Everything here together takes well under a minute on a green run;
+  `timeout-minutes: 10` leaves headroom without hiding a hang.
+- `e2e`: a matrix over `project: [chromium, firefox, webkit]` with
+  `fail-fast: false`, so one browser's failure doesn't cancel the others.
+  Each matrix job checks out the repo fresh, installs only its own browser
+  (`npx playwright install --with-deps ${{ matrix.project }}`, rather than
+  all three), and runs `npm run test:examples -- --project=${{
+  matrix.project }}`. Playwright's `globalSetup` (`npm run build`) runs
+  again inside each job, since each is a separate runner/checkout; this is
+  the same build step `checks` also runs, just duplicated across jobs to
+  keep them independent and parallel.
+
+This cuts wall time because:
+
+- The three browser projects, previously run one after another in a single
+  job, now run concurrently as three jobs. Each already-idle GitHub-hosted
+  runner is a full 4 vCPU machine to itself.
+- `tests/examples/playwright.config.js` raises CI's `workers` from `2` to
+  `4` (overridable via `E2E_WORKERS`). The old value of `2` was chosen so
+  that 3 projects' worth of tests, run in the same job, wouldn't overwhelm
+  a 4 vCPU runner; now that a job only ever runs one project's ~153 tests,
+  it can use all 4 vCPUs itself.
+- Each matrix job only installs the one browser it needs, instead of
+  `--with-deps` downloading and installing Chromium, Firefox and WebKit (and
+  their OS dependencies) every run.
+
+Expected wall time: `checks` (~20s) and `e2e` (bounded by its slowest
+matrix job, roughly a third of the old 22m13s Playwright time plus its own
+`npm ci` and single-browser install, so well under 10 minutes) run at the
+same time, for a total CI wall time well under 10 minutes, down from ~24.
+
+The per-project `globalTimeout` in `playwright.config.js` drops from 45 to
+20 minutes on CI only (`process.env.CI ? 1200000 : 2700000`): a job now
+covers one project's ~153 tests at 4 workers instead of all 459 at 2
+workers, so the old 22.3-minute full-suite reference point is a very
+generous upper bound for a single project. Local runs (`CI` unset) keep the
+45-minute budget and still exercise all three projects in one invocation
+via `npm run test:examples`, so local behaviour is unchanged. Each matrix
+job's `timeout-minutes: 25` in `test.yml` sits above that 20-minute
+in-config budget, covering checkout, `npm ci` and the single-browser
+install around it.
+
+Artifact uploads on failure are now named `test-artifacts-${{
+matrix.project }}` (e.g. `test-artifacts-firefox`) instead of a single
+`test-artifacts`, since three parallel jobs uploading to the same artifact
+name would collide.
+
+If GitHub's `ubuntu-latest` migration (see above) changes the effective
+vCPU count, or the suite grows significantly, re-measure both the
+`workers` value and the `globalTimeout`/`timeout-minutes` budgets rather
+than assuming they still hold.
 
 ## `release.yml` - npm publish pipeline
 
