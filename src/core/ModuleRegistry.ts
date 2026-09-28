@@ -660,7 +660,19 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
             // Only register if not skipping registry module registration
             if (!this.skipRegistryModuleRegistration) {
-                this.register(moduleInstance);
+                // `applyRegistration(instance, false)`, not `register()`:
+                // this runs once per entry inside loadFromRegistry()'s loop,
+                // before every entry is known. Running checkUrlChange() here
+                // too (as register() does) would race the SAME best-matching
+                // module's activation against itself across iterations - the
+                // second attempt finds the first still in
+                // `_activationInProgress` and logs "Activation already in
+                // progress ..., skipping" on every init that eagerly loads
+                // more than one registry entry. loadFromRegistry() already
+                // runs checkUrlChange() exactly once, in initialize(), after
+                // the whole registry has loaded - matching loadModule()'s
+                // on-demand path, which defers to the caller the same way.
+                this.applyRegistration(moduleInstance, false);
                 logger.log(`✅ Agentlet loaded and registered: ${name}`);
             } else {
                 logger.log(`✅ Agentlet loaded (registration skipped): ${name}`);
