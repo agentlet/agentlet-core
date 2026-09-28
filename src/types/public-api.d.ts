@@ -832,6 +832,12 @@ export interface CookiesAPI {
     /** Returns the number of cookies it attempted to delete. */
     clearAll(options?: CookieDeleteOptions): number;
     getMatching(pattern: string | RegExp): Record<string, string>;
+    /**
+     * Lazily starts the 1-second `document.cookie` poll (`startMonitoring()`)
+     * if this is the first listener registered; `removeChangeListener()`
+     * stops it again once none are left. Call `startMonitoring()` directly
+     * to poll without registering a listener.
+     */
     addChangeListener(
         callback: (name: string, newValue: string | undefined, oldValue: string | undefined) => void
     ): void;

@@ -209,6 +209,63 @@ describe('CookieManager', () => {
     });
   });
 
+  describe('Lazy polling', () => {
+    // Regression coverage: CookieManager used to poll document.cookie every
+    // second from the moment it was constructed, regardless of whether
+    // anything was listening for changes. The poll now starts only once a
+    // listener is registered, and stops again once none are left.
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('does not start polling on construction', () => {
+      expect(cookieManager.pollInterval).toBeNull();
+    });
+
+    test('addChangeListener() starts polling', () => {
+      cookieManager.addChangeListener(jest.fn());
+
+      expect(cookieManager.pollInterval).not.toBeNull();
+    });
+
+    test('removeChangeListener() stops polling once the last listener is gone', () => {
+      const listener1 = jest.fn();
+      const listener2 = jest.fn();
+      cookieManager.addChangeListener(listener1);
+      cookieManager.addChangeListener(listener2);
+
+      cookieManager.removeChangeListener(listener1);
+      expect(cookieManager.pollInterval).not.toBeNull(); // listener2 still registered
+
+      cookieManager.removeChangeListener(listener2);
+      expect(cookieManager.pollInterval).toBeNull();
+    });
+
+    test('a listener added long after construction does not see a spurious change for stale state', () => {
+      cookieManager.set('pre_existing', 'value');
+      // No listener yet - this write happened while nothing was watching.
+
+      const listener = jest.fn();
+      cookieManager.addChangeListener(listener);
+      jest.advanceTimersByTime(1000);
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    test('cleanup() stops polling', () => {
+      cookieManager.addChangeListener(jest.fn());
+      expect(cookieManager.pollInterval).not.toBeNull();
+
+      cookieManager.cleanup();
+
+      expect(cookieManager.pollInterval).toBeNull();
+    });
+  });
+
   describe('Proxy Access', () => {
     test('should allow setting cookies through proxy', () => {
       const proxy = cookieManager.createProxy();

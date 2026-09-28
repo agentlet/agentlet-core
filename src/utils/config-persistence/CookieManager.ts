@@ -47,8 +47,11 @@ export default class CookieManager implements CookiesAPI {
         // Take initial snapshot
         this.updateSnapshot();
 
-        // Start monitoring for changes
-        this.startMonitoring();
+        // Monitoring is NOT started here: polling document.cookie every
+        // second is a host-page side effect (a timer that runs for the
+        // lifetime of the page) that should only exist while something is
+        // actually listening for cookie changes. addChangeListener()/
+        // removeChangeListener() below start and stop it lazily instead.
 
         logger.log('CookieManager initialized');
     }
@@ -240,7 +243,10 @@ export default class CookieManager implements CookiesAPI {
     }
 
     /**
-     * Add a change listener
+     * Add a change listener. Starts the 1-second polling loop (see
+     * `startMonitoring()`) if this is the first listener - polling
+     * `document.cookie` for the lifetime of the page is a host-page side
+     * effect that should only exist while something is actually listening.
      * @param callback - Callback function (name, newValue, oldValue) => void
      */
     addChangeListener(callback: CookieChangeListener): void {
@@ -249,11 +255,13 @@ export default class CookieManager implements CookiesAPI {
         }
 
         this.listeners.add(callback);
+        this.startMonitoring();
         logger.log('Cookie change listener added');
     }
 
     /**
-     * Remove a change listener
+     * Remove a change listener. Stops polling once no listener is left (see
+     * `stopMonitoring()`), mirroring `addChangeListener()`'s lazy start.
      * @param callback - Callback function to remove
      */
     removeChangeListener(callback: CookieChangeListener): boolean {
@@ -261,16 +269,26 @@ export default class CookieManager implements CookiesAPI {
         if (removed) {
             logger.log('Cookie change listener removed');
         }
+        if (this.listeners.size === 0) {
+            this.stopMonitoring();
+        }
         return removed;
     }
 
     /**
-     * Start monitoring cookies for changes
+     * Start monitoring cookies for changes. Called automatically by
+     * `addChangeListener()`; safe to call directly too (e.g. to poll without
+     * ever registering a listener) - idempotent either way.
      */
     startMonitoring(): void {
         if (this.pollInterval) {
             return; // Already monitoring
         }
+
+        // Refresh the baseline right before polling begins, so a listener
+        // added long after construction doesn't see a burst of spurious
+        // "changes" for cookies that changed while nothing was watching.
+        this.updateSnapshot();
 
         this.pollInterval = setInterval(() => {
             this.checkForChanges();
