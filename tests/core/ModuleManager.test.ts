@@ -1,16 +1,16 @@
 /**
- * Behaviour characterization tests for ModuleManager.
- *
- * No existing test file covers `src/core/ModuleManager.js` (confirmed via
- * `grep -rli modulemanager tests`), so this file pins down its CURRENT
- * behaviour ahead of its conversion to TypeScript: the single-registration
- * choke point in front of `ModuleRegistry`, its duplicate-detection /
- * source-tracking rules, and its other public methods
+ * Behaviour characterization tests for ModuleManager, covering the
+ * single-registration choke point in front of `ModuleRegistry`, its
+ * duplicate-detection / source-tracking rules, and its other public methods
  * (unregister/get/getAll/activate/getStatistics/initialize).
  *
- * Nothing here should change when the conversion lands - if an assertion
- * needs to change, the conversion changed behaviour and that is a bug in
- * the conversion, not in this file.
+ * `get()`/`getAll()`/`modules` now read straight from `moduleRegistry`
+ * instead of a separately-maintained local map (see the "get()/getAll()"
+ * describe block below) - this is a deliberate bug fix, not a conversion:
+ * `window.agentlet.modules.get(name)` (backed by ModuleManager) used to
+ * return `undefined` for a module loaded via the registry script, because
+ * `ModuleRegistry.loadAgentletModule()` registers straight onto
+ * `ModuleRegistry` without going through `ModuleManager.register()`.
  */
 
 import ModuleManagerCtor from '../../src/core/ModuleManager.js';
@@ -25,8 +25,11 @@ import type { AgentletModule, ModuleActivationContext } from '../../src/types/pu
  * `src/types/public-api.d.ts`).
  */
 interface ModuleRegistryStub {
+    modules: Map<string, AgentletModule>;
     register: jest.Mock<void, [AgentletModule]>;
     unregister: jest.Mock<Promise<boolean>, [string]>;
+    get: jest.Mock<AgentletModule | null, [string]>;
+    getAll: jest.Mock<string[], []>;
     activateModule: jest.Mock<Promise<void>, [AgentletModule, ModuleActivationContext?]>;
     getStatistics: jest.Mock<Record<string, unknown>, []>;
 }
@@ -48,10 +51,27 @@ interface ModuleManagerTestInstance {
 
 const ModuleManager = ModuleManagerCtor as unknown as new (moduleRegistry: ModuleRegistryStub) => ModuleManagerTestInstance;
 
+/**
+ * `ModuleManager` no longer keeps its own copy of the registered-modules
+ * map (see the ModuleManager.ts fix for the "window.agentlet.modules.get()
+ * returns undefined for registry-loaded modules" bug): `register()`,
+ * `get()` and `getAll()` all read straight from `moduleRegistry`, so this
+ * stub backs `register()`/`unregister()` with a real `modules` Map instead
+ * of only recording calls.
+ */
 function createRegistryStub(): ModuleRegistryStub {
+    const modules = new Map<string, AgentletModule>();
     return {
-        register: jest.fn(),
-        unregister: jest.fn().mockResolvedValue(true),
+        modules,
+        register: jest.fn((module: AgentletModule) => {
+            modules.set(module.name, module);
+        }),
+        unregister: jest.fn((name: string) => {
+            modules.delete(name);
+            return Promise.resolve(true);
+        }),
+        get: jest.fn((name: string) => modules.get(name) || null),
+        getAll: jest.fn(() => Array.from(modules.keys())),
         activateModule: jest.fn().mockResolvedValue(undefined),
         getStatistics: jest.fn().mockReturnValue({ totalModules: 0, activationCount: 0 })
     };
@@ -145,14 +165,30 @@ describe('ModuleManager behaviour characterization', () => {
     });
 
     describe('get() / getAll()', () => {
-        test('reflect ModuleManager\'s own local map, not modules registered directly on moduleRegistry', () => {
+        test('reflect moduleRegistry.get()/getAll(), including modules registered directly on it', () => {
             const managed = new Module({ name: 'managed', patterns: ['x'] });
             manager.register(managed, 'source1');
 
-            // Registered directly on the underlying registry, bypassing the manager.
             expect(manager.get('managed')).toBe(managed);
             expect(manager.getAll()).toEqual(['managed']);
             expect(manager.get('unmanaged-elsewhere')).toBeUndefined();
+        });
+
+        // Regression test for the bug where `window.agentlet.modules.get()`
+        // (backed by ModuleManager) returned `undefined` for a module
+        // loaded via the registry script, because ModuleRegistry.
+        // loadAgentletModule() registers straight onto ModuleRegistry
+        // without going through ModuleManager.register() - so
+        // ModuleManager's old, separately-maintained `modules` map never
+        // saw it, while `moduleRegistry.get()` did. ModuleManager now reads
+        // straight from moduleRegistry instead of keeping its own copy, so
+        // the two can no longer disagree.
+        test('sees a module registered directly on moduleRegistry, bypassing manager.register()', () => {
+            const fromRegistryLoad = new Module({ name: 'from-registry', patterns: ['x'] });
+            registryStub.modules.set('from-registry', fromRegistryLoad);
+
+            expect(manager.get('from-registry')).toBe(fromRegistryLoad);
+            expect(manager.getAll()).toEqual(['from-registry']);
         });
     });
 
