@@ -5,6 +5,7 @@
 
 import type { AgentletCoreConfig, AgentletTheme, EventBusAPI, EnvAPI, AgentletModule } from '../types/public-api';
 import type { UIManager } from './UIManager.js';
+import { logger } from '../utils/system/Logger.js';
 
 /**
  * Minimal shape of the `AgentletCore` instance this class needs. Not the
@@ -123,7 +124,7 @@ export class PanelManager {
         // Save panel width for the current module if env vars are available
         this.savePanelWidthForModule(width);
 
-        console.log(`Panel resized to ${width}px`);
+        logger.log(`Panel resized to ${width}px`);
     }
 
     /**
@@ -157,7 +158,7 @@ export class PanelManager {
 
         const envKey = `panel_width_${moduleName}`;
         this.core.envManager.set(envKey, width.toString());
-        console.log(`Saved panel width ${width}px for module '${moduleName}'`);
+        logger.log(`Saved panel width ${width}px for module '${moduleName}'`);
     }
 
     /**
@@ -184,7 +185,7 @@ export class PanelManager {
                 // Use setTimeout to ensure UI is ready
                 setTimeout(() => {
                     this.setPanelWidth(width);
-                    console.log(`Restored panel width ${width}px for module '${moduleName}'`);
+                    logger.log(`Restored panel width ${width}px for module '${moduleName}'`);
                 }, 50);
             }
         }

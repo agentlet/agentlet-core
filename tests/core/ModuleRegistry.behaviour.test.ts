@@ -33,6 +33,7 @@
 import ModuleRegistryCtor from '../../src/core/ModuleRegistry.js';
 import Module from '../../src/core/Module.js';
 import type { AgentletModule, ModuleActivationContext } from '../../src/types/public-api';
+import { setDebugMode } from '../../src/utils/system/Logger.js';
 
 /**
  * ModuleRegistry.js is untyped, plain JS at this point (pre-conversion), so
@@ -143,6 +144,11 @@ jest.useFakeTimers();
 // whatever pushState/replaceState currently is).
 const nativePushState = history.pushState;
 const nativeReplaceState = history.replaceState;
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ModuleRegistry behaviour characterization', () => {
     let mockEventBus: EventBusStub;
@@ -511,6 +517,68 @@ describe('ModuleRegistry behaviour characterization', () => {
 
             expect(registry.modules.has('from-registry')).toBe(true);
             expect(registry.get('from-registry')?.name).toBe('from-registry');
+        });
+
+        test('loadAgentletModule() registers without running checkUrlChange() itself, unlike register()', async () => {
+            // Regression test: loadFromRegistry() calls loadAgentletModule()
+            // once per eager registry entry, then initialize() (its caller)
+            // runs checkUrlChange() exactly once after every entry has
+            // loaded. If loadAgentletModule() also ran checkUrlChange() per
+            // entry (as it used to, via register()), the SAME best-matching
+            // module's activation would race against itself across entries -
+            // the second attempt finds the first one still in
+            // `_activationInProgress` and logs "Activation already in
+            // progress ..., skipping" on every init that eagerly loads more
+            // than one registry entry. See loadAgentletModule()'s comment.
+            history.pushState({}, '', '/double-activation-check');
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const checkUrlChangeSpy = jest.spyOn(registry, 'checkUrlChange');
+            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+            class FirstEagerModule extends Module {
+                constructor() {
+                    super({ name: 'eager-one', patterns: ['double-activation-check'] });
+                }
+            }
+            class SecondEagerModule extends Module {
+                constructor() {
+                    super({ name: 'eager-two', patterns: ['never-matches.example'] });
+                }
+            }
+            (window as unknown as Record<string, unknown>).FirstEagerModule = FirstEagerModule;
+            (window as unknown as Record<string, unknown>).SecondEagerModule = SecondEagerModule;
+
+            const promise1 = registry.loadAgentletModule({ name: 'eager-one', url: 'https://example.com/eager-one.js', module: 'FirstEagerModule' });
+            (document.head.querySelector('script[src="https://example.com/eager-one.js"]') as HTMLScriptElement).onload?.(new Event('load'));
+            await promise1;
+
+            const promise2 = registry.loadAgentletModule({ name: 'eager-two', url: 'https://example.com/eager-two.js', module: 'SecondEagerModule' });
+            (document.head.querySelector('script[src="https://example.com/eager-two.js"]') as HTMLScriptElement).onload?.(new Event('load'));
+            await promise2;
+
+            // Neither loadAgentletModule() call ran URL detection itself.
+            expect(checkUrlChangeSpy).not.toHaveBeenCalled();
+            expect(registry.activeModule).toBeNull();
+
+            // The single trailing checkUrlChange() initialize() runs after
+            // the whole registry has loaded activates the matching module
+            // exactly once, with no "already in progress" warning.
+            // checkUrlChange() calls activateModule() without awaiting it
+            // (see its own doc comment), so flush a few microtask ticks for
+            // that fire-and-forget chain (module.init() then
+            // module.activate(), each its own await) to actually finish.
+            registry.checkUrlChange();
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(registry.activeModule?.name).toBe('eager-one');
+            expect(consoleWarnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Activation already in progress'));
+
+            (window as unknown as Record<string, unknown>).FirstEagerModule = undefined;
+            (window as unknown as Record<string, unknown>).SecondEagerModule = undefined;
+            consoleWarnSpy.mockRestore();
         });
 
         test('getStatistics() tracks registriesLoaded/registryLoadFailures after loadFromRegistry() runs', async () => {

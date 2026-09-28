@@ -28,7 +28,8 @@
 import AgentletCore from '../src/index.js';
 import Module from '../src/core/Module.js';
 import * as entry from '../src/index.js';
-import type { AgentletModule } from '../src/types/public-api';
+import type { AgentletModule, EnvAPI } from '../src/types/public-api';
+import { logger, setDebugMode, isDebugMode } from '../src/utils/system/Logger.js';
 
 describe('AgentletCore behaviour', () => {
     let agentlet: AgentletCore | undefined;
@@ -215,6 +216,36 @@ describe('AgentletCore behaviour', () => {
             agentlet = new AgentletCore();
 
             expect(window.agentlet).toBe(agentlet);
+        });
+    });
+
+    describe('debugMode wiring to the shared logger', () => {
+        afterEach(() => {
+            setDebugMode(false);
+        });
+
+        test('constructing with debugMode: false (the default) gates informational logging off', () => {
+            agentlet = new AgentletCore();
+
+            expect(isDebugMode()).toBe(false);
+            logger.log('should not print');
+            expect(console.log).not.toHaveBeenCalledWith('should not print');
+        });
+
+        test('constructing with debugMode: true lets informational logging through', () => {
+            agentlet = new AgentletCore({ debugMode: true });
+
+            expect(isDebugMode()).toBe(true);
+            logger.log('should print');
+            expect(console.log).toHaveBeenCalledWith('should print');
+        });
+
+        test('a later instance with debugMode: false turns logging back off (module-level flag)', () => {
+            agentlet = new AgentletCore({ debugMode: true });
+            expect(isDebugMode()).toBe(true);
+
+            agentlet = new AgentletCore({ debugMode: false });
+            expect(isDebugMode()).toBe(false);
         });
     });
 
@@ -737,42 +768,153 @@ describe('AgentletCore behaviour', () => {
     });
 
     describe('localStorage monitoring', () => {
+        // Regression coverage: the core used to patch native localStorage
+        // methods globally and call handleLocalStorageChange() (which
+        // unmounts/remounts the active module) for ANY key, including ones
+        // the host page owns (e.g. a theme toggle writing its own
+        // localStorage key). Monitoring is now scoped to the env manager's
+        // own localStorage key (default: 'agentlet') and uses no
+        // monkey-patching - see setupLocalStorageListener()'s doc comment.
+
         test('setupLocalStorageListener() logs that monitoring is enabled', () => {
-            agentlet = new AgentletCore();
+            agentlet = new AgentletCore({ debugMode: true });
 
             agentlet.setupLocalStorageListener();
 
             expect(console.log).toHaveBeenCalledWith('📦 localStorage monitoring enabled');
         });
 
-        test('a same-tab localStorage.setItem() triggers handleLocalStorageChange() with the new value', async () => {
+        test('getMonitoredLocalStorageKey() returns the default env manager\'s storage key', () => {
             agentlet = new AgentletCore();
-            await agentlet.init();
-            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
-            window.localStorage.setItem('some-key', 'some-value');
-
-            expect(handleSpy).toHaveBeenCalledWith('some-key', 'some-value');
+            expect(agentlet.getMonitoredLocalStorageKey()).toBe('agentlet');
         });
 
-        test('a same-tab localStorage.removeItem() triggers handleLocalStorageChange() with a null new value', async () => {
-            agentlet = new AgentletCore();
-            await agentlet.init();
-            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+        test('getMonitoredLocalStorageKey() returns null for a custom EnvAPI without a storageKey', () => {
+            const custom: EnvAPI = {
+                name: () => 'custom',
+                get: () => undefined,
+                set: () => {},
+                has: () => false,
+                remove: () => false,
+                clear: () => {},
+                getAll: () => ({}),
+                setMultiple: () => {},
+                loadFromObject: () => {},
+                addChangeListener: () => {},
+                removeChangeListener: () => {},
+                createProxy(): EnvAPI { return custom; }
+            };
+            agentlet = new AgentletCore({ envManager: custom });
 
-            window.localStorage.removeItem('some-key');
-
-            expect(handleSpy).toHaveBeenCalledWith('some-key', null);
+            expect(agentlet.getMonitoredLocalStorageKey()).toBeNull();
         });
 
-        test('a same-tab localStorage.clear() triggers handleLocalStorageChange() with null/null', async () => {
+        test('getMonitoredLocalStorageKey() returns null when envManager is disabled', () => {
+            agentlet = new AgentletCore();
+            agentlet.envManager = null;
+
+            expect(agentlet.getMonitoredLocalStorageKey()).toBeNull();
+        });
+
+        test('does not patch native localStorage methods (no monkey-patching)', async () => {
+            const originalSetItem = window.localStorage.setItem;
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            expect(window.localStorage.setItem).toBe(originalSetItem);
+        });
+
+        test('the host page writing an unrelated localStorage key does not call handleLocalStorageChange()', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
             const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
-            window.localStorage.clear();
+            window.localStorage.setItem('starlight-theme', 'dark');
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'starlight-theme',
+                newValue: 'dark'
+            }));
 
-            expect(handleSpy).toHaveBeenCalledWith(null, null);
+            expect(handleSpy).not.toHaveBeenCalled();
+        });
+
+        test('agentlet.env.X = value calls handleLocalStorageChange() with the raw localStorage key and full serialized blob (2.0.1 shape)', async () => {
+            // handleLocalStorageChange()'s payload shape is a public
+            // contract (see onLocalStorageChange in public-api.d.ts) and
+            // must stay exactly what a direct Storage patch would have
+            // reported in 2.0.1 - the raw localStorage key (the env
+            // manager's own, default 'agentlet') and the full serialized
+            // JSON blob - even though this is no longer sourced by reading
+            // localStorage or patching anything (see setupLocalStorageListener()'s
+            // doc comment).
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            agentlet.envManager?.set('MY_VAR', 'hello');
+
+            const expectedBlob = JSON.stringify({ MY_VAR: 'hello' });
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', expectedBlob);
+            // Confirm the synthesized blob really does match what actually
+            // landed in localStorage (LocalStorageEnvironmentVariablesManager.saveToStorage()).
+            expect(window.localStorage.getItem('agentlet')).toBe(expectedBlob);
+        });
+
+        test('agentlet.env.remove()/clear() call handleLocalStorageChange() with the same 2.0.1 shape', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            agentlet.envManager?.set('MY_VAR', 'hello');
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            // remove() still ends in a localStorage.setItem() of the
+            // (smaller) remaining blob, same as 2.0.1.
+            agentlet.envManager?.remove('MY_VAR');
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', JSON.stringify({}));
+
+            // clear() ends in a localStorage.removeItem(), same as 2.0.1 -
+            // newValue is null, not '{}'.
+            agentlet.envManager?.clear();
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', null);
+        });
+
+        test('a cross-tab "storage" event for the env manager\'s own key calls handleLocalStorageChange()', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'agentlet',
+                newValue: '{"MY_VAR":"hello"}'
+            }));
+
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', '{"MY_VAR":"hello"}');
+        });
+
+        test('a cross-tab "storage" event for an unrelated key does not call handleLocalStorageChange()', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
+
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'starlight-theme',
+                newValue: 'dark'
+            }));
+
+            expect(handleSpy).not.toHaveBeenCalled();
+        });
+
+        test('cleanup() removes the storage listener and unsubscribes from the env manager', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+            const envManager = agentlet.envManager;
+            const removeChangeListenerSpy = jest.spyOn(envManager!, 'removeChangeListener');
+
+            await agentlet.cleanup();
+
+            expect(agentlet.boundStorageEventListener).toBeNull();
+            expect(agentlet.boundEnvChangeListener).toBeNull();
+            expect(removeChangeListenerSpy).toHaveBeenCalledTimes(1);
         });
 
         test('handleLocalStorageChange() emits localStorage:changed and refreshes the display/content', async () => {
@@ -856,6 +998,64 @@ describe('AgentletCore behaviour', () => {
             await agentlet.cleanup();
 
             expect(emitSpy).toHaveBeenCalledWith('core:cleanup');
+        });
+
+        test('leaves the page as it found it: no leftover window listeners, timers, or Storage patches', async () => {
+            // Snapshots what is patchable/leakable before init() and again
+            // after cleanup() - Storage methods, pending timers (via fake
+            // timers) and window listener counts by event type - and
+            // exercises the opt-in features (cookie/storage change
+            // listeners) that DO install something, so cleanup() has real
+            // patches and an interval to undo, not just the always-on
+            // module-registry URL polling.
+            jest.useFakeTimers();
+            try {
+                const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
+                const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
+                const timerCountBefore = jest.getTimerCount();
+
+                agentlet = new AgentletCore();
+                await agentlet.init();
+
+                // Exercise features that patch/poll only when actually used.
+                const cookieListener = jest.fn();
+                agentlet.cookieManager.addChangeListener(cookieListener);
+                const storageListener = jest.fn();
+                agentlet.storageManager.addChangeListener(storageListener);
+
+                // Sanity: confirm those two calls actually installed
+                // something, so restoring it below is a real assertion.
+                expect(jest.getTimerCount()).toBeGreaterThan(timerCountBefore);
+                window.localStorage.setItem('sanity-check-key', 'value');
+                expect(storageListener).toHaveBeenCalled();
+
+                const addedListenerTypes = addEventListenerSpy.mock.calls.map(call => call[0] as string);
+
+                await agentlet.cleanup();
+
+                // No timers left running (module registry's URL poll and
+                // the cookie poll started above are both stopped).
+                expect(jest.getTimerCount()).toBe(timerCountBefore);
+
+                // Every window listener type init() added has a matching
+                // removeEventListener() call of the same type.
+                const removedListenerTypes = removeEventListenerSpy.mock.calls.map(call => call[0] as string);
+                const addedCounts = new Map<string, number>();
+                addedListenerTypes.forEach(type => addedCounts.set(type, (addedCounts.get(type) || 0) + 1));
+                addedCounts.forEach((count, type) => {
+                    const removedCount = removedListenerTypes.filter(t => t === type).length;
+                    expect(removedCount).toBeGreaterThanOrEqual(count);
+                });
+
+                // Storage methods no longer notify the (removed) listener -
+                // the patch installed by storageManager.addChangeListener()
+                // above was undone.
+                storageListener.mockClear();
+                window.localStorage.setItem('after-cleanup-key', 'value');
+                expect(storageListener).not.toHaveBeenCalled();
+            } finally {
+                jest.useRealTimers();
+            }
         });
 
         test('a second cleanup() call (already torn down) does not throw', async () => {

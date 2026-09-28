@@ -4,6 +4,7 @@
  */
 
 import type { AgentletCoreConfig, EventBusAPI, EnvAPI, AgentletModule, UIManagerInternalAPI } from '../types/public-api';
+import { logger } from '../utils/system/Logger.js';
 
 /**
  * The DOM/query references shared between `AgentletCore` and `UIManager`
@@ -228,9 +229,9 @@ export class UIManager implements UIManagerInternalAPI {
                 this.showImageOverlay();
             }
 
-            console.log('🎨 UI setup completed (started minimized)');
+            logger.log('🎨 UI setup completed (started minimized)');
         } else {
-            console.log('🎨 UI setup completed');
+            logger.log('🎨 UI setup completed');
         }
     }
 
@@ -278,7 +279,7 @@ export class UIManager implements UIManagerInternalAPI {
         content.id = 'agentlet-content';
         content.className = 'agentlet-content';
 
-        console.log('🔧 UIManager createContentArea created:', content);
+        logger.log('🔧 UIManager createContentArea created:', content);
         return content;
     }
 

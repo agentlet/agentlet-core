@@ -4,6 +4,7 @@
  */
 import type { ElementSelectorAPI, ElementSelectorStartOptions, ElementInfo } from '../../types/public-api';
 import { Z_INDEX } from './ZIndex.js';
+import { logger } from '../system/Logger.js';
 
 class ElementSelector implements ElementSelectorAPI {
     isActive: boolean;
@@ -61,7 +62,7 @@ class ElementSelector implements ElementSelectorAPI {
         // Prevent selection
         document.body.style.userSelect = 'none';
 
-        console.log('🎯 Element selector activated. Click an element to select it, ESC to cancel.');
+        logger.log('🎯 Element selector activated. Click an element to select it, ESC to cancel.');
     }
 
     /**
@@ -93,7 +94,7 @@ class ElementSelector implements ElementSelectorAPI {
         // Restore selection
         document.body.style.userSelect = '';
 
-        console.log('🎯 Element selector deactivated');
+        logger.log('🎯 Element selector deactivated');
     }
 
     /**

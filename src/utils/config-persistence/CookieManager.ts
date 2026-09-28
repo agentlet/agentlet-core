@@ -8,6 +8,7 @@ import type {
     CookieStatistics,
     CookiesAPI
 } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /** A single cookie change-listener callback, matching {@link CookiesAPI}. */
 type CookieChangeListener = (name: string, newValue: string | undefined, oldValue: string | undefined) => void;
@@ -46,10 +47,13 @@ export default class CookieManager implements CookiesAPI {
         // Take initial snapshot
         this.updateSnapshot();
 
-        // Start monitoring for changes
-        this.startMonitoring();
+        // Monitoring is NOT started here: polling document.cookie every
+        // second is a host-page side effect (a timer that runs for the
+        // lifetime of the page) that should only exist while something is
+        // actually listening for cookie changes. addChangeListener()/
+        // removeChangeListener() below start and stop it lazily instead.
 
-        console.log('CookieManager initialized');
+        logger.log('CookieManager initialized');
     }
 
     /**
@@ -132,7 +136,7 @@ export default class CookieManager implements CookiesAPI {
             this.updateSnapshot();
             this.notifyChange(name, stringValue, oldValue);
 
-            console.log(`Cookie set: ${name} = ${this.maskSensitive(name, stringValue)}`);
+            logger.log(`Cookie set: ${name} = ${this.maskSensitive(name, stringValue)}`);
         } catch (error) {
             console.error('Failed to set cookie:', error);
             throw new Error(`Failed to set cookie: ${(error as Error).message}`);
@@ -159,7 +163,7 @@ export default class CookieManager implements CookiesAPI {
                 maxAge: 0
             });
 
-            console.log(`Cookie deleted: ${name}`);
+            logger.log(`Cookie deleted: ${name}`);
             return true;
         }
 
@@ -214,7 +218,7 @@ export default class CookieManager implements CookiesAPI {
             this.delete(name, options);
         });
 
-        console.log(`Attempted to clear ${cookieNames.length} cookies`);
+        logger.log(`Attempted to clear ${cookieNames.length} cookies`);
         return cookieNames.length;
     }
 
@@ -239,7 +243,10 @@ export default class CookieManager implements CookiesAPI {
     }
 
     /**
-     * Add a change listener
+     * Add a change listener. Starts the 1-second polling loop (see
+     * `startMonitoring()`) if this is the first listener - polling
+     * `document.cookie` for the lifetime of the page is a host-page side
+     * effect that should only exist while something is actually listening.
      * @param callback - Callback function (name, newValue, oldValue) => void
      */
     addChangeListener(callback: CookieChangeListener): void {
@@ -248,34 +255,46 @@ export default class CookieManager implements CookiesAPI {
         }
 
         this.listeners.add(callback);
-        console.log('Cookie change listener added');
+        this.startMonitoring();
+        logger.log('Cookie change listener added');
     }
 
     /**
-     * Remove a change listener
+     * Remove a change listener. Stops polling once no listener is left (see
+     * `stopMonitoring()`), mirroring `addChangeListener()`'s lazy start.
      * @param callback - Callback function to remove
      */
     removeChangeListener(callback: CookieChangeListener): boolean {
         const removed = this.listeners.delete(callback);
         if (removed) {
-            console.log('Cookie change listener removed');
+            logger.log('Cookie change listener removed');
+        }
+        if (this.listeners.size === 0) {
+            this.stopMonitoring();
         }
         return removed;
     }
 
     /**
-     * Start monitoring cookies for changes
+     * Start monitoring cookies for changes. Called automatically by
+     * `addChangeListener()`; safe to call directly too (e.g. to poll without
+     * ever registering a listener) - idempotent either way.
      */
     startMonitoring(): void {
         if (this.pollInterval) {
             return; // Already monitoring
         }
 
+        // Refresh the baseline right before polling begins, so a listener
+        // added long after construction doesn't see a burst of spurious
+        // "changes" for cookies that changed while nothing was watching.
+        this.updateSnapshot();
+
         this.pollInterval = setInterval(() => {
             this.checkForChanges();
         }, this.pollFrequency);
 
-        console.log(`Cookie monitoring started (polling every ${this.pollFrequency}ms)`);
+        logger.log(`Cookie monitoring started (polling every ${this.pollFrequency}ms)`);
     }
 
     /**
@@ -285,7 +304,7 @@ export default class CookieManager implements CookiesAPI {
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
-            console.log('Cookie monitoring stopped');
+            logger.log('Cookie monitoring stopped');
         }
     }
 
@@ -525,6 +544,6 @@ export default class CookieManager implements CookiesAPI {
     cleanup(): void {
         this.stopMonitoring();
         this.listeners.clear();
-        console.log('CookieManager cleaned up');
+        logger.log('CookieManager cleaned up');
     }
 }

@@ -3,6 +3,7 @@
  * Converts PDF files to images for AI analysis using PDF.js
  */
 import type { PDFConversionOptions, PDFCapabilities, PDFProcessorAPI, LibrarySetupAPI } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /**
  * Minimal shape of the `pdfjs-dist` global this file reads - only the
@@ -93,7 +94,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
 
         if (this.librarySetup) {
             try {
-                console.log('📄 Loading PDF.js library for PDF processing...');
+                logger.log('📄 Loading PDF.js library for PDF processing...');
                 return await this.librarySetup.ensureLibrary('pdfjs');
             } catch (error) {
                 console.warn('📄 Failed to load PDF.js library:', (error as Error).message);
@@ -115,7 +116,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
             return false;
         }
 
-        console.log('📄 PDF.js library is available (bundled version)');
+        logger.log('📄 PDF.js library is available (bundled version)');
         return true;
     }
 
@@ -146,12 +147,12 @@ export default class PDFProcessor implements PDFProcessorAPI {
         const images: string[] = [];
 
         try {
-            console.log('📄 Loading PDF document...');
+            logger.log('📄 Loading PDF document...');
 
             // Convert File to ArrayBuffer if needed
             let processedData: File | ArrayBuffer | Uint8Array = pdfData;
             if (pdfData instanceof File) {
-                console.log(`📄 Converting File to ArrayBuffer: ${pdfData.name}`);
+                logger.log(`📄 Converting File to ArrayBuffer: ${pdfData.name}`);
                 processedData = await this.fileToArrayBuffer(pdfData);
             }
 
@@ -178,12 +179,12 @@ export default class PDFProcessor implements PDFProcessorAPI {
             const pdf = await loadingTask.promise;
 
             const totalPages = Math.min(pdf.numPages, mergedOptions.maxPages);
-            console.log(`📄 PDF loaded: ${totalPages} pages (of ${pdf.numPages} total)`);
+            logger.log(`📄 PDF loaded: ${totalPages} pages (of ${pdf.numPages} total)`);
 
             // Convert each page to image
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
                 try {
-                    console.log(`📄 Processing page ${pageNum}/${totalPages}...`);
+                    logger.log(`📄 Processing page ${pageNum}/${totalPages}...`);
 
                     const page = await pdf.getPage(pageNum);
                     const viewport = page.getViewport({ scale: mergedOptions.scale });
@@ -209,7 +210,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
                     // Clean up
                     canvas.remove();
 
-                    console.log(`📄 Page ${pageNum} converted successfully`);
+                    logger.log(`📄 Page ${pageNum} converted successfully`);
 
                 } catch (pageError) {
                     console.error(`📄 Error processing page ${pageNum}:`, pageError);
@@ -217,7 +218,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
                 }
             }
 
-            console.log(`📄 PDF conversion completed: ${images.length} images created`);
+            logger.log(`📄 PDF conversion completed: ${images.length} images created`);
             return images;
 
         } catch (error) {
@@ -281,7 +282,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
             throw new Error('Selected file is not a PDF');
         }
 
-        console.log(`📄 Converting PDF file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+        logger.log(`📄 Converting PDF file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
         // Use the main convertPDFToImages method which now handles File objects
         return await this.convertPDFToImages(file, options);
@@ -294,7 +295,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
      */
     async convertPDFFromURL(pdfUrl: string, options: PDFConversionOptions = {}): Promise<string[]> {
         try {
-            console.log(`📄 Fetching PDF from URL: ${pdfUrl}`);
+            logger.log(`📄 Fetching PDF from URL: ${pdfUrl}`);
 
             const response = await fetch(pdfUrl);
             if (!response.ok) {
@@ -316,11 +317,11 @@ export default class PDFProcessor implements PDFProcessorAPI {
      * @param pdfName - Name of the PDF for logging
      */
     displayPDFImagesInConsole(images: string[], pdfName: string = 'PDF'): void {
-        console.log(`📄 ${pdfName} converted to ${images.length} page(s):`);
+        logger.log(`📄 ${pdfName} converted to ${images.length} page(s):`);
 
         images.forEach((image, index) => {
-            console.log(`📄 Page ${index + 1}:`);
-            console.log('%c ', `
+            logger.log(`📄 Page ${index + 1}:`);
+            logger.log('%c ', `
                 font-size: 200px;
                 background: url(${image}) no-repeat center;
                 background-size: contain;

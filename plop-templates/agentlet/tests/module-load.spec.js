@@ -154,11 +154,13 @@ test.describe('Module loading', () => {
     );
     expect(initMessage).toBeTruthy();
 
-    // Check that activateModule was called
-    const activateMessage = consoleMessages.find(msg => 
-      msg.includes('🔄 Module activated: {{name}}')
-    );
-    expect(activateMessage).toBeTruthy();
+    // Check that activateModule was called: verify a visible effect of
+    // activation (it is now the registry's active module) instead of a
+    // console message - agentlet-core's own "Module activated: ..." log is
+    // informational and only appears when debugMode is enabled, which this
+    // scaffold does not turn on just to satisfy a test.
+    const activeModuleName = await page.evaluate(() => window.agentlet?.moduleRegistry?.activeModule?.name);
+    expect(activeModuleName).toBe('{{kebabCase name}}');
 
     // Verify agentlet utilities are available
     const utilitiesAvailable = await page.evaluate(() => {

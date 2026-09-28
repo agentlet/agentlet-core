@@ -21,6 +21,7 @@
 import ElementSelectorCtor from '../../../src/utils/ui/ElementSelector.js';
 import { Z_INDEX } from '../../../src/utils/ui/ZIndex.js';
 import type { ElementSelectorAPI, ElementInfo } from '../../../src/types/public-api';
+import { setDebugMode } from '../../../src/utils/system/Logger.js';
 
 /**
  * ElementSelector.js is untyped, plain JS. `tsc` (with `checkJs: false`)
@@ -124,6 +125,11 @@ function fakeEvent(overrides: Partial<{ clientX: number; clientY: number; key: s
         ...overrides
     };
 }
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ElementSelector markup characterization', () => {
     let elementSelector: ElementSelectorTestInstance;

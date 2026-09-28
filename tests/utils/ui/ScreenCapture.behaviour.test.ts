@@ -14,6 +14,7 @@
 
 import ScreenCaptureCtor from '../../../src/utils/ui/ScreenCapture.js';
 import type { ScreenCaptureAPI, Html2CanvasOptions } from '../../../src/types/public-api';
+import { setDebugMode } from '../../../src/utils/system/Logger.js';
 
 /**
  * ScreenCapture.js is untyped, plain JS, so `tsc` only infers a weak shape
@@ -35,6 +36,11 @@ interface LibrarySetupStub {
 const ScreenCapture = ScreenCaptureCtor as unknown as new (librarySetup?: LibrarySetupStub | null) => ScreenCaptureTestInstance;
 
 type Html2CanvasMock = jest.Mock<Promise<HTMLCanvasElement>, [Element, Html2CanvasOptions]>;
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ScreenCapture behaviour characterization', () => {
     let screenCapture: ScreenCaptureTestInstance;

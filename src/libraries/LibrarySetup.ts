@@ -7,6 +7,7 @@
 import { LibraryLoader } from './LibraryLoader.js';
 import type { LibraryRegistryConfig } from './LibraryLoader.js';
 import type { LibrarySetupAPI } from '../types/public-api';
+import { logger } from '../utils/system/Logger.js';
 
 /** Constructor config. A subset of `AgentletCoreConfig` (see `src/types/public-api.d.ts`), which is what `src/index.ts` actually passes in. */
 export interface LibrarySetupConfig {
@@ -123,7 +124,7 @@ export class LibrarySetup implements LibrarySetupAPI {
     initializeRegistryLoader(registryConfig: LibraryRegistryConfig = {}): void {
         if (this.loadingMode === 'registry') {
             this.libraryLoader = new LibraryLoader(registryConfig);
-            console.log('📚 Registry-based library loading enabled');
+            logger.log('📚 Registry-based library loading enabled');
         }
     }
 
@@ -135,7 +136,7 @@ export class LibrarySetup implements LibrarySetupAPI {
         const globals = getLibraryGlobals();
         if (typeof globals.XLSX === 'undefined') {
             globals.XLSX = XLSX;
-            console.log('📊 XLSX library loaded for Excel export functionality');
+            logger.log('📊 XLSX library loaded for Excel export functionality');
         }
     }
 
@@ -147,7 +148,7 @@ export class LibrarySetup implements LibrarySetupAPI {
         const globals = getLibraryGlobals();
         if (typeof globals.html2canvas === 'undefined') {
             globals.html2canvas = html2canvas;
-            console.log('📸 html2canvas library loaded for screenshot functionality');
+            logger.log('📸 html2canvas library loaded for screenshot functionality');
         }
     }
 
@@ -161,7 +162,7 @@ export class LibrarySetup implements LibrarySetupAPI {
         const isFirstSetup = typeof globals.pdfjsLib === 'undefined';
         if (isFirstSetup) {
             globals.pdfjsLib = pdfjsLib;
-            console.log('📄 PDF.js library loaded for PDF processing functionality');
+            logger.log('📄 PDF.js library loaded for PDF processing functionality');
         }
 
         // Configure the worker URL every time this runs, even when
@@ -187,10 +188,10 @@ export class LibrarySetup implements LibrarySetupAPI {
         // reads `GlobalWorkerOptions.verbosity` for logging).
         (activeLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
 
-        console.log('📄 PDF.js worker URL set to:', workerSrc);
+        logger.log('📄 PDF.js worker URL set to:', workerSrc);
 
         // Verify the setting worked
-        console.log('📄 PDF.js GlobalWorkerOptions.workerSrc:', activeLib.GlobalWorkerOptions.workerSrc);
+        logger.log('📄 PDF.js GlobalWorkerOptions.workerSrc:', activeLib.GlobalWorkerOptions.workerSrc);
     }
 
     /**
@@ -241,7 +242,7 @@ export class LibrarySetup implements LibrarySetupAPI {
         const globals = getLibraryGlobals();
         if (globals.pdfjsLib) {
             globals.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-            console.log('📄 PDF.js worker URL manually set to:', workerUrl);
+            logger.log('📄 PDF.js worker URL manually set to:', workerUrl);
         } else {
             console.warn('📄 PDF.js not loaded yet, cannot set worker URL');
         }
@@ -255,13 +256,13 @@ export class LibrarySetup implements LibrarySetupAPI {
         const globals = getLibraryGlobals();
         if (typeof globals.hotkeys === 'undefined') {
             globals.hotkeys = hotkeys;
-            console.log('⌨️ hotkeys-js library loaded for keyboard shortcuts');
+            logger.log('⌨️ hotkeys-js library loaded for keyboard shortcuts');
         }
 
         // Initialize shortcut manager with hotkeys
         if (shortcutManager) {
             shortcutManager.init(hotkeys);
-            console.log('⌨️ ShortcutManager initialized with hotkeys-js');
+            logger.log('⌨️ ShortcutManager initialized with hotkeys-js');
         }
     }
 
@@ -279,10 +280,10 @@ export class LibrarySetup implements LibrarySetupAPI {
             if (pdfjsLib) this.setupPDFJS(pdfjsLib);
             if (hotkeys) this.setupHotkeys(hotkeys, shortcutManager);
 
-            console.log('📚 Bundled libraries setup completed');
+            logger.log('📚 Bundled libraries setup completed');
         } else {
             // Registry-based approach - libraries loaded on demand
-            console.log('📚 Registry-based loading enabled - libraries will load on demand');
+            logger.log('📚 Registry-based loading enabled - libraries will load on demand');
         }
     }
 

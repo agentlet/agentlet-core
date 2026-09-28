@@ -32,6 +32,7 @@ import { StyleInjector } from '../../src/ui/StyleInjector.js';
 import { ThemeManager } from '../../src/core/ThemeManager.js';
 import { Z_INDEX } from '../../src/utils/ui/ZIndex.js';
 import type { AgentletTheme } from '../../src/types/public-api';
+import { setDebugMode } from '../../src/utils/system/Logger.js';
 
 /** `StyleInjector.js` is untyped plain JS pre-conversion; this describes the
  * real runtime surface this suite drives directly (generate*Styles() are
@@ -66,6 +67,11 @@ function createStyleInjector(): StyleInjectorTestInstance {
 function defaultTheme(): AgentletTheme {
     return new ThemeManager({}).processThemeConfig(undefined);
 }
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('StyleInjector behaviour characterization', () => {
     beforeEach(() => {

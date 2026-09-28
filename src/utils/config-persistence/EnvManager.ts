@@ -3,6 +3,7 @@
  * Provides core functionality for managing environment variables
  */
 import type { EnvAPI } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /** A single env-variable change-listener callback, matching {@link EnvAPI}. */
 type EnvChangeListener = (key: string, newValue: string | undefined, oldValue: string | undefined) => void;
@@ -41,7 +42,7 @@ export class BaseEnvironmentVariablesManager implements EnvAPI {
         // Notify listeners of change
         this.notifyChange(key, value, oldValue);
 
-        console.log(`Environment variable set: ${key} = ${this.maskSensitive(key, value)}`);
+        logger.log(`Environment variable set: ${key} = ${this.maskSensitive(key, value)}`);
     }
 
     /**
@@ -78,7 +79,7 @@ export class BaseEnvironmentVariablesManager implements EnvAPI {
             // Notify listeners of deletion
             this.notifyChange(key, undefined, oldValue);
 
-            console.log(`Environment variable removed: ${key}`);
+            logger.log(`Environment variable removed: ${key}`);
         }
 
         return existed;
@@ -94,7 +95,7 @@ export class BaseEnvironmentVariablesManager implements EnvAPI {
         // Notify listeners of clear
         this.notifyChange('*', undefined, undefined);
 
-        console.log(`Cleared ${count} environment variables`);
+        logger.log(`Cleared ${count} environment variables`);
     }
 
     /**
@@ -137,7 +138,7 @@ export class BaseEnvironmentVariablesManager implements EnvAPI {
         }
 
         this.setMultiple(envObject);
-        console.log(`Loaded ${Object.keys(envObject).length} variables from object`);
+        logger.log(`Loaded ${Object.keys(envObject).length} variables from object`);
     }
 
     /**
@@ -243,7 +244,7 @@ export class LocalStorageEnvironmentVariablesManager extends BaseEnvironmentVari
         // Load existing variables from storage
         this.loadFromStorage();
 
-        console.log('LocalStorageEnvironmentVariablesManager initialized');
+        logger.log('LocalStorageEnvironmentVariablesManager initialized');
     }
 
     /**
@@ -268,7 +269,7 @@ export class LocalStorageEnvironmentVariablesManager extends BaseEnvironmentVari
                 Object.entries(parsed).forEach(([key, value]) => {
                     this.variables.set(key, value);
                 });
-                console.log(`Loaded ${this.variables.size} environment variables from localStorage`);
+                logger.log(`Loaded ${this.variables.size} environment variables from localStorage`);
             }
         } catch (error) {
             console.error('Failed to load environment variables from localStorage:', error);
@@ -282,7 +283,7 @@ export class LocalStorageEnvironmentVariablesManager extends BaseEnvironmentVari
         try {
             const data = Object.fromEntries(this.variables);
             localStorage.setItem(this.storageKey, JSON.stringify(data));
-            console.log('Environment variables saved to localStorage');
+            logger.log('Environment variables saved to localStorage');
         } catch (error) {
             console.error('Failed to save environment variables to localStorage:', error);
             throw new Error('Failed to save environment variables');

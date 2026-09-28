@@ -832,6 +832,12 @@ export interface CookiesAPI {
     /** Returns the number of cookies it attempted to delete. */
     clearAll(options?: CookieDeleteOptions): number;
     getMatching(pattern: string | RegExp): Record<string, string>;
+    /**
+     * Lazily starts the 1-second `document.cookie` poll (`startMonitoring()`)
+     * if this is the first listener registered; `removeChangeListener()`
+     * stops it again once none are left. Call `startMonitoring()` directly
+     * to poll without registering a listener.
+     */
     addChangeListener(
         callback: (name: string, newValue: string | undefined, oldValue: string | undefined) => void
     ): void;
@@ -895,6 +901,14 @@ export interface BoundStorageAPI {
      * `key` is `null` (not `'*'`) specifically for a cross-tab `clear()`:
      * the native `storage` event reports `key: null` for that case, while
      * a same-tab `clear()` (patched in-process) reports the `'*'` sentinel.
+     *
+     * Same-tab change detection requires patching `localStorage`/
+     * `sessionStorage`'s `setItem`/`removeItem`/`clear` - this only happens
+     * lazily, the first time a listener is registered for that storage
+     * type, and is undone again once the last listener for that type is
+     * removed (or on `cleanup()`). Nothing is patched, and the host page's
+     * own storage calls are never touched, unless this is called at least
+     * once.
      */
     addChangeListener(
         callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void
@@ -926,7 +940,11 @@ export interface StorageManagerAPI {
     getJSON<T = unknown>(key: string, defaultValue?: T | null, storageType?: StorageType): T | null;
     setJSON(key: string, value: unknown, storageType?: StorageType): void;
     setMultiple(items: Record<string, string>, storageType?: StorageType): void;
-    /** See {@link BoundStorageAPI.addChangeListener} - `key` is `null` for a cross-tab `clear()`. */
+    /**
+     * See {@link BoundStorageAPI.addChangeListener} - `key` is `null` for a
+     * cross-tab `clear()`, and the underlying native-method patch is
+     * installed lazily per `storageType` (or both, for `'both'`).
+     */
     addChangeListener(
         callback: (storageType: StorageType, key: string | null, newValue: string | null, oldValue: string | null) => void,
         storageType?: StorageType | 'both'
@@ -1813,6 +1831,19 @@ export declare class AgentletModule {
     setSubmoduleChangeCallback?(callback: () => void): void;
     /** Set to `true` to receive `onLocalStorageChange` notifications from the core. */
     requiresLocalStorageChangeNotification?: boolean;
+    /**
+     * Only fires for the env manager's own localStorage key (see
+     * `LocalStorageEnvironmentVariablesManager` in
+     * `src/utils/config-persistence/EnvManager.ts`) - never for a key the
+     * host page or another script owns. `key`/`newValue` are always the raw
+     * localStorage key and its full serialized JSON value (`null` for a
+     * `clear()`), matching what a direct `Storage` patch would have
+     * reported. The core does not patch native `Storage` methods to produce
+     * this, though: cross-tab changes come from the native `storage` event,
+     * and same-tab changes made through `agentlet.env` come from the env
+     * manager's own change notifications (it already knows synchronously
+     * when it writes).
+     */
     onLocalStorageChange?(key: string | null, newValue: string | null): void;
 }
 

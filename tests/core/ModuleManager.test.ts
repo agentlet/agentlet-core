@@ -16,6 +16,7 @@
 import ModuleManagerCtor from '../../src/core/ModuleManager.js';
 import Module from '../../src/core/Module.js';
 import type { AgentletModule, ModuleActivationContext } from '../../src/types/public-api';
+import { setDebugMode } from '../../src/utils/system/Logger.js';
 
 /**
  * ModuleManager.js is untyped, plain JS at this point (pre-conversion), so
@@ -76,6 +77,11 @@ function createRegistryStub(): ModuleRegistryStub {
         getStatistics: jest.fn().mockReturnValue({ totalModules: 0, activationCount: 0 })
     };
 }
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ModuleManager behaviour characterization', () => {
     let registryStub: ModuleRegistryStub;

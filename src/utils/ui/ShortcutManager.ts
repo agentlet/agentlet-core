@@ -4,6 +4,7 @@
  */
 import type { ShortcutInfo, ShortcutManagerAPI, ShortcutRegisterOptions, ShortcutsAPI } from '../../types/public-api';
 import type { LibrarySetup } from '../../libraries/LibrarySetup.js';
+import { logger } from '../system/Logger.js';
 
 // Modifiers whose combinations never produce ordinary typed text. Shift is
 // deliberately excluded: shift+s is how a user types an uppercase S.
@@ -139,7 +140,7 @@ class ShortcutManager implements ShortcutManagerAPI {
         this.enabled = true;
         this.hotkeys = null;
 
-        console.log('⌨️ ShortcutManager initialized');
+        logger.log('⌨️ ShortcutManager initialized');
     }
 
     /**
@@ -159,7 +160,7 @@ class ShortcutManager implements ShortcutManagerAPI {
 
         if (this.librarySetup) {
             try {
-                console.log('⌨️ Loading hotkeys-js library for keyboard shortcuts...');
+                logger.log('⌨️ Loading hotkeys-js library for keyboard shortcuts...');
                 const success = await this.librarySetup.ensureLibrary('hotkeys');
                 const windowHotkeys = getWindowHotkeys();
                 if (success && windowHotkeys) {
@@ -188,7 +189,7 @@ class ShortcutManager implements ShortcutManagerAPI {
             return true;
         };
 
-        console.log('⌨️ ShortcutManager initialized with hotkeys-js');
+        logger.log('⌨️ ShortcutManager initialized with hotkeys-js');
     }
 
     /**
@@ -283,7 +284,7 @@ class ShortcutManager implements ShortcutManagerAPI {
             registered: new Date()
         });
 
-        console.log(`⌨️ Registered shortcut: ${keys} - ${config.description}`);
+        logger.log(`⌨️ Registered shortcut: ${keys} - ${config.description}`);
         return true;
     }
 
@@ -302,7 +303,7 @@ class ShortcutManager implements ShortcutManagerAPI {
         this.hotkeys.unbind(keys, scope);
         this.shortcuts.delete(keys);
 
-        console.log(`⌨️ Unregistered shortcut: ${keys}`);
+        logger.log(`⌨️ Unregistered shortcut: ${keys}`);
         return true;
     }
 
@@ -312,7 +313,7 @@ class ShortcutManager implements ShortcutManagerAPI {
      */
     setEnabled(enabled: boolean): void {
         this.enabled = enabled;
-        console.log(`⌨️ Shortcuts ${enabled ? 'enabled' : 'disabled'}`);
+        logger.log(`⌨️ Shortcuts ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     /**
@@ -352,7 +353,7 @@ class ShortcutManager implements ShortcutManagerAPI {
         }
 
         this.shortcuts.clear();
-        console.log('⌨️ All shortcuts cleared');
+        logger.log('⌨️ All shortcuts cleared');
     }
 
     /**
@@ -372,7 +373,7 @@ class ShortcutManager implements ShortcutManagerAPI {
         if (config.quickCommandDialogShortcut) {
             const callback = config.quickCommandCallback || ((result: unknown) => {
                 if (result) {
-                    console.log('⌨️ Quick command:', result);
+                    logger.log('⌨️ Quick command:', result);
                     // Here you could add logic to parse and execute commands
                 }
             });
@@ -395,7 +396,7 @@ class ShortcutManager implements ShortcutManagerAPI {
             allowInInputs: true
         });
 
-        console.log('⌨️ Default Agentlet shortcuts registered');
+        logger.log('⌨️ Default Agentlet shortcuts registered');
     }
 
     /**

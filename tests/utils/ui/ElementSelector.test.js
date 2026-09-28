@@ -3,6 +3,12 @@
  */
 
 import ElementSelector from '../../../src/utils/ui/ElementSelector.js';
+import { setDebugMode } from '../../../src/utils/system/Logger.js';
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ElementSelector', () => {
   let elementSelector;
