@@ -839,27 +839,43 @@ describe('AgentletCore behaviour', () => {
             expect(handleSpy).not.toHaveBeenCalled();
         });
 
-        test('agentlet.env.X = value calls handleLocalStorageChange() with the env variable\'s own key/value', async () => {
+        test('agentlet.env.X = value calls handleLocalStorageChange() with the raw localStorage key and full serialized blob (2.0.1 shape)', async () => {
+            // handleLocalStorageChange()'s payload shape is a public
+            // contract (see onLocalStorageChange in public-api.d.ts) and
+            // must stay exactly what a direct Storage patch would have
+            // reported in 2.0.1 - the raw localStorage key (the env
+            // manager's own, default 'agentlet') and the full serialized
+            // JSON blob - even though this is no longer sourced by reading
+            // localStorage or patching anything (see setupLocalStorageListener()'s
+            // doc comment).
             agentlet = new AgentletCore();
             await agentlet.init();
             const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
             agentlet.envManager?.set('MY_VAR', 'hello');
 
-            expect(handleSpy).toHaveBeenCalledWith('MY_VAR', 'hello');
+            const expectedBlob = JSON.stringify({ MY_VAR: 'hello' });
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', expectedBlob);
+            // Confirm the synthesized blob really does match what actually
+            // landed in localStorage (LocalStorageEnvironmentVariablesManager.saveToStorage()).
+            expect(window.localStorage.getItem('agentlet')).toBe(expectedBlob);
         });
 
-        test('agentlet.env.remove()/clear() call handleLocalStorageChange() too', async () => {
+        test('agentlet.env.remove()/clear() call handleLocalStorageChange() with the same 2.0.1 shape', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
             agentlet.envManager?.set('MY_VAR', 'hello');
             const handleSpy = jest.spyOn(agentlet, 'handleLocalStorageChange');
 
+            // remove() still ends in a localStorage.setItem() of the
+            // (smaller) remaining blob, same as 2.0.1.
             agentlet.envManager?.remove('MY_VAR');
-            expect(handleSpy).toHaveBeenCalledWith('MY_VAR', null);
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', JSON.stringify({}));
 
+            // clear() ends in a localStorage.removeItem(), same as 2.0.1 -
+            // newValue is null, not '{}'.
             agentlet.envManager?.clear();
-            expect(handleSpy).toHaveBeenCalledWith('*', null);
+            expect(handleSpy).toHaveBeenCalledWith('agentlet', null);
         });
 
         test('a cross-tab "storage" event for the env manager\'s own key calls handleLocalStorageChange()', async () => {

@@ -1835,12 +1835,14 @@ export declare class AgentletModule {
      * Only fires for the env manager's own localStorage key (see
      * `LocalStorageEnvironmentVariablesManager` in
      * `src/utils/config-persistence/EnvManager.ts`) - never for a key the
-     * host page or another script owns. The core does not patch native
-     * `Storage` methods for this: same-tab changes made through
-     * `agentlet.env` report that env variable's own `key`/`newValue`
-     * directly (not the raw localStorage key or its serialized blob);
-     * cross-tab changes (the native `storage` event) report the raw
-     * localStorage key and its full serialized value, as they always did.
+     * host page or another script owns. `key`/`newValue` are always the raw
+     * localStorage key and its full serialized JSON value (`null` for a
+     * `clear()`), matching what a direct `Storage` patch would have
+     * reported. The core does not patch native `Storage` methods to produce
+     * this, though: cross-tab changes come from the native `storage` event,
+     * and same-tab changes made through `agentlet.env` come from the env
+     * manager's own change notifications (it already knows synchronously
+     * when it writes).
      */
     onLocalStorageChange?(key: string | null, newValue: string | null): void;
 }

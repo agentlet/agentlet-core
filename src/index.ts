@@ -789,9 +789,21 @@ class AgentletCore {
      *   when `agentlet.env.X = ...`/`.remove()`/`.clear()` runs (it is what
      *   performs the write), so this subscribes to its existing
      *   `addChangeListener()` instead of intercepting `localStorage` itself.
-     *   `key`/`newValue` are therefore the env variable's own name/value
-     *   here, not the raw localStorage key/JSON blob - see the doc comment
-     *   on `onLocalStorageChange` in `src/types/public-api.d.ts`.
+     *   `key`/`newValue` still carry the same raw localStorage key and
+     *   serialized-JSON-blob shape `onLocalStorageChange` always has (see
+     *   its doc comment in `src/types/public-api.d.ts`): by the time the env
+     *   manager's listener fires, its in-memory variables map already
+     *   reflects the change (`BaseEnvironmentVariablesManager.set()`/
+     *   `remove()`/`clear()` mutate the map before notifying - see
+     *   `src/utils/config-persistence/EnvManager.ts`), so `getAll(true)`
+     *   here mirrors exactly the JSON blob
+     *   `LocalStorageEnvironmentVariablesManager.saveToStorage()` is about
+     *   to persist, without reading `localStorage` itself (no dependency on
+     *   exactly when that write happens) and without patching anything.
+     *   `clear()` is the one operation that calls `localStorage.removeItem()`
+     *   instead of `setItem()` (see `saveToStorage()`'s callers), detected
+     *   here via the `'*'` sentinel key `BaseEnvironmentVariablesManager`'s
+     *   own `clear()` notifies with.
      *
      * A change made by some other script directly to the env manager's
      * localStorage key, in the same tab, bypassing `agentlet.env`, is not
@@ -812,11 +824,13 @@ class AgentletCore {
             window.addEventListener('storage', this.boundStorageEventListener);
         }
 
-        if (this.envManager && monitoredKey) {
-            this.boundEnvChangeListener = (key, newValue): void => {
-                this.handleLocalStorageChange(key, newValue ?? null);
+        const envManager = this.envManager;
+        if (envManager && monitoredKey) {
+            this.boundEnvChangeListener = (key): void => {
+                const newValue = key === '*' ? null : JSON.stringify(envManager.getAll(true));
+                this.handleLocalStorageChange(monitoredKey, newValue);
             };
-            this.envManager.addChangeListener(this.boundEnvChangeListener);
+            envManager.addChangeListener(this.boundEnvChangeListener);
         }
 
         logger.log('📦 localStorage monitoring enabled');
