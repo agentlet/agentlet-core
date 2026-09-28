@@ -525,8 +525,11 @@ function buildSarif(findings, { toolName = 'agentlet-core-vuln-scan', toolVersio
                     }
                 }
             ],
+            // Own key: primaryLocationLineHash is computed by the upload
+            // action from the file contents, and every result points at
+            // line 1, so it cannot tell findings apart.
             partialFingerprints: {
-                primaryLocationLineHash: `${finding.packageName}|${ruleId}|${finding.scope || ''}`
+                'dependencyVulnerability/v1': `${finding.packageName}|${ruleId}|${finding.scope || ''}`
             }
         });
     }
