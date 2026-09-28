@@ -117,9 +117,26 @@ describe('contrastingTextColor()', () => {
         expect(contrastingTextColor('#fff')).toBe('#000000');
     });
 
-    it('falls back to the framework default for non-hex values (gradients, rgba(), named colours)', () => {
+    it('falls back to the framework default for values it does not parse (gradients, CSS variables, hsl(), named colours)', () => {
         expect(contrastingTextColor('linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)')).toBe('#333333');
-        expect(contrastingTextColor('rgba(15, 51, 80, 1)')).toBe('#333333');
+        expect(contrastingTextColor('var(--brand-header-background)')).toBe('#333333');
+        expect(contrastingTextColor('hsl(210, 76%, 19%)')).toBe('#333333');
         expect(contrastingTextColor('navy')).toBe('#333333');
+    });
+
+    it('parses #rgba and #rrggbbaa hex, ignoring the alpha channel', () => {
+        expect(contrastingTextColor('#000f')).toBe('#ffffff'); // black, full alpha
+        expect(contrastingTextColor('#0003')).toBe('#ffffff'); // black, low alpha - still read as opaque black
+        expect(contrastingTextColor('#0f3350ff')).toBe('#ffffff'); // navy, full alpha
+        expect(contrastingTextColor('#f4a26180')).toBe('#000000'); // orange, half alpha
+    });
+
+    it('parses rgb()/rgba() functional notation, comma- or space-separated, ignoring alpha', () => {
+        expect(contrastingTextColor('rgb(15, 51, 80)')).toBe('#ffffff'); // navy
+        expect(contrastingTextColor('rgba(15, 51, 80, 1)')).toBe('#ffffff'); // navy, explicit alpha
+        expect(contrastingTextColor('rgb(15 51 80)')).toBe('#ffffff'); // CSS Color 4 space syntax
+        expect(contrastingTextColor('rgb(15 51 80 / 50%)')).toBe('#ffffff'); // space syntax with alpha
+        expect(contrastingTextColor('rgba(244, 162, 97, 0.8)')).toBe('#000000'); // orange
+        expect(contrastingTextColor('rgb(0%, 0%, 0%)')).toBe('#ffffff'); // percentage channels
     });
 });

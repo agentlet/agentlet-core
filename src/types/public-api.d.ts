@@ -1484,6 +1484,17 @@ export interface AgentletTheme {
     dialogBorderRadius: string;
     dialogBoxShadow: string;
     dialogHeaderBackground: string;
+    /**
+     * `ThemeManager.processThemeConfig()` derives this automatically (by
+     * luminance, black or white) when a caller sets a header background
+     * - `headerBackground` or `dialogHeaderBackground` - without ever
+     * setting a matching text colour anywhere. That safeguard only
+     * understands hex colours (`#rgb`/`#rgba`/`#rrggbb`/`#rrggbbaa`) and
+     * functional `rgb()`/`rgba()` notation; a background given as a CSS
+     * custom property, a gradient, `hsl()`/`oklch()`/etc, or a named
+     * colour falls back to the framework's fixed dark default instead
+     * (see `contrastingTextColor()` in `ThemeManager.ts`).
+     */
     dialogHeaderTextColor: string;
     dialogHeaderTextMargin: string;
     dialogContentBackground: string;
