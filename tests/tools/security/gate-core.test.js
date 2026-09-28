@@ -3,7 +3,9 @@ const {
     cvss3BaseScore,
     extractCveAliases,
     extractFixedVersion,
+    evaluateAffectedness,
     parseOsvScanOutput,
+    partitionByAffected,
     enrichFindings,
     partitionExceptions,
     exceptionMatches,
@@ -11,6 +13,69 @@ const {
     evaluateGate,
     buildSarif
 } = require('../../../tools/security/lib/gate-core.js');
+
+// Real shapes fetched from api.osv.dev, trimmed to the fields this module
+// reads. xlsx's two GHSAs were never fixed on the npm registry (only on
+// the SheetJS CDN), so OSV records them as an open-ended
+// `introduced: "0"` range with no `fixed`/`last_affected` event, and puts
+// the real upper bound in `database_specific.last_known_affected_version_range`.
+const XLSX_GHSA_4R6H = {
+    id: 'GHSA-4r6h-8v6p-xvw6',
+    aliases: ['CVE-2023-30533'],
+    summary: 'Prototype Pollution in sheetJS',
+    database_specific: { severity: 'HIGH' },
+    affected: [
+        {
+            package: { name: 'xlsx', ecosystem: 'npm', purl: 'pkg:npm/xlsx' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }] }],
+            database_specific: { last_known_affected_version_range: '< 0.19.3' }
+        }
+    ],
+    references: [{ type: 'ADVISORY', url: 'https://example.com/advisory' }]
+};
+
+const XLSX_GHSA_5PGG = {
+    id: 'GHSA-5pgg-2g8v-p4x9',
+    aliases: ['CVE-2024-22363'],
+    summary: 'xlsx Regular Expression Denial of Service (ReDoS)',
+    database_specific: { severity: 'HIGH' },
+    affected: [
+        {
+            package: { name: 'xlsx', ecosystem: 'npm', purl: 'pkg:npm/xlsx' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }] }],
+            database_specific: { last_known_affected_version_range: '< 0.20.2' }
+        }
+    ],
+    references: []
+};
+
+// GHSA-96hv-2xvq-fx4p for `ws`: four separate affected entries, one per
+// major-version branch, each with its own real `fixed` event.
+const WS_GHSA_96HV = {
+    id: 'GHSA-96hv-2xvq-fx4p',
+    aliases: ['CVE-2026-48779'],
+    summary: 'ws: Memory exhaustion DoS from tiny fragments and data chunks',
+    database_specific: { severity: 'HIGH' },
+    affected: [
+        {
+            package: { name: 'ws', ecosystem: 'npm', purl: 'pkg:npm/ws' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '1.1.0' }, { fixed: '5.2.5' }] }]
+        },
+        {
+            package: { name: 'ws', ecosystem: 'npm', purl: 'pkg:npm/ws' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '6.0.0' }, { fixed: '6.2.4' }] }]
+        },
+        {
+            package: { name: 'ws', ecosystem: 'npm', purl: 'pkg:npm/ws' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '7.0.0' }, { fixed: '7.5.11' }] }]
+        },
+        {
+            package: { name: 'ws', ecosystem: 'npm', purl: 'pkg:npm/ws' },
+            ranges: [{ type: 'SEMVER', events: [{ introduced: '8.0.0' }, { fixed: '8.21.0' }] }]
+        }
+    ],
+    references: []
+};
 
 function makeOsvVulnerability(overrides = {}) {
     return {
@@ -101,6 +166,92 @@ describe('extractCveAliases / extractFixedVersion', () => {
     });
 });
 
+describe('evaluateAffectedness', () => {
+    test('xlsx GHSA-4r6h-8v6p-xvw6: 0.18.5 is affected, fix is 0.19.3', () => {
+        const result = evaluateAffectedness(XLSX_GHSA_4R6H, 'xlsx', '0.18.5');
+        expect(result.affected).toBe(true);
+        expect(result.fixedVersion).toBe('0.19.3');
+        expect(result.reason).toBeNull();
+    });
+
+    test('xlsx GHSA-4r6h-8v6p-xvw6: 0.20.3 is NOT affected (past the real, CDN-only fix)', () => {
+        const result = evaluateAffectedness(XLSX_GHSA_4R6H, 'xlsx', '0.20.3');
+        expect(result.affected).toBe(false);
+        expect(result.fixedVersion).toBeNull();
+        expect(result.reason).toMatch(/0\.20\.3/);
+        expect(result.reason).toMatch(/0\.19\.3/);
+    });
+
+    test('xlsx GHSA-5pgg-2g8v-p4x9: 0.18.5 affected (fix 0.20.2), 0.20.3 not affected', () => {
+        expect(evaluateAffectedness(XLSX_GHSA_5PGG, 'xlsx', '0.18.5')).toMatchObject({
+            affected: true,
+            fixedVersion: '0.20.2'
+        });
+        expect(evaluateAffectedness(XLSX_GHSA_5PGG, 'xlsx', '0.20.3')).toMatchObject({
+            affected: false,
+            fixedVersion: null
+        });
+    });
+
+    test('ws GHSA-96hv-2xvq-fx4p: picks the fix from the branch that contains the installed version', () => {
+        // This is the reported bug: naively taking the first `fixed` event
+        // (5.2.5, the 1.x branch's fix) for an 8.x install would suggest a
+        // downgrade instead of the real 8.x fix (8.21.0).
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '8.18.3')).toMatchObject({
+            affected: true,
+            fixedVersion: '8.21.0'
+        });
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '7.4.0')).toMatchObject({
+            affected: true,
+            fixedVersion: '7.5.11'
+        });
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '6.1.0')).toMatchObject({
+            affected: true,
+            fixedVersion: '6.2.4'
+        });
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '2.0.0')).toMatchObject({
+            affected: true,
+            fixedVersion: '5.2.5'
+        });
+    });
+
+    test('ws GHSA-96hv-2xvq-fx4p: a version past every branch fix is not affected', () => {
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '8.21.0')).toMatchObject({
+            affected: false,
+            fixedVersion: null
+        });
+    });
+
+    test('a version below every introduced event is not affected', () => {
+        expect(evaluateAffectedness(WS_GHSA_96HV, 'ws', '0.5.0')).toMatchObject({
+            affected: false,
+            fixedVersion: null
+        });
+    });
+
+    test('an unparseable range hint is treated conservatively as affected', () => {
+        const vuln = {
+            affected: [{
+                package: { name: 'foo' },
+                ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }] }],
+                database_specific: { last_known_affected_version_range: 'see advisory text' }
+            }]
+        };
+        expect(evaluateAffectedness(vuln, 'foo', '9.9.9')).toMatchObject({ affected: true });
+    });
+
+    test('no hint at all and open-ended range: affected at face value', () => {
+        const vuln = {
+            affected: [{
+                package: { name: 'foo' },
+                ranges: [{ type: 'SEMVER', events: [{ introduced: '1.0.0' }] }]
+            }]
+        };
+        expect(evaluateAffectedness(vuln, 'foo', '5.0.0')).toMatchObject({ affected: true, fixedVersion: null });
+        expect(evaluateAffectedness(vuln, 'foo', '0.5.0')).toMatchObject({ affected: false });
+    });
+});
+
 describe('parseOsvScanOutput', () => {
     test('flattens one finding per package+vulnerability', () => {
         const output = makeOsvScanOutput([makeOsvVulnerability()]);
@@ -117,9 +268,40 @@ describe('parseOsvScanOutput', () => {
         });
     });
 
+    test('marks xlsx@0.18.5 affected and xlsx@0.20.3 not affected for the same real GHSA records', () => {
+        const affectedOutput = makeOsvScanOutput([XLSX_GHSA_4R6H, XLSX_GHSA_5PGG], { name: 'xlsx', version: '0.18.5' });
+        const affectedFindings = parseOsvScanOutput(affectedOutput, { scope: 'bundle' });
+        expect(affectedFindings.every(f => f.affected)).toBe(true);
+        expect(affectedFindings.map(f => f.fixedVersion).sort()).toEqual(['0.19.3', '0.20.2']);
+
+        const fixedOutput = makeOsvScanOutput([XLSX_GHSA_4R6H, XLSX_GHSA_5PGG], { name: 'xlsx', version: '0.20.3' });
+        const fixedFindings = parseOsvScanOutput(fixedOutput, { scope: 'bundle' });
+        expect(fixedFindings.every(f => f.affected === false)).toBe(true);
+        expect(fixedFindings.every(f => f.notAffectedReason)).toBeTruthy();
+    });
+
+    test('picks the correct branch fix for a multi-range advisory (ws)', () => {
+        const output = makeOsvScanOutput([WS_GHSA_96HV], { name: 'ws', version: '8.18.3' });
+        const findings = parseOsvScanOutput(output, { scope: 'lockfile' });
+        expect(findings[0].fixedVersion).toBe('8.21.0');
+    });
+
     test('handles empty results gracefully', () => {
         expect(parseOsvScanOutput({ results: [] })).toEqual([]);
         expect(parseOsvScanOutput({})).toEqual([]);
+    });
+});
+
+describe('partitionByAffected', () => {
+    test('splits findings by the affected flag, treating undefined as affected', () => {
+        const findings = [
+            { id: 'a', affected: true },
+            { id: 'b', affected: false },
+            { id: 'c' } // legacy/unspecified: kept as affected
+        ];
+        const { affected, notAffected } = partitionByAffected(findings);
+        expect(affected.map(f => f.id)).toEqual(['a', 'c']);
+        expect(notAffected.map(f => f.id)).toEqual(['b']);
     });
 });
 

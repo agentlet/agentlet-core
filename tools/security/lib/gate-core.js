@@ -11,6 +11,8 @@
  * what these functions compute.
  */
 
+const { compareVersions, satisfiesRange, upperBoundFromRange } = require('./semver-lite.js');
+
 const SEVERITY_ORDER = ['unknown', 'low', 'medium', 'high', 'critical'];
 
 /**
@@ -152,11 +154,12 @@ function allIds(vulnerability) {
 }
 
 /**
- * Best-effort fixed version for a vulnerability affecting `packageName`.
- * Prefers an explicit SEMVER "fixed" event; falls back to parsing OSV's
- * `database_specific.last_known_affected_version_range` (e.g. "< 0.19.3"),
- * which GHSA-sourced advisories populate even without a fixed event.
- * Returns null if no fixed version is known.
+ * Best-effort fixed version for a vulnerability, ignoring which specific
+ * range/branch it came from. Kept for simple single-range cases (and
+ * backwards compatibility); `evaluateAffectedness` below is what
+ * `parseOsvScanOutput` actually uses, since it correctly picks the range
+ * that contains the installed version rather than always the first one
+ * (see its doc comment for why that distinction matters).
  */
 function extractFixedVersion(vulnerability) {
     for (const affected of vulnerability?.affected || []) {
@@ -168,20 +171,135 @@ function extractFixedVersion(vulnerability) {
             }
         }
         const rangeText = affected.database_specific?.last_known_affected_version_range;
-        if (typeof rangeText === 'string') {
-            const match = rangeText.match(/^\s*<\s*(.+?)\s*$/);
-            if (match) {
-                return match[1];
-            }
+        const upperBound = typeof rangeText === 'string' ? upperBoundFromRange(rangeText) : null;
+        if (upperBound) {
+            return upperBound;
         }
     }
     return null;
 }
 
 /**
+ * Decides whether `installedVersion` of `packageName` is actually affected
+ * by an OSV vulnerability record, and if so which version fixes it.
+ *
+ * This matters for two real cases seen in practice:
+ *
+ * 1. Multi-branch advisories (e.g. GHSA-96hv-2xvq-fx4p for `ws`, which has
+ *    four separate `affected` entries, one per major-version branch, each
+ *    with its own `fixed` event: 1.x->5.2.5, 6.x->6.2.4, 7.x->7.5.11,
+ *    8.x->8.21.0). Naively returning the first `fixed` event found (as the
+ *    old `extractFixedVersion` did) reports the wrong fix for every branch
+ *    but the first - e.g. suggesting `ws@8.18.3` should upgrade to 5.2.5,
+ *    which is a downgrade. This function evaluates each range's
+ *    introduced/fixed (or last_affected) interval against the installed
+ *    version with a real semver comparator and only uses the fixed version
+ *    from the range that actually contains it.
+ *
+ * 2. Advisories with no fixed npm release at all (e.g. `xlsx`'s
+ *    GHSA-4r6h-8v6p-xvw6/GHSA-5pgg-2g8v-p4x9: the real fix was only ever
+ *    published to the SheetJS CDN, never to the npm registry). OSV then
+ *    has no `fixed`/`last_affected` event - only `introduced: "0"` - which
+ *    literally means "every version is affected" if read naively. GHSA
+ *    still records the true upper bound in the affected entry's
+ *    `database_specific.last_known_affected_version_range` (e.g.
+ *    "< 0.19.3"). This function evaluates the installed version against
+ *    that range and reports the package as NOT actually affected once it
+ *    is upgraded past that bound (e.g. `xlsx@0.20.3`), even though the
+ *    open-ended OSV range alone can't express that.
+ *
+ * @returns {{ affected: boolean, fixedVersion: string|null, reason: string|null }}
+ *   `reason` is set (human-readable) whenever a range hint was used to
+ *   decide `affected: false`, for the "not affected per advisory range"
+ *   report/log section.
+ */
+function evaluateAffectedness(vulnerability, packageName, installedVersion) {
+    const allAffected = vulnerability?.affected || [];
+    const relevant = allAffected.filter(a => !a.package?.name || a.package.name === packageName);
+    const entries = relevant.length > 0 ? relevant : allAffected;
+
+    let affected = false;
+    let fixedVersion = null;
+    let reason = null;
+
+    for (const affectedEntry of entries) {
+        const rangeHint = affectedEntry.database_specific?.last_known_affected_version_range;
+
+        for (const range of affectedEntry.ranges || []) {
+            if (range.type !== 'SEMVER') {
+                continue;
+            }
+            const events = range.events || [];
+            const introduced = events.find(e => e.introduced !== undefined)?.introduced;
+            const fixedEvent = events.find(e => e.fixed !== undefined);
+            const lastAffectedEvent = events.find(e => e.last_affected !== undefined);
+
+            const geIntroduced = introduced === undefined ||
+                compareVersions(installedVersion, introduced) >= 0;
+
+            if (fixedEvent || lastAffectedEvent) {
+                // Closed (or half-open) interval expressed directly by OSV
+                // events - the normal, well-formed case. Only the range
+                // whose interval actually contains the installed version
+                // may set fixedVersion.
+                const belowEnd = fixedEvent
+                    ? compareVersions(installedVersion, fixedEvent.fixed) < 0
+                    : compareVersions(installedVersion, lastAffectedEvent.last_affected) <= 0;
+
+                if (geIntroduced && belowEnd) {
+                    affected = true;
+                    if (fixedEvent && fixedVersion === null) {
+                        fixedVersion = fixedEvent.fixed;
+                    }
+                }
+                continue;
+            }
+
+            // Open-ended range (no fixed/last_affected event at all). Fall
+            // back to GHSA's last_known_affected_version_range hint, if
+            // present, to determine both whether this version is really
+            // affected and what the real fix version is.
+            if (typeof rangeHint === 'string') {
+                const satisfiesHint = satisfiesRange(installedVersion, rangeHint);
+                if (satisfiesHint === null) {
+                    // Unparseable hint: can't verify exclusion, so stay
+                    // conservative and treat it as affected with an
+                    // unknown fix rather than silently dropping a finding.
+                    affected = true;
+                } else if (satisfiesHint) {
+                    affected = true;
+                    const bound = upperBoundFromRange(rangeHint);
+                    if (bound && fixedVersion === null) {
+                        fixedVersion = bound;
+                    }
+                } else {
+                    reason = `installed version ${installedVersion} does not satisfy the advisory's ` +
+                        `known-affected range (${rangeHint})`;
+                }
+                continue;
+            }
+
+            // No hint and no upper bound at all: nothing tells us this
+            // version is safe, so treat the open-ended range at face value.
+            if (geIntroduced) {
+                affected = true;
+            }
+        }
+    }
+
+    return { affected, fixedVersion, reason: affected ? null : reason };
+}
+
+/**
  * Flatten osv-scanner's JSON output (osv-scanner scan source --format json)
  * into one finding per package+vulnerability. `scope` and `sourcePath` are
  * carried through for reporting/SARIF location purposes.
+ *
+ * Findings osv-scanner reports but that `evaluateAffectedness` determines
+ * are not actually affected (see its doc comment) get `affected: false`
+ * and a `notAffectedReason`; callers (see scan.mjs) must exclude these
+ * from the gate and from SARIF, but should still surface them for
+ * transparency (they are still what osv-scanner reported).
  */
 function parseOsvScanOutput(osvJson, { scope, sourcePath } = {}) {
     const findings = [];
@@ -189,6 +307,9 @@ function parseOsvScanOutput(osvJson, { scope, sourcePath } = {}) {
         const resolvedSourcePath = sourcePath || result.source?.path;
         for (const pkg of result.packages || []) {
             for (const vulnerability of pkg.vulnerabilities || []) {
+                const { affected, fixedVersion, reason } = evaluateAffectedness(
+                    vulnerability, pkg.package.name, pkg.package.version
+                );
                 findings.push({
                     scope,
                     sourcePath: resolvedSourcePath,
@@ -200,7 +321,9 @@ function parseOsvScanOutput(osvJson, { scope, sourcePath } = {}) {
                     cveIds: extractCveAliases(vulnerability),
                     summary: vulnerability.summary || vulnerability.details?.slice(0, 200) || '',
                     severity: normalizeSeverity(vulnerability),
-                    fixedVersion: extractFixedVersion(vulnerability),
+                    affected,
+                    notAffectedReason: reason,
+                    fixedVersion,
                     references: (vulnerability.references || []).map(r => r.url),
                     epss: null,
                     kev: false
@@ -209,6 +332,22 @@ function parseOsvScanOutput(osvJson, { scope, sourcePath } = {}) {
         }
     }
     return findings;
+}
+
+/**
+ * Splits findings into those osv-scanner AND our own range evaluation
+ * agree are affected, versus those excluded by
+ * `database_specific.last_known_affected_version_range` (see
+ * `evaluateAffectedness`). Callers should gate/SARIF only `affected`, but
+ * still report `notAffected` for transparency.
+ */
+function partitionByAffected(findings) {
+    const affected = [];
+    const notAffected = [];
+    for (const finding of findings) {
+        (finding.affected === false ? notAffected : affected).push(finding);
+    }
+    return { affected, notAffected };
 }
 
 /**
@@ -419,8 +558,10 @@ module.exports = {
     severityAtLeast,
     extractCveAliases,
     extractFixedVersion,
+    evaluateAffectedness,
     allIds,
     parseOsvScanOutput,
+    partitionByAffected,
     enrichFindings,
     partitionExceptions,
     exceptionMatches,

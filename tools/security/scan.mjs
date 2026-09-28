@@ -35,11 +35,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     parseOsvScanOutput,
+    partitionByAffected,
     enrichFindings,
     evaluateGate,
     buildSarif,
     SEVERITY_ORDER
 } from './lib/gate-core.js';
+
+// api.first.org's EPSS endpoint pages results at 100 per request by
+// default (its own `limit`/`offset` params). Passing more CVE ids than
+// that in one `?cve=` query would silently only get scores back for the
+// first page. Chunk defensively so a scan with a large, EPSS-scored CVE
+// count never truncates instead of just reporting "unknown" for the
+// tail - see the "Enriching" step in main() below.
+const EPSS_BATCH_SIZE = 100;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..', '..');
@@ -127,22 +136,35 @@ function runOsvScanner({ sbomPath, lockfilePath }) {
     }
 }
 
+function chunk(array, size) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+}
+
+async function fetchEpssBatch(cveIds) {
+    const url = `https://api.first.org/data/v1/epss?cve=${cveIds.join(',')}&limit=${EPSS_BATCH_SIZE}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+    const body = await response.json();
+    const map = {};
+    for (const entry of body.data || []) {
+        map[entry.cve] = Number(entry.epss);
+    }
+    return map;
+}
+
 async function fetchEpss(cveIds, { offline }) {
     if (offline || cveIds.length === 0) {
         return {};
     }
     try {
-        const url = `https://api.first.org/data/v1/epss?cve=${cveIds.join(',')}`;
-        const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        const body = await response.json();
-        const map = {};
-        for (const entry of body.data || []) {
-            map[entry.cve] = Number(entry.epss);
-        }
-        return map;
+        const batches = await Promise.all(chunk(cveIds, EPSS_BATCH_SIZE).map(fetchEpssBatch));
+        return Object.assign({}, ...batches);
     } catch (error) {
         console.warn(`⚠️ EPSS enrichment unavailable (${error.message}); marking EPSS as unknown.`);
         return {};
@@ -185,7 +207,24 @@ function printTable(title, findings) {
     }
 }
 
-function buildMarkdownSummary({ bundleGate, lockfileFindings, exceptions }) {
+/**
+ * Findings osv-scanner reported but that evaluateAffectedness() (see
+ * gate-core.js) determined are not actually affected once cross-checked
+ * against the advisory's known-affected version range - never gated or
+ * put in SARIF, but listed here so a reviewer can see why a CVE that
+ * shows up in osv-scanner's own output didn't produce a finding.
+ */
+function printNotAffected(title, findings) {
+    if (findings.length === 0) {
+        return;
+    }
+    console.log(`\n${title} (${findings.length} finding${findings.length === 1 ? '' : 's'}, not affected per advisory range)`);
+    for (const finding of findings) {
+        console.log(`  ⚪ ${finding.packageName}@${finding.packageVersion}  ${finding.id}  - ${finding.notAffectedReason || 'installed version is outside the advisory\'s affected range'}`);
+    }
+}
+
+function buildMarkdownSummary({ bundleGate, bundleNotAffected, lockfileFindings, lockfileNotAffected, exceptions }) {
     const lines = ['# Dependency vulnerability scan', ''];
 
     lines.push('## Bundle scope (blocking)');
@@ -215,10 +254,21 @@ function buildMarkdownSummary({ bundleGate, lockfileFindings, exceptions }) {
         }
         lines.push('');
     }
+    if (bundleNotAffected.length > 0) {
+        lines.push('**Not affected per advisory range** (osv-scanner reported these, but the installed version ' +
+            'is outside the advisory\'s known-affected range - excluded from the gate and SARIF):');
+        for (const f of bundleNotAffected) {
+            lines.push(`- \`${f.packageName}@${f.packageVersion}\` ${f.id}: ${f.notAffectedReason || 'outside affected range'}`);
+        }
+        lines.push('');
+    }
 
     lines.push('## Lockfile scope (reporting only, never blocks)');
     lines.push('');
     lines.push(`${lockfileFindings.length} finding(s) across the full install tree (build tooling and dev dependencies included).`);
+    if (lockfileNotAffected.length > 0) {
+        lines.push(`${lockfileNotAffected.length} additional finding(s) excluded as not affected per advisory range.`);
+    }
     lines.push('');
     lines.push(`_Exceptions file: \`${exceptions.path}\` (${exceptions.list.length} entr${exceptions.list.length === 1 ? 'y' : 'ies'})._`);
 
@@ -246,22 +296,27 @@ async function main() {
 
     console.log('🔎 Scanning shipped bundle SBOM (blocking scope)...');
     const bundleRaw = runOsvScanner({ sbomPath: bundleSbomPath });
-    let bundleFindings = parseOsvScanOutput(bundleRaw, { scope: 'bundle', sourcePath: 'package.json' });
+    const bundleParsed = parseOsvScanOutput(bundleRaw, { scope: 'bundle', sourcePath: 'package.json' });
+    const { affected: bundleAffectedRaw, notAffected: bundleNotAffected } = partitionByAffected(bundleParsed);
 
-    let lockfileFindings = [];
+    let lockfileAffectedRaw = [];
+    let lockfileNotAffected = [];
     if (!options.skipLockfile) {
         const lockfilePath = path.join(rootDir, options.lockfile);
         if (existsSync(lockfilePath)) {
             console.log('🔎 Scanning package-lock.json (reporting only)...');
             const lockfileRaw = runOsvScanner({ lockfilePath });
-            lockfileFindings = parseOsvScanOutput(lockfileRaw, { scope: 'lockfile', sourcePath: options.lockfile });
+            const lockfileParsed = parseOsvScanOutput(lockfileRaw, { scope: 'lockfile', sourcePath: options.lockfile });
+            ({ affected: lockfileAffectedRaw, notAffected: lockfileNotAffected } = partitionByAffected(lockfileParsed));
         } else {
             console.warn(`⚠️ No lockfile found at ${options.lockfile}, skipping lockfile scope.`);
         }
     }
 
-    const allFindings = [...bundleFindings, ...lockfileFindings];
-    const allCveIds = [...new Set(allFindings.flatMap(f => f.cveIds))];
+    // EPSS/KEV enrichment only needs to cover findings that actually count
+    // (not-affected ones are reported as-is, unenriched).
+    const allAffectedFindings = [...bundleAffectedRaw, ...lockfileAffectedRaw];
+    const allCveIds = [...new Set(allAffectedFindings.flatMap(f => f.cveIds))];
 
     console.log(`🌐 Enriching ${allCveIds.length} CVE id(s) with EPSS + CISA KEV${options.offline ? ' (skipped: --offline)' : ''}...`);
     const [epssByCve, kevIds] = await Promise.all([
@@ -269,8 +324,8 @@ async function main() {
         fetchKev(options)
     ]);
 
-    bundleFindings = enrichFindings(bundleFindings, { epssByCve, kevIds });
-    lockfileFindings = enrichFindings(lockfileFindings, { epssByCve, kevIds });
+    const bundleFindings = enrichFindings(bundleAffectedRaw, { epssByCve, kevIds });
+    const lockfileFindings = enrichFindings(lockfileAffectedRaw, { epssByCve, kevIds });
 
     const bundleGate = evaluateGate(bundleFindings, exceptionsList, { minSeverity: options.minSeverity, blocking: true });
     // Lockfile scope is reporting-only: never blocks, so evaluate with an
@@ -280,7 +335,9 @@ async function main() {
 
     printTable('Bundle scope - blocking findings', bundleGate.blockingFindings);
     printTable('Bundle scope - exempted findings (valid exception on file)', bundleGate.exemptedFindings);
+    printNotAffected('Bundle scope - excluded findings', bundleNotAffected);
     printTable('Lockfile scope - all findings (reporting only)', lockfileGate.nonBlockingFindings);
+    printNotAffected('Lockfile scope - excluded findings', lockfileNotAffected);
 
     if (bundleGate.expiredExceptions.length > 0) {
         console.log(`\n❌ ${bundleGate.expiredExceptions.length} expired exception(s) in ${options.exceptions}:`);
@@ -299,18 +356,27 @@ async function main() {
     mkdirSync(outDir, { recursive: true });
 
     const rootPkg = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-    const sarif = buildSarif(allFindings, { toolName: 'agentlet-core-vuln-scan', toolVersion: rootPkg.version, lockfilePath: options.lockfile });
+    // Not-affected findings are deliberately excluded from SARIF: they are
+    // not real code-scanning results, just transparency about what
+    // osv-scanner reported and why it was excluded (see scan-report.json
+    // and scan-summary.md for those).
+    const sarif = buildSarif([...bundleFindings, ...lockfileFindings], {
+        toolName: 'agentlet-core-vuln-scan', toolVersion: rootPkg.version, lockfilePath: options.lockfile
+    });
     writeFileSync(path.join(outDir, 'results.sarif'), JSON.stringify(sarif, null, 2));
 
     const jsonReport = {
         generatedAt: new Date().toISOString(),
         minSeverity: options.minSeverity,
-        bundle: bundleGate,
-        lockfile: lockfileGate
+        bundle: { ...bundleGate, notAffected: bundleNotAffected },
+        lockfile: { ...lockfileGate, notAffected: lockfileNotAffected }
     };
     writeFileSync(path.join(outDir, 'scan-report.json'), JSON.stringify(jsonReport, null, 2));
 
-    const markdown = buildMarkdownSummary({ bundleGate, lockfileFindings, exceptions: { path: options.exceptions, list: exceptionsList } });
+    const markdown = buildMarkdownSummary({
+        bundleGate, bundleNotAffected, lockfileFindings, lockfileNotAffected,
+        exceptions: { path: options.exceptions, list: exceptionsList }
+    });
     if (process.env.GITHUB_STEP_SUMMARY) {
         writeFileSync(process.env.GITHUB_STEP_SUMMARY, markdown + '\n', { flag: 'a' });
     }
