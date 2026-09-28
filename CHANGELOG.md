@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `npm run test:examples:docker` runs a targeted subset of the Playwright
+  e2e suite inside the official Playwright Docker image, for a quick
+  recheck on hosts where the local OS is too old for the Playwright browser
+  builds `npm run test:examples` needs. CI remains the reference for a full
+  run of the suite.
+
 ### Changed
 
 - `express`, `cors`, and `dotenv` are no longer installed as runtime
