@@ -73,7 +73,7 @@
     "hotkeys-js": "^3.13.15",
     "html2canvas": "^1.4.1",
     "pdfjs-dist": "^5.4.54",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
