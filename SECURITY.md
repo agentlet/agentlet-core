@@ -4,7 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| 2.x     | :white_check_mark: |
+| 1.0.x   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -21,7 +22,7 @@ If you discover a security vulnerability in Agentlet Core, please report it by e
 
 ## Security Measures
 
-- **Dependency Auditing**: CI/CD pipeline audits for critical vulnerabilities
+- **Dependency Auditing**: dependency vulnerability scanning in CI is being added; it is not yet part of the pipeline today
 - **Content Security Policy**: Respects CSP headers in target applications
 - **Cross-Origin Security**: Implements proper CORS handling
 - **Input Validation**: Form filling includes value validation
