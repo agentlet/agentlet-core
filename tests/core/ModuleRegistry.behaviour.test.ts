@@ -33,6 +33,7 @@
 import ModuleRegistryCtor from '../../src/core/ModuleRegistry.js';
 import Module from '../../src/core/Module.js';
 import type { AgentletModule, ModuleActivationContext } from '../../src/types/public-api';
+import { setDebugMode } from '../../src/utils/system/Logger.js';
 
 /**
  * ModuleRegistry.js is untyped, plain JS at this point (pre-conversion), so
@@ -143,6 +144,11 @@ jest.useFakeTimers();
 // whatever pushState/replaceState currently is).
 const nativePushState = history.pushState;
 const nativeReplaceState = history.replaceState;
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('ModuleRegistry behaviour characterization', () => {
     let mockEventBus: EventBusStub;

@@ -2,6 +2,7 @@
  * LibraryLoader - Dynamic loading of external libraries
  * Supports registry-based loading from internal hosting infrastructure
  */
+import { logger } from '../utils/system/Logger.js';
 
 /** Constructor config: a map of library name -> script URL, plus an optional prefix for entries that start with `./` or `../`. */
 export interface LibraryRegistryConfig {
@@ -69,7 +70,7 @@ class LibraryLoader {
         this.loadingPromises = new Map();
         this.baseUrl = registryConfig.baseUrl || '';
 
-        console.log('📚 LibraryLoader initialized with libraries:', Object.keys(this.libraries));
+        logger.log('📚 LibraryLoader initialized with libraries:', Object.keys(this.libraries));
     }
 
     /**
@@ -94,13 +95,13 @@ class LibraryLoader {
             throw new Error(`Library '${name}' not configured in registry. Add it to agentlets-registry.json libraries section.`);
         }
 
-        console.log(`📚 Loading library: ${name} from ${url}`);
+        logger.log(`📚 Loading library: ${name} from ${url}`);
 
         const loadingPromise: Promise<boolean> = this.loadScript(url)
             .then(() => {
                 this.loadedLibraries.add(name);
                 this.setupLibraryGlobals(name);
-                console.log(`✅ Library loaded successfully: ${name}`);
+                logger.log(`✅ Library loaded successfully: ${name}`);
                 return true;
             })
             .catch((error: unknown) => {
@@ -171,7 +172,7 @@ class LibraryLoader {
             script.crossOrigin = 'anonymous'; // For CORS support
 
             script.onload = (): void => {
-                console.log(`📚 Script loaded: ${url}`);
+                logger.log(`📚 Script loaded: ${url}`);
                 resolve();
             };
 
@@ -207,7 +208,7 @@ class LibraryLoader {
                 // (likely a no-op against modern pdfjs-dist, since nothing in the
                 // library reads `GlobalWorkerOptions.verbosity` for logging).
                 (pdfjsLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
-                console.log('📄 PDF.js worker configured:', workerUrl);
+                logger.log('📄 PDF.js worker configured:', workerUrl);
             }
             break;
         }

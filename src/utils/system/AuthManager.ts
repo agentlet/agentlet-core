@@ -3,6 +3,7 @@
  * Provides popup-based authentication with customizable IDP integration
  */
 import type { AuthManagerAPI, AuthManagerConfig, AuthResult, AuthState, AuthAPI } from '../../types/public-api';
+import { logger } from './Logger.js';
 
 class AuthManager implements AuthManagerAPI {
     config: Required<AuthManagerConfig>;
@@ -46,7 +47,7 @@ class AuthManager implements AuthManagerAPI {
         this.loginButton = null;
         this.authenticatedUser = null;
 
-        console.log('AuthManager initialized with config:', this.config);
+        logger.log('AuthManager initialized with config:', this.config);
     }
 
     /**
@@ -121,7 +122,7 @@ class AuthManager implements AuthManagerAPI {
 
         try {
             this.isAuthenticating = true;
-            console.log('Starting authentication flow...');
+            logger.log('Starting authentication flow...');
 
             // Open popup window
             this.authPopup = this.openAuthPopup();
@@ -150,7 +151,7 @@ class AuthManager implements AuthManagerAPI {
 
         const features = `${popupFeatures},width=${popupWidth},height=${popupHeight},left=${left},top=${top}`;
 
-        console.log(`Opening auth popup: ${loginUrl}`);
+        logger.log(`Opening auth popup: ${loginUrl}`);
         const popup = window.open(loginUrl, 'agentlet_auth', features);
 
         if (!popup) {
@@ -173,7 +174,7 @@ class AuthManager implements AuthManagerAPI {
                 }
             }
 
-            console.log('AuthManager: Received message from popup:', event.data);
+            logger.log('AuthManager: Received message from popup:', event.data);
 
             try {
                 // Use custom message handler if provided
@@ -254,7 +255,7 @@ class AuthManager implements AuthManagerAPI {
     monitorPopupClosure(): void {
         const checkClosed = (): void => {
             if (this.authPopup && this.authPopup.closed) {
-                console.log('Auth popup was closed by user');
+                logger.log('Auth popup was closed by user');
                 this.handleCancel();
             } else if (this.isAuthenticating) {
                 setTimeout(checkClosed, 1000);
@@ -268,7 +269,7 @@ class AuthManager implements AuthManagerAPI {
      * Handle successful authentication
      */
     handleSuccess(token: string, additionalData: Record<string, unknown> = {}): void {
-        console.log('Authentication successful');
+        logger.log('Authentication successful');
 
         this.cleanup();
 
@@ -334,7 +335,7 @@ class AuthManager implements AuthManagerAPI {
      * Handle authentication cancellation
      */
     handleCancel(): void {
-        console.log('Authentication cancelled by user');
+        logger.log('Authentication cancelled by user');
 
         this.cleanup();
 
@@ -386,7 +387,7 @@ class AuthManager implements AuthManagerAPI {
             ...newConfig
         } as Required<AuthManagerConfig>;
 
-        console.log('AuthManager config updated:', this.config);
+        logger.log('AuthManager config updated:', this.config);
     }
 
     /**
@@ -491,11 +492,11 @@ class AuthManager implements AuthManagerAPI {
         const confirmed = await this.showLogoutConfirmation(userName);
 
         if (!confirmed) {
-            console.log('Logout cancelled by user');
+            logger.log('Logout cancelled by user');
             return;
         }
 
-        console.log('Logging out user');
+        logger.log('Logging out user');
 
         this.authenticatedUser = null;
         this.updateButtonContent();
@@ -528,7 +529,7 @@ class AuthManager implements AuthManagerAPI {
                     `You're currently logged in as ${userName}, do you want to logout?`,
                     'Confirm Logout',
                     (result) => {
-                        console.log('Dialog result received:', result);
+                        logger.log('Dialog result received:', result);
                         resolve(result === 'confirm');
                     }
                 );

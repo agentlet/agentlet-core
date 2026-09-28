@@ -5,6 +5,7 @@
 
 import { Z_INDEX } from '../utils/ui/ZIndex.js';
 import type { StyleInjectorAPI, AgentletTheme, ThemeManagerAPI } from '../types/public-api';
+import { logger } from '../utils/system/Logger.js';
 
 /**
  * UI mount root: an open shadow root (shadowDom: true, the default), or
@@ -367,7 +368,7 @@ export class StyleInjector implements StyleInjectorAPI {
      */
     regenerateStyles(): void {
         this.injectStyles();
-        console.log('🎨 Styles regenerated with updated theme');
+        logger.log('🎨 Styles regenerated with updated theme');
     }
 
     /**

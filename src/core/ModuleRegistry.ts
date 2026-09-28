@@ -12,6 +12,7 @@ import type {
     ModuleRegistryAPI,
     ModuleStatistics
 } from '../types/public-api';
+import { logger } from '../utils/system/Logger.js';
 
 /**
  * Constructor configuration. Not part of the public `window.agentlet`
@@ -192,7 +193,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             this.modules.set(module.name, module);
             this.metrics.totalModules = this.modules.size;
 
-            console.log(`📦 Module registered: ${module.name}`);
+            logger.log(`📦 Module registered: ${module.name}`);
             this.emit('module:registered', { module: module.name });
 
             // Check if this module should be active for current URL
@@ -229,7 +230,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         this.modules.delete(moduleName);
         this.metrics.totalModules = this.modules.size;
 
-        console.log(`📦 Module unregistered: ${moduleName}`);
+        logger.log(`📦 Module unregistered: ${moduleName}`);
         this.emit('module:unregistered', { module: moduleName });
 
         return true;
@@ -286,7 +287,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             this.activeModule = module;
             this.metrics.activationCount++;
 
-            console.log(`🔄 Module activated: ${module.name}`);
+            logger.log(`🔄 Module activated: ${module.name}`);
             this.emit('module:activated', { module: module.name, context });
 
             // Notify callback
@@ -313,7 +314,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         const module = this.activeModule;
         try {
             await module.cleanup(context);
-            console.log(`⏸️ Module deactivated: ${module.name}`);
+            logger.log(`⏸️ Module deactivated: ${module.name}`);
             this.emit('module:deactivated', { module: module.name });
         } catch (error) {
             console.error(`❌ Module deactivation failed: ${module.name}`, error);
@@ -509,12 +510,12 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         // Prevent loading the same registry multiple times
         if (this.loadedRegistries.has(url)) {
-            console.log(`📦 Registry already loaded: ${url}`);
+            logger.log(`📦 Registry already loaded: ${url}`);
             return;
         }
 
         try {
-            console.log(`📦 Loading agentlets registry from: ${url}`);
+            logger.log(`📦 Loading agentlets registry from: ${url}`);
 
             // Payload shape is not guaranteed by the external registry script.
             const registryData = await this.loadRegistryScript(url);
@@ -528,7 +529,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
                 throw new Error('Registry must contain an agentlets array');
             }
 
-            console.log(`📦 Found ${agentlets.length} agentlet(s) in registry`);
+            logger.log(`📦 Found ${agentlets.length} agentlet(s) in registry`);
 
             // Extract base URL from registry URL for relative library paths
             let baseUrl: string;
@@ -554,7 +555,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
                 this.registryEntries.set(agentletConfig.name, { ...agentletConfig });
 
                 if (agentletConfig.lazy) {
-                    console.log(`📦 Skipping eager load of lazy agentlet: ${agentletConfig.name}`);
+                    logger.log(`📦 Skipping eager load of lazy agentlet: ${agentletConfig.name}`);
                     continue;
                 }
 
@@ -569,7 +570,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             this.loadedRegistries.add(url);
             this.metrics.registriesLoaded++;
 
-            console.log(`✅ Registry loaded successfully: ${agentlets.length} agentlet(s)`);
+            logger.log(`✅ Registry loaded successfully: ${agentlets.length} agentlet(s)`);
             this.emit('registry:loaded', { url, agentletCount: agentlets.length });
 
         } catch (error) {
@@ -600,7 +601,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             // Set up event listener for registry data
             eventListener = (event: CustomEvent) => {
                 cleanup();
-                console.log('📦 Registry data received via event');
+                logger.log('📦 Registry data received via event');
                 resolve(event.detail);
             };
 
@@ -619,7 +620,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             script.crossOrigin = 'anonymous';
 
             script.onload = () => {
-                console.log(`📦 Registry script loaded: ${url}`);
+                logger.log(`📦 Registry script loaded: ${url}`);
                 // Event handler will resolve the promise when data arrives
             };
 
@@ -650,7 +651,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         // Skip if already loaded
         if (this.modules.has(name)) {
-            console.log(`📦 Agentlet already loaded: ${name}`);
+            logger.log(`📦 Agentlet already loaded: ${name}`);
             return;
         }
 
@@ -660,9 +661,9 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             // Only register if not skipping registry module registration
             if (!this.skipRegistryModuleRegistration) {
                 this.register(moduleInstance);
-                console.log(`✅ Agentlet loaded and registered: ${name}`);
+                logger.log(`✅ Agentlet loaded and registered: ${name}`);
             } else {
-                console.log(`✅ Agentlet loaded (registration skipped): ${name}`);
+                logger.log(`✅ Agentlet loaded (registration skipped): ${name}`);
             }
 
         } catch (error) {
@@ -681,7 +682,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
     private async instantiateAgentletModule(entry: AgentletRegistryEntryConfig): Promise<AgentletModule> {
         const { name, url, module: moduleClass } = entry;
 
-        console.log(`📦 Loading agentlet module: ${name} from ${url}`);
+        logger.log(`📦 Loading agentlet module: ${name} from ${url}`);
 
         // Dynamically import the module
         await this.loadScript(url);
@@ -730,7 +731,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         const existing = this.modules.get(name);
         if (existing) {
-            console.log(`📦 Agentlet already loaded: ${name}`);
+            logger.log(`📦 Agentlet already loaded: ${name}`);
             return existing;
         }
 
@@ -738,9 +739,9 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
         if (!this.skipRegistryModuleRegistration) {
             this.applyRegistration(moduleInstance, false);
-            console.log(`✅ Agentlet loaded and registered: ${name}`);
+            logger.log(`✅ Agentlet loaded and registered: ${name}`);
         } else {
-            console.log(`✅ Agentlet loaded (registration skipped): ${name}`);
+            logger.log(`✅ Agentlet loaded (registration skipped): ${name}`);
         }
 
         return moduleInstance;
@@ -777,7 +778,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             script.crossOrigin = 'anonymous';
 
             script.onload = () => {
-                console.log(`📦 Script loaded: ${url}`);
+                logger.log(`📦 Script loaded: ${url}`);
                 resolve();
             };
 
@@ -798,7 +799,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
      * Initialize the registry
      */
     async initialize(): Promise<void> {
-        console.log('🚀 Module Registry initialized');
+        logger.log('🚀 Module Registry initialized');
 
         // Load from registry if configured
         if (this.registryUrl) {
@@ -877,6 +878,6 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
         this.modules.clear();
         this.activeModule = null;
 
-        console.log('🧹 Module Registry cleaned up');
+        logger.log('🧹 Module Registry cleaned up');
     }
 }

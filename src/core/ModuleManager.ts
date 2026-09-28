@@ -10,6 +10,7 @@ import type {
     ModuleStatistics
 } from '../types/public-api';
 import type ModuleRegistry from './ModuleRegistry.js';
+import { logger } from '../utils/system/Logger.js';
 
 export default class ModuleManager implements ModuleManagerAPI {
     moduleRegistry: ModuleRegistry;
@@ -74,7 +75,7 @@ export default class ModuleManager implements ModuleManagerAPI {
         // single source of truth for the registered-modules map)
         this.moduleRegistry.register(module);
 
-        console.log(`📦 ModuleManager: ${module.name} registered from ${source}`);
+        logger.log(`📦 ModuleManager: ${module.name} registered from ${source}`);
     }
 
     /**
@@ -135,6 +136,6 @@ export default class ModuleManager implements ModuleManagerAPI {
         }
 
         this._isInitialized = true;
-        console.log('📦 ModuleManager initialized');
+        logger.log('📦 ModuleManager initialized');
     }
 }

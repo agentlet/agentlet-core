@@ -461,6 +461,16 @@ class Module {
     }
 
     // Utility methods
+    //
+    // Unlike the informational console.log calls converted to logger.log()
+    // elsewhere in this codebase (see src/utils/system/Logger.ts), log()
+    // here is left calling console.log directly, same as error()/warn()
+    // right below it: this is a public convenience API for AGENTLET
+    // AUTHORS to log their own module's messages (this.log(...) inside
+    // their own module code), not internal framework chatter - gating it
+    // behind the host AgentletCore's debugMode would silence a module
+    // author's own, deliberate console.log() calls based on a setting they
+    // don't control.
     log(message: unknown, ...args: unknown[]): void {
         console.log(`[${this.name}]`, message, ...args);
     }

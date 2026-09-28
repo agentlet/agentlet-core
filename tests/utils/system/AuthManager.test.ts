@@ -25,6 +25,7 @@
 
 import AuthManager from '../../../src/utils/system/AuthManager.js';
 import type { AuthManagerConfig } from '../../../src/types/public-api';
+import { setDebugMode } from '../../../src/utils/system/Logger.js';
 
 /** The full instance surface this file needs, including internal fields under test. */
 interface AuthManagerInstance {
@@ -78,6 +79,11 @@ interface AgentletGlobalMock {
 function setAgentletGlobal(agentlet: AgentletGlobalMock | undefined): void {
     (window as unknown as { agentlet?: AgentletGlobalMock }).agentlet = agentlet;
 }
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('AuthManager', () => {
     afterEach(() => {

@@ -4,6 +4,7 @@
  */
 import type { PageHighlighterOverlayOptions, PageHighlighterOverlayControl } from '../../../types/public-api';
 import type { PageHighlighterContext, OverlayEntry, ResolvedOverlayConfig } from './types.js';
+import { logger } from '../../system/Logger.js';
 
 const DEFAULT_OVERLAY_CONFIG: ResolvedOverlayConfig = {
     message: 'Loading...',
@@ -65,7 +66,7 @@ export function showOverlay(context: PageHighlighterContext, options: PageHighli
 
     // Add progress bar if needed
     if (config.type === 'progress') {
-        console.log('🔧 Creating progress bar with progress:', config.progress);
+        logger.log('🔧 Creating progress bar with progress:', config.progress);
 
         const progressContainer = document.createElement('div');
         progressContainer.className = 'agentlet-progress-container';
@@ -89,7 +90,7 @@ export function showOverlay(context: PageHighlighterContext, options: PageHighli
         progressContainer.appendChild(progressText);
         messageContent.appendChild(progressContainer);
 
-        console.log('✅ Progress bar created and appended to message content');
+        logger.log('✅ Progress bar created and appended to message content');
     }
 
     messageContainer.appendChild(messageContent);
@@ -137,15 +138,15 @@ export function showOverlay(context: PageHighlighterContext, options: PageHighli
             }
 
             if (updates.progress !== undefined && config.type === 'progress') {
-                console.log('🔄 Updating progress to:', `${updates.progress}%`);
+                logger.log('🔄 Updating progress to:', `${updates.progress}%`);
                 const progressContainer = messageContent.querySelector('.agentlet-progress-container');
                 const progressFill = progressContainer?.querySelector('.agentlet-progress-fill') as HTMLElement | null;
                 const progressText = progressContainer?.querySelector('.agentlet-progress-text') as HTMLElement | null;
-                console.log('🔍 Progress elements found:', { progressContainer: !!progressContainer, progressFill: !!progressFill, progressText: !!progressText });
+                logger.log('🔍 Progress elements found:', { progressContainer: !!progressContainer, progressFill: !!progressFill, progressText: !!progressText });
                 if (progressFill && progressText) {
                     progressFill.style.width = `${updates.progress}%`;
                     progressText.textContent = `${updates.progress}%`;
-                    console.log('✅ Progress updated to:', `${updates.progress}%`, 'Width set to:', progressFill.style.width);
+                    logger.log('✅ Progress updated to:', `${updates.progress}%`, 'Width set to:', progressFill.style.width);
                 } else {
                     console.error('❌ Progress elements not found!');
                 }

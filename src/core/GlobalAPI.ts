@@ -17,6 +17,7 @@ import type {
     AgentletUtils,
     ThemeChangedEventPayload
 } from '../types/public-api';
+import { logger } from '../utils/system/Logger.js';
 
 export class GlobalAPI {
     core: AgentletAPI;
@@ -109,7 +110,7 @@ export class GlobalAPI {
         // Add PageHighlighter with error handling
         try {
             window.agentlet.utils.PageHighlighter = new PageHighlighter();
-            console.log('✅ PageHighlighter instantiated successfully');
+            logger.log('✅ PageHighlighter instantiated successfully');
         } catch (error) {
             console.error('❌ Failed to instantiate PageHighlighter:', error);
             window.agentlet.utils.PageHighlighter = null;

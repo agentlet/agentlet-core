@@ -11,6 +11,7 @@ import type {
     ScreenCaptureRegion
 } from '../../types/public-api';
 import type { LibrarySetup } from '../../libraries/LibrarySetup.js';
+import { logger } from '../system/Logger.js';
 
 /**
  * Minimal shape of `LibrarySetup` this file actually uses - deliberately
@@ -74,7 +75,7 @@ class ScreenCapture implements ScreenCaptureAPI {
 
         if (this.librarySetup) {
             try {
-                console.log('📸 Loading html2canvas library for screenshot functionality...');
+                logger.log('📸 Loading html2canvas library for screenshot functionality...');
                 return await this.librarySetup.ensureLibrary('html2canvas');
             } catch (error) {
                 console.warn('📸 Failed to load html2canvas library:', extractMessage(error));
@@ -95,7 +96,7 @@ class ScreenCapture implements ScreenCaptureAPI {
 
         try {
             this.isCapturing = true;
-            console.log('📸 Capturing full page...');
+            logger.log('📸 Capturing full page...');
 
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
@@ -104,7 +105,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             }
 
             const canvas = await getHtml2Canvas()!(document.body, mergedOptions);
-            console.log('📸 Page capture completed');
+            logger.log('📸 Page capture completed');
 
             return canvas;
         } catch (error) {
@@ -130,7 +131,7 @@ class ScreenCapture implements ScreenCaptureAPI {
 
         try {
             this.isCapturing = true;
-            console.log('📸 Capturing element:', element.tagName, element.id || element.className);
+            logger.log('📸 Capturing element:', element.tagName, element.id || element.className);
 
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
@@ -139,7 +140,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             }
 
             const canvas = await getHtml2Canvas()!(element, mergedOptions);
-            console.log('📸 Element capture completed');
+            logger.log('📸 Element capture completed');
 
             return canvas;
         } catch (error) {
@@ -293,7 +294,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             link.click();
             link.remove();
 
-            console.log('📸 Download initiated:', filename);
+            logger.log('📸 Download initiated:', filename);
         } catch (error) {
             console.error('📸 Download failed:', error);
             throw error;
@@ -315,7 +316,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             const clipboardItem = new ClipboardItem({ [blob.type]: blob });
 
             await navigator.clipboard.write([clipboardItem]);
-            console.log('📸 Image copied to clipboard');
+            logger.log('📸 Image copied to clipboard');
         } catch (error) {
             console.error('📸 Clipboard copy failed:', error);
             throw error;
@@ -445,8 +446,8 @@ class ScreenCapture implements ScreenCaptureAPI {
         const emoji = captureType === 'page' ? '📄' : '📸';
         const title = captureType === 'page' ? 'Full page screenshot' : 'Captured image';
 
-        console.log(`${emoji} ${title} preview:`);
-        console.log('%c ', `
+        logger.log(`${emoji} ${title} preview:`);
+        logger.log('%c ', `
             font-size: 200px;
             background: url(${dataURL}) no-repeat center;
             background-size: contain;

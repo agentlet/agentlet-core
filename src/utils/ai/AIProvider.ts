@@ -17,6 +17,7 @@ import type {
     AIManagerAPI,
     PDFInputData
 } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /** `BaseAIProvider`/`OpenAIProvider` constructor options; `OpenAIProvider` reads a few extra keys off the same bag (see its constructor). */
 interface AIProviderOptions {
@@ -86,11 +87,11 @@ export class BaseAIProvider implements AIProviderHandle {
         try {
             if (typeof pdfData === 'string' && (pdfData.startsWith('http') || pdfData.startsWith('https'))) {
                 // PDF URL
-                console.log('📄 Processing PDF from URL...');
+                logger.log('📄 Processing PDF from URL...');
                 images = await pdfProcessor.convertPDFFromURL(pdfData, options.pdfOptions);
             } else if (pdfData instanceof File || pdfData instanceof ArrayBuffer || pdfData instanceof Uint8Array) {
                 // PDF file or buffer
-                console.log('📄 Processing PDF data...');
+                logger.log('📄 Processing PDF data...');
                 images = await pdfProcessor.convertPDFToImages(pdfData, options.pdfOptions);
             } else {
                 throw new Error('Invalid PDF data format. Expected File, ArrayBuffer, Uint8Array, or URL string.');
@@ -419,7 +420,7 @@ export class AIManager implements AIManagerAPI {
             }
         }
 
-        console.log(`AIManager initialized with ${this.providers.size} provider(s)`);
+        logger.log(`AIManager initialized with ${this.providers.size} provider(s)`);
     }
 
     /**

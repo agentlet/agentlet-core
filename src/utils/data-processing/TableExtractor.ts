@@ -14,6 +14,7 @@ import type {
     TablesAPI,
     LibrarySetupAPI
 } from '../../types/public-api';
+import { logger } from '../system/Logger.js';
 
 /**
  * Minimal shape of the SheetJS (`xlsx`) global this file reads - only the
@@ -73,7 +74,7 @@ class TableExtractor implements TableExtractorAPI {
 
         if (this.librarySetup) {
             try {
-                console.log('📊 Loading XLSX library for Excel export...');
+                logger.log('📊 Loading XLSX library for Excel export...');
                 return await this.librarySetup.ensureLibrary('xlsx');
             } catch (error) {
                 console.warn('📊 Failed to load XLSX library:', (error as Error).message);
@@ -189,7 +190,7 @@ class TableExtractor implements TableExtractorAPI {
         if (config.nextButtonSelector) {
             let currentPage = 1;
 
-            console.log(`📊 Extracted page ${currentPage} (${firstPageData.rows.length} rows)`);
+            logger.log(`📊 Extracted page ${currentPage} (${firstPageData.rows.length} rows)`);
 
             while (currentPage < (config.maxPages as number)) {
                 const nextButton = document.querySelector<PaginationTriggerElement>(config.nextButtonSelector);
@@ -200,7 +201,7 @@ class TableExtractor implements TableExtractorAPI {
 
                 try {
                     // Click next button
-                    console.log(`📊 Going to page ${currentPage + 1}...`);
+                    logger.log(`📊 Going to page ${currentPage + 1}...`);
                     nextButton.click();
 
                     // Wait for page to load
@@ -212,7 +213,7 @@ class TableExtractor implements TableExtractorAPI {
                     const pageData = this.extractTableData(tableElement, config);
                     allData.rows = [...allData.rows, ...pageData.rows];
 
-                    console.log(`📊 Extracted page ${currentPage} (${pageData.rows.length} rows)`);
+                    logger.log(`📊 Extracted page ${currentPage} (${pageData.rows.length} rows)`);
 
                 } catch (error) {
                     console.warn(`📊 Error on page ${currentPage}:`, error);
@@ -229,7 +230,7 @@ class TableExtractor implements TableExtractorAPI {
             ...allData.rows.map(row => row.length)
         );
 
-        console.log(`📊 Extraction completed: ${allData.metadata.totalPages} pages, ${allData.rows.length} total rows`);
+        logger.log(`📊 Extraction completed: ${allData.metadata.totalPages} pages, ${allData.rows.length} total rows`);
         return allData;
     }
 

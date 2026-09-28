@@ -3,6 +3,7 @@
  */
 
 import PDFProcessor from '../../../src/utils/ai/PDFProcessor.js';
+import { setDebugMode } from '../../../src/utils/system/Logger.js';
 
 // Mock PDF.js
 const mockPDFJS = {
@@ -33,6 +34,11 @@ const mockCanvas = {
     width: 800,
     height: 600
 };
+
+// Debug-gated logging (see src/utils/system/Logger.ts): this file asserts on
+// console.log output, which now only happens while debugMode is on.
+beforeAll(() => setDebugMode(true));
+afterAll(() => setDebugMode(false));
 
 describe('PDFProcessor', () => {
     let pdfProcessor;
