@@ -8,6 +8,13 @@
  * script, so the listener is always in place by the time this (dynamically
  * loaded) script runs - a delay here is unnecessary and, on a busy page,
  * can push the dispatch past the loader's 10-second timeout.
+ *
+ * `lazy: true` (module C below) does two things, not one: it is skipped
+ * by init()'s eager load, AND - as long as it stays unloaded - it is
+ * invisible to URL-based module detection, even though its own pattern
+ * ('localhost') would otherwise match this page. It only becomes a
+ * normal, detectable, activatable module once the page calls
+ * `moduleRegistry.loadModule(entry)` (see "Load lazy module C" below).
  */
 (function() {
     'use strict';
@@ -28,6 +35,8 @@
                 name: 'registry-module-c',
                 url: './module-registry-activation-module-c.js',
                 module: 'ModuleRegistryActivationModuleC',
+                // Not fetched at init(), AND not URL-detectable until loaded
+                // (see the file-level comment above) - not just "loaded later".
                 lazy: true
             }
         ]

@@ -1375,7 +1375,10 @@ export interface AIManagerAPI {
  * straight from `ModuleRegistry`'s own module map - so this always agrees
  * with `window.agentlet.moduleRegistry.get()`/`.getAll()` regardless of
  * which registration path a module came in through (constructor, `register()`,
- * an eager registry entry, or `moduleRegistry.loadModule()`).
+ * an eager registry entry, or `moduleRegistry.loadModule()`). The only
+ * difference between the two is the sentinel used for "not found": `get()`
+ * here resolves to `undefined` (via `ModuleManager`), while
+ * `moduleRegistry.get()` resolves to `null` - both read the exact same map.
  */
 export interface ModulesAPI {
     get(name: string): AgentletModule | null | undefined;
@@ -1410,13 +1413,24 @@ export interface AgentletRegistryEntry {
     url: string;
     module: string;
     /**
-     * When true, this entry is skipped by `init()`'s eager registry load.
+     * `lazy: true` has two effects, not just one - both matter:
+     *
+     * 1. This entry is skipped by `init()`'s eager registry load (it is
+     *    not fetched, instantiated or registered at startup).
+     * 2. Until it *is* loaded (via `loadModule()`), it does not exist in
+     *    `moduleRegistry.modules` at all, so it is invisible to URL-based
+     *    module detection (`findMatchingModule()` and the automatic
+     *    re-detection on navigation) even if its `patterns` would
+     *    otherwise match the current page. A lazy entry is not merely
+     *    "loaded later" - while unloaded, it cannot be auto-activated by
+     *    URL matching under any circumstance.
+     *
      * It is still returned by `getRegistryEntries()` (with `loaded: false`)
      * so a host can list it - for example to build a "load more" or
-     * launcher UI - and load it on demand with `loadModule()`. A lazy entry
-     * is not a candidate for URL-based module detection
-     * (`findMatchingModule()` / the automatic re-detection on navigation)
-     * until it has actually been loaded.
+     * launcher UI - and load it on demand with `loadModule()`. Once
+     * loaded, it is registered like any other module and becomes an
+     * ordinary candidate for URL-based detection again (see
+     * `loadModule()`'s doc comment).
      */
     lazy?: boolean;
 }
@@ -1446,12 +1460,21 @@ export interface ModuleRegistryAPI {
      * `window[entry.module]`, instantiates it and registers it - reusing
      * the same loading code `init()`'s eager registry load uses - then
      * resolves with the module instance. Unlike the eager load, this never
-     * activates the module, even if its pattern matches the current URL;
-     * call `activateModule()` explicitly afterwards to make it active.
+     * activates the module itself, even if its pattern matches the current
+     * URL; call `activateModule()` explicitly afterwards to make it active.
      * Resolves with the already-registered instance, without reloading, if
      * `entry.name` is already loaded. Lets a host load a `lazy: true`
      * registry entry - or any inline entry it constructs itself - after
      * `init()` has already run.
+     *
+     * Loading is a one-way transition: once this resolves, the module is
+     * registered exactly like an eager one and becomes an ordinary
+     * candidate for automatic URL-based detection again (a later
+     * navigation can auto-activate it if it matches and nothing else is
+     * active) - `lazy` only controls whether it is fetched and detectable
+     * *before* this is called, not a permanent opt-out. Call
+     * `deactivateModule()`/`unregister()` if that isn't the desired
+     * behavior for a given host.
      */
     loadModule(entry: AgentletRegistryEntry): Promise<AgentletModule>;
     /**

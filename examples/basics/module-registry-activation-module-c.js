@@ -3,10 +3,13 @@
  * module-registry-activation example.
  *
  * Declared in the registry with `lazy: true`, so it is NOT fetched during
- * init(); it is only loaded when the page calls
- * `window.agentlet.moduleRegistry.loadModule(entry)`. Its pattern also
- * matches the page, demonstrating that loadModule() registers it without
- * activating it even though it would otherwise match the current URL.
+ * init(), and - until loaded - it does not exist in `moduleRegistry.modules`
+ * at all, so it is also invisible to automatic URL-based module detection,
+ * even though its pattern ('localhost') matches this page. It is only
+ * loaded (and only then becomes a normal, detectable module again) when the
+ * page calls `window.agentlet.moduleRegistry.loadModule(entry)`; loading it
+ * still does not activate it, so a manual `activateModule()` call is what
+ * demonstrates it working, not the load itself.
  */
 class ModuleRegistryActivationModuleC extends window.agentlet.Module {
     constructor() {
