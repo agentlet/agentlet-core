@@ -5,6 +5,59 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-09-28
+
+### Added
+
+- `moduleRegistry.loadModule(entry)` loads and registers one registry entry
+  on demand, without activating it, even if its pattern matches the current
+  URL.
+- Registry entries can be marked `lazy: true`. They are skipped by `init()`'s
+  eager load, listed by `moduleRegistry.getRegistryEntries()` with
+  `loaded: false`, and not a candidate for URL-based module detection until
+  loaded with `loadModule()`.
+- Dialogs accept `icon: ''` or `icon: null` to omit the title icon entirely.
+- The npm package now ships `dist/pdf.worker.min.mjs`, matching the bundled
+  `pdfjs-dist` version, about 1 MB unpacked.
+
+### Fixed
+
+- `window.agentlet.modules.get()` and `getAll()` now see modules that were
+  loaded through the registry.
+- A module activated with `activateModule()` is no longer reverted by the
+  1 second URL poll, and stays active across a URL change while it still
+  matches.
+- Hash-based navigation is now detected immediately, instead of only on the
+  next poll tick.
+- `pdfWorkerUrl` is now always applied. It used to be silently ignored in
+  bundled builds.
+- A relative `registryUrl` is now resolved against the page to derive the
+  PDF worker URL.
+- Dialog headers now take a matching background and text colour from
+  `headerBackground`/`headerTextColor` when the dialog-specific keys are not
+  set, with a readable text colour derived from hex or `rgb()` backgrounds.
+- Dialogs now follow `setTheme()`, whether already open or opened later.
+- No informational console output is written unless `debugMode: true`.
+  Warnings and errors are unaffected, and a failed module script load still
+  logs an error.
+- The page's `localStorage`/`sessionStorage` methods are no longer patched
+  unless a storage change listener is registered, and host writes to
+  unrelated keys no longer remount the active module.
+- Cookie polling only runs while something listens for cookie changes.
+- Removed a spurious "Activation already in progress" warning at init.
+- `cleanup()` now restores everything the core patched or listened to.
+- The example registry scripts dispatch `agentletRegistryLoaded`
+  synchronously, removing a race with the loader's timeout.
+
+### Changed
+
+- The default PDF.js worker path is `./pdf.worker.min.mjs`, was
+  `./pdf.worker.min.js`.
+- Removed the automatic fallback to a worker hosted on cdnjs.cloudflare.com.
+  A clear error now names `pdfWorkerUrl` and `configurePDFWorker()` instead.
+- Scaffold template tests assert visible effects instead of core console
+  messages.
+
 ## [2.0.1] - 2026-09-25
 
 ### Fixed
@@ -125,5 +178,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.1.0]: https://github.com/agentlet/agentlet-core/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/agentlet/agentlet-core/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/agentlet/agentlet-core/compare/v1.0.0...v2.0.0
