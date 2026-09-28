@@ -39,10 +39,14 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 - Scans that SBOM with `osv-scanner` and gates the job on the result
   (`npm run security:scan`) - see "Dependency vulnerability scanning" below
   for the full design and how to run it locally
-- Uploads results to the GitHub Security tab (SARIF) and as build artifacts
-- On the nightly run only, also rescans the SBOM attached to the latest
-  published GitHub release, and opens/updates a `security`-labeled issue if
-  that rescan fails
+- Uploads results to the GitHub Security tab (SARIF, via
+  `github/codeql-action/upload-sarif`) and as build artifacts - skipped for
+  PRs from forks, whose `GITHUB_TOKEN` is read-only, but the gate itself
+  still runs and blocks there
+- On the nightly run only: opens/updates a `security`-labeled issue if the
+  gate fails on `main` itself, and separately rescans the SBOM attached to
+  the latest published GitHub release, opening/updating its own
+  `security`-labeled issue (distinct title) if that fails too
 
 ### 📦 `dependabot.yml` - Dependency Updates
 - **npm dependencies**: Weekly updates on Mondays
