@@ -52,11 +52,11 @@ jobs:
         # against the release's own SHA256SUMS file - no curl|sh.
         run: |
           set -euo pipefail
-          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
-          curl -sSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
+          curl -fsSL -o osv-scanner_linux_amd64 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          curl -fsSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
           grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
-          chmod +x osv-scanner
-          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          chmod +x osv-scanner_linux_amd64
+          sudo mv osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
           osv-scanner --version
 
       - name: Build project
@@ -74,7 +74,9 @@ jobs:
         # Skipped for PRs from forks: their GITHUB_TOKEN is read-only, so
         # this upload would fail there. The gate itself (see the last step
         # below) does not depend on this step and still runs and blocks.
-        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
+        # Also skipped when no SARIF was produced (an earlier step failed
+        # before the scan ran), so the real error stays the visible one.
+        if: always() && hashFiles('reports/security/results.sarif') != '' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/security/results.sarif
@@ -152,11 +154,11 @@ jobs:
       - name: Install osv-scanner
         run: |
           set -euo pipefail
-          curl -sSL -o osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
-          curl -sSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
+          curl -fsSL -o osv-scanner_linux_amd64 "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          curl -fsSL -o osv-scanner_SHA256SUMS "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS"
           grep 'osv-scanner_linux_amd64$' osv-scanner_SHA256SUMS | sha256sum -c -
-          chmod +x osv-scanner
-          sudo mv osv-scanner /usr/local/bin/osv-scanner
+          chmod +x osv-scanner_linux_amd64
+          sudo mv osv-scanner_linux_amd64 /usr/local/bin/osv-scanner
 
       - name: Fetch latest release's SBOM asset, if published
         id: fetch
