@@ -26,6 +26,14 @@ jobs:
     permissions:
       contents: read
       security-events: write
+    outputs:
+      # Exposed so the schedule-only nightly-main-issue job below can react
+      # to the gate result without needing issues: write itself (kept off
+      # this job's permissions so PR runs, including fork PRs, stay
+      # least-privilege). Set even though the job ultimately fails when the
+      # gate fails (see the last step) - step outputs from an earlier,
+      # continue-on-error step survive that.
+      gate_outcome: ${{ steps.scan.outcome }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -63,8 +71,11 @@ jobs:
         continue-on-error: true
 
       - name: Upload SARIF to code scanning
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        # Skipped for PRs from forks: their GITHUB_TOKEN is read-only, so
+        # this upload would fail there. The gate itself (see the last step
+        # below) does not depend on this step and still runs and blocks.
+        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/security/results.sarif
           category: dependency-vulnerabilities
@@ -86,6 +97,41 @@ jobs:
         run: |
           echo "Dependency vulnerability gate failed - see the job summary and the uploaded reports." >&2
           exit 1
+
+  nightly-main-issue:
+    name: File tracking issue for a failing nightly scan of main
+    # Runs only for the nightly schedule (a PR or push-to-main failure is
+    # already visible as a failed check, and does not need an issue). Needs
+    # `always()` because the `scan` job above ends in failure when the gate
+    # fails, which would otherwise skip this job by default.
+    needs: scan
+    if: always() && github.event_name == 'schedule' && needs.scan.outputs.gate_outcome == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download scan reports
+        uses: actions/download-artifact@v7
+        with:
+          name: security-scan-reports
+          path: reports/security
+
+      - name: Open or update a tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Nightly scan: main has a blocking vulnerability"
+          body_file="reports/security/scan-summary.md"
+          gh label create security --color b60205 --description "Security related issues" --repo "${GITHUB_REPOSITORY}" 2>/dev/null || true
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" --label security --state open --search "in:title \"Nightly scan: main has a blocking vulnerability\"" --json number --jq '.[0].number' || true)"
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --repo "${GITHUB_REPOSITORY}" --body-file "${body_file}"
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "${title}" --label security --body-file "${body_file}"
+          fi
 
   nightly-release-scan:
     name: Rescan latest published release
