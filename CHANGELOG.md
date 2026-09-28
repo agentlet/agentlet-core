@@ -5,10 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.1] - 2026-09-28
 
 ### Added
 
+- Each GitHub release now attaches `sbom-bundle.cdx.json`, a CycloneDX SBOM
+  of the dependencies bundled into the published build. Pull requests and
+  pushes to `main` are scanned against known vulnerabilities, and the scan
+  runs nightly on `main` and on the latest release.
 - `npm run test:examples:docker` runs a targeted subset of the Playwright
   e2e suite inside the official Playwright Docker image, for a quick
   recheck on hosts where the local OS is too old for the Playwright browser
@@ -17,10 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `express`, `cors`, and `dotenv` are no longer installed as runtime
-  dependencies for consumers of the npm package. They are only used by the
-  local `tools/dev-server.js` dev tooling and now live in
-  `devDependencies`.
+- The npm package no longer declares any runtime `dependencies`, so
+  `npm install agentlet-core` installs nothing else.
+  - `hotkeys-js`, `html2canvas`, `pdfjs-dist` and `xlsx` are already inlined
+    in every `dist/` bundle and are now `devDependencies`. If your own code
+    imported one of them directly and relied on agentlet-core installing it,
+    add it to your own `package.json`.
+  - `express`, `cors`, and `dotenv` were only used by the local
+    `tools/dev-server.js` dev tooling and are now `devDependencies` too.
 - Dependency vulnerabilities in dev tooling (Jest, Playwright, plop, and
   their transitive dependencies) have been fixed.
 
@@ -29,10 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `xlsx` is upgraded to 0.20.3, fixing GHSA-4r6h-8v6p-xvw6 (prototype
   pollution) and GHSA-5pgg-2g8v-p4x9 (regular expression denial of
   service). The npm registry's last published `xlsx` release is 0.18.5, so
-  0.20.3 is now installed from the SheetJS project's own CDN
-  (cdn.sheetjs.com) instead of the npm registry. If your install goes
-  through a registry-only proxy, allow that host or `npm install` will fail
-  to fetch this dependency.
+  0.20.3 comes from the SheetJS project's own CDN (cdn.sheetjs.com). It is
+  only fetched when building agentlet-core itself, not when installing the
+  npm package. The bundles grow accordingly, for example
+  `agentlet-core.min.js` from about 1236 KB to 1305 KB.
 
 ## [2.1.0] - 2026-09-28
 
@@ -207,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.1.1]: https://github.com/agentlet/agentlet-core/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/agentlet/agentlet-core/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/agentlet/agentlet-core/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/agentlet/agentlet-core/compare/v1.0.0...v2.0.0
