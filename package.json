@@ -40,6 +40,8 @@
     "verify:dist-types": "node tools/verify-dist-types.mjs",
     "verify:node-import": "node tools/verify-node-import.mjs",
     "verify:tarball-import": "node tools/verify-tarball-import.mjs",
+    "security:sbom": "node tools/security/sbom.mjs",
+    "security:scan": "node tools/security/scan.mjs",
     "test:examples": "playwright test --config=tests/examples/playwright.config.js",
     "test:examples:visible": "playwright test --config=tests/examples/playwright.config.js --headed",
     "test:examples:debug": "playwright test --config=tests/examples/playwright.config.js --debug",

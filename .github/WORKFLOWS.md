@@ -5,12 +5,13 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 ## Workflows
 
 ### 🧪 `test.yml` - Quick Test Pipeline
-**Trigger**: Every push to any branch, PRs to main/develop
+**Trigger**: Every push to `main`, PRs to `main`
 - Runs on Node.js 22.x
-- Executes Jest unit tests 
-- Builds the project
-- Runs Playwright integration tests
-- Uploads test artifacts on failure
+- Two jobs run in parallel, with no dependency between them:
+  - `checks`: `npm ci`, Jest unit tests, lint, typecheck, build
+  - `e2e`: a 3-way matrix (`chromium`, `firefox`, `webkit`), each running
+    the Playwright suite for a single browser project
+- Uploads test artifacts (per browser project) on e2e failure
 
 ### 🚀 `ci.yml` - Full CI/CD Pipeline  
 **Trigger**: Push to main/develop, PRs to main/develop
@@ -31,6 +32,22 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 - **Security Audit**:
   - npm audit for vulnerabilities
   - Dependency review for PRs
+
+### 🔒 `security.yml` - Dependency vulnerability scan
+**Trigger**: PRs to main, pushes to main, nightly schedule (03:17 UTC), manual dispatch
+- Builds the project, then generates a CycloneDX SBOM of what the published
+  bundles actually ship (`npm run security:sbom`)
+- Scans that SBOM with `osv-scanner` and gates the job on the result
+  (`npm run security:scan`) - see "Dependency vulnerability scanning" below
+  for the full design and how to run it locally
+- Uploads results to the GitHub Security tab (SARIF, via
+  `github/codeql-action/upload-sarif`) and as build artifacts - skipped for
+  PRs from forks, whose `GITHUB_TOKEN` is read-only, but the gate itself
+  still runs and blocks there
+- On the nightly run only: opens/updates a `security`-labeled issue if the
+  gate fails on `main` itself, and separately rescans the SBOM attached to
+  the latest published GitHub release, opening/updating its own
+  `security`-labeled issue (distinct title) if that fails too
 
 ### 📦 `dependabot.yml` - Dependency Updates
 - **npm dependencies**: Weekly updates on Mondays
@@ -76,10 +93,16 @@ Recommended settings for `main` branch:
 - Require status checks to pass before merging
 - Require branches to be up to date before merging
 - Required status checks:
-  - `test`
+  - `checks`
+  - `e2e (chromium)`, `e2e (firefox)`, `e2e (webkit)`
   - `test (20.x, 22.x)` from CI pipeline
   - `build-and-package`
   - `security-audit`
+
+  (`main` currently has no branch protection rule configured, so these names
+  aren't enforced anywhere; keep this list in sync with the job/matrix names
+  in `test.yml` if it's ever turned on, since GitHub matches required checks
+  by exact name.)
 
 ### 3. Environment Variables
 The workflows use these environment variables:
@@ -264,6 +287,70 @@ If the suite grows significantly, re-measure with
 `CI=true npx playwright test --config=tests/examples/playwright.config.js`
 before assuming the existing budget still holds.
 
+## Splitting e2e across a per-browser matrix (`test.yml`)
+
+The fix above got CI green, but the `test` job still ran all 3 Playwright
+projects serially after `npm ci` / jest / lint / typecheck / build, in a
+single job: ~19s for everything else plus a measured 22m13s for Playwright
+(after a 47s `playwright install --with-deps`), for a total of roughly
+24 minutes of wall time per run.
+
+`test.yml` now splits that single job into two, running in parallel (no
+`needs` between them):
+
+- `checks`: checkout, setup-node, `npm ci`, jest, lint, typecheck, build.
+  Everything here together takes well under a minute on a green run;
+  `timeout-minutes: 10` leaves headroom without hiding a hang.
+- `e2e`: a matrix over `project: [chromium, firefox, webkit]` with
+  `fail-fast: false`, so one browser's failure doesn't cancel the others.
+  Each matrix job checks out the repo fresh, installs only its own browser
+  (`npx playwright install --with-deps ${{ matrix.project }}`, rather than
+  all three), and runs `npm run test:examples -- --project=${{
+  matrix.project }}`. Playwright's `globalSetup` (`npm run build`) runs
+  again inside each job, since each is a separate runner/checkout; this is
+  the same build step `checks` also runs, just duplicated across jobs to
+  keep them independent and parallel.
+
+This cuts wall time because:
+
+- The three browser projects, previously run one after another in a single
+  job, now run concurrently as three jobs. Each already-idle GitHub-hosted
+  runner is a full 4 vCPU machine to itself.
+- `tests/examples/playwright.config.js` raises CI's `workers` from `2` to
+  `4` (overridable via `E2E_WORKERS`). The old value of `2` was chosen so
+  that 3 projects' worth of tests, run in the same job, wouldn't overwhelm
+  a 4 vCPU runner; now that a job only ever runs one project's ~153 tests,
+  it can use all 4 vCPUs itself.
+- Each matrix job only installs the one browser it needs, instead of
+  `--with-deps` downloading and installing Chromium, Firefox and WebKit (and
+  their OS dependencies) every run.
+
+Expected wall time: `checks` (~20s) and `e2e` (bounded by its slowest
+matrix job, roughly a third of the old 22m13s Playwright time plus its own
+`npm ci` and single-browser install, so well under 10 minutes) run at the
+same time, for a total CI wall time well under 10 minutes, down from ~24.
+
+The per-project `globalTimeout` in `playwright.config.js` drops from 45 to
+20 minutes on CI only (`process.env.CI ? 1200000 : 2700000`): a job now
+covers one project's ~153 tests at 4 workers instead of all 459 at 2
+workers, so the old 22.3-minute full-suite reference point is a very
+generous upper bound for a single project. Local runs (`CI` unset) keep the
+45-minute budget and still exercise all three projects in one invocation
+via `npm run test:examples`, so local behaviour is unchanged. Each matrix
+job's `timeout-minutes: 25` in `test.yml` sits above that 20-minute
+in-config budget, covering checkout, `npm ci` and the single-browser
+install around it.
+
+Artifact uploads on failure are now named `test-artifacts-${{
+matrix.project }}` (e.g. `test-artifacts-firefox`) instead of a single
+`test-artifacts`, since three parallel jobs uploading to the same artifact
+name would collide.
+
+If GitHub's `ubuntu-latest` migration (see above) changes the effective
+vCPU count, or the suite grows significantly, re-measure both the
+`workers` value and the `globalTimeout`/`timeout-minutes` budgets rather
+than assuming they still hold.
+
 ## `release.yml` - npm publish pipeline
 
 **Trigger**: Push of a tag matching `v*` (for example `v1.2.3`)
@@ -329,3 +416,153 @@ release, confirm the `NPM_TOKEN` secret described above has been added,
 and that `package.json`'s `version` matches the tag about to be pushed.
 The workflow verifies that last point itself and fails early if it does
 not hold, but checking before tagging avoids a pointless failed run.
+
+## Dependency vulnerability scanning (`security.yml`)
+
+### Why not just run a scanner on `dist/`
+
+`agentlet-core`'s published bundles (`dist/agentlet-core.js` and friends)
+are built with esbuild, which inlines every bundled dependency into a
+single file. A filesystem/container SBOM scanner finds zero components in
+`dist/` or in the `npm pack` tarball: there is nothing that looks like a
+`node_modules` tree to scan. `package-lock.json` lists every installed
+package, but most of them (the build toolchain, test runners, linters) are
+never shipped, so scanning only the lockfile would both miss nothing that
+matters and constantly flag things that can't affect a consumer.
+
+The gate therefore scans two different things:
+
+- **`bundle` scope (blocking)** - a CycloneDX SBOM built from the esbuild
+  metafiles (`tools/build.js` passes `metafile: true` for every
+  npm-published target plus the bookmarklet and extension builds, and
+  writes each one to `reports/security/meta/*.meta.json`, which is
+  gitignored and never published). `tools/security/sbom.mjs` reads those
+  metafiles, maps every `node_modules` input back to the nearest owning
+  package's `package.json` (handling scoped and nested `node_modules`
+  correctly, so two different versions of the same package pulled in via
+  different dependents are not conflated), and writes
+  `reports/security/sbom-bundle.cdx.json`. This is what a consumer of
+  `agentlet-core` actually runs.
+- **`lockfile` scope (reporting only)** - `package-lock.json` scanned
+  directly, full install tree. Useful for visibility (a compromised build
+  tool is still a supply-chain risk) but never blocks a PR, since nothing
+  in it necessarily ships.
+
+### Running the scan locally
+
+```bash
+brew install osv-scanner
+npm run build           # writes reports/security/meta/*.meta.json
+npm run security:sbom   # reads them, writes reports/security/sbom-bundle.cdx.json
+npm run security:scan   # runs osv-scanner against both scopes and gates
+```
+
+`npm run security:scan` accepts `--min-severity=<low|medium|high|critical>`
+(default `high`), `--skip-lockfile`, and `--offline` (skips the EPSS/KEV
+network calls, marking both as unknown) - see the header comment in
+`tools/security/scan.mjs` for the full flag list. Reports land in
+`reports/security/` (gitignored): `results.sarif`, `scan-report.json`, and
+`scan-summary.md`.
+
+### Gate rule
+
+A finding in the **bundle** scope fails the gate when:
+
+- it is `high` or `critical` severity **and** a fixed version is known
+  (from OSV's `fixed` event or, for GHSA-sourced advisories without one,
+  the affected-range hint), **or**
+- it is listed in CISA's Known Exploited Vulnerabilities (KEV) catalog,
+  regardless of severity,
+
+unless a valid, unexpired entry in `security/vulnerability-exceptions.json`
+covers it. An **expired** exception is treated as if it did not exist for
+matching purposes, and additionally fails the gate on its own (to force
+either renewing or removing it) - see
+`tools/security/lib/gate-core.js`'s `evaluateGate`. The lockfile scope
+never blocks, regardless of severity.
+
+Severity comes from OSV's `database_specific.severity` (GHSA advisories)
+when present, falling back to a base-score calculation from the CVSS v3.x
+vector when it is not.
+
+### Vulnerability exceptions (`security/vulnerability-exceptions.json`)
+
+```json
+{
+  "exceptions": [
+    {
+      "id": "GHSA-xxxx-xxxx-xxxx",
+      "package": "some-package",
+      "reason": "Why this is accepted temporarily",
+      "expires": "2026-12-31",
+      "owner": "github-handle"
+    }
+  ]
+}
+```
+
+- `id` - a GHSA or CVE id. Matches a finding on **any** of its OSV
+  aliases, so either id works.
+- `package` - optional; when present, the exception only applies to that
+  package name.
+- `reason` - required, human-readable.
+- `expires` - required, `YYYY-MM-DD`. Once past, the entry stops matching
+  and instead fails the gate itself until it is renewed (a new `expires`
+  date) or removed.
+- `owner` - optional, for review follow-up.
+
+Review policy: an exception is a deliberate, time-boxed decision to accept
+a known risk (e.g. no upstream fix exists yet and the affected code path is
+unreachable from a bundled build). It should name a real owner and a
+realistic expiry, not a far-future date used to silence the gate
+permanently. An unused exception (nothing matched it on a given run)
+produces a warning in the scan output so stale entries get noticed and
+removed.
+
+### EPSS and KEV enrichment
+
+Findings are enriched, best-effort, with:
+
+- **EPSS** (Exploit Prediction Scoring System) from
+  `https://api.first.org/data/v1/epss`, keyed by CVE id (GHSA ids are
+  mapped to CVE ids via OSV's `aliases`).
+- **CISA KEV** (Known Exploited Vulnerabilities) from
+  `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`.
+
+Both calls are wrapped so a network failure (offline dev machine, an
+outage, a firewalled CI runner) prints a warning and marks that data as
+unknown rather than failing the scan; the gate rule does not require EPSS,
+and a `kev: false` from a failed KEV fetch means a real KEV finding could
+be under-flagged for that run rather than the scan crashing.
+
+### Installing `osv-scanner` in CI
+
+`security.yml` downloads the official release binary
+(`osv-scanner_linux_amd64`) for a pinned version
+(`env.OSV_SCANNER_VERSION`) directly from `google/osv-scanner`'s GitHub
+releases, and verifies it against that same release's `SHA256SUMS` file
+before running it - no `curl | sh`. Bump `OSV_SCANNER_VERSION` deliberately
+and re-check `osv-scanner scan source --help` for flag changes when doing
+so, since `tools/security/scan.mjs` depends on the exact CLI surface of the
+pinned version.
+
+### Nightly rescan of the latest published release
+
+New CVEs are disclosed after a version has already shipped, so a clean scan
+at release time does not stay true forever. The nightly run of
+`security.yml` downloads the `sbom-bundle.cdx.json` asset from the most
+recent GitHub release (attached by `release.yml`, see below) and rescans it
+independently of the current `main` branch. If that rescan fails the gate,
+the workflow opens (or comments on, if one is already open) a single
+issue labeled `security` rather than opening a duplicate every night.
+
+### SBOM attached to GitHub releases (`release.yml`)
+
+After `npm publish` succeeds, `release.yml` creates (or updates) the GitHub
+release for the pushed tag and attaches the same `sbom-bundle.cdx.json`
+generated for that build. SBOM generation happens *before* `npm publish` so
+a failure there stops before anything is published; the upload to the
+release happens *after* publish so a failure there (network blip, the
+release already exists in an unexpected way) never leaves npm in a
+half-published state - it can be retried on its own with
+`gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.

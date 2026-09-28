@@ -139,6 +139,18 @@ agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `te
   - Run `npm install --save https://cdn.sheetjs.com/xlsx-<version>/xlsx-<version>.tgz`, replacing `<version>` with the version you want.
   - Review the SheetJS changelog for breaking changes, then run the full verification suite (`npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run verify:dist-types`, `npm run verify:node-import`, `npm run verify:tarball-import`) before committing.
 
+### Dependency vulnerability scanning
+
+`npm run build && npm run security:sbom && npm run security:scan` checks
+what agentlet-core's published bundles actually ship against known
+vulnerabilities and blocks on high/critical findings with a fix or KEV
+listing (see `.github/WORKFLOWS.md`'s "Dependency vulnerability scanning"
+section for the full design). Requires `osv-scanner` on `PATH`
+(`brew install osv-scanner`). Do not add a bundled runtime dependency
+without checking this passes, and never widen
+`security/vulnerability-exceptions.json` without a real owner and a
+realistic expiry date.
+
 ### Module Development
 
 When creating new modules:

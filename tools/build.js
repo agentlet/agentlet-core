@@ -29,6 +29,7 @@ class AgentletCoreBuilder {
                 globalName: 'AgentletCore',
                 minify: false,
                 sourcemap: true,
+                metafile: true,
                 // esbuild's iife+globalName output only assigns to the global
                 // variable. Since package.json's "require"/"default" exports
                 // condition resolves to this file, also assign module.exports
@@ -49,6 +50,7 @@ class AgentletCoreBuilder {
                 globalName: 'AgentletCore',
                 minify: true,
                 sourcemap: false,
+                metafile: true,
                 footer: {
                     js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
                 }
@@ -61,9 +63,10 @@ class AgentletCoreBuilder {
                 target: 'es2020',
                 outfile: path.join(this.distDir, 'agentlet-core.esm.js'),
                 minify: false,
-                sourcemap: true
+                sourcemap: true,
+                metafile: true
             },
-            
+
             bookmarklet: {
                 entryPoints: [this.entryPoint],
                 bundle: true,
@@ -73,6 +76,7 @@ class AgentletCoreBuilder {
                 globalName: 'AgentletCore',
                 minify: true,
                 sourcemap: false,
+                metafile: true,
                 banner: {
                     js: 'javascript:(function(){'
                 },
@@ -80,7 +84,7 @@ class AgentletCoreBuilder {
                     js: '})();'
                 }
             },
-            
+
             extension: {
                 entryPoints: [this.entryPoint],
                 bundle: true,
@@ -90,6 +94,7 @@ class AgentletCoreBuilder {
                 globalName: 'AgentletCore',
                 minify: true,
                 sourcemap: false,
+                metafile: true,
                 external: ['chrome']
             }
         };
@@ -121,6 +126,27 @@ class AgentletCoreBuilder {
             console.log(`📁 Resources copied to: ${distResourcesDir}`);
         } catch (error) {
             console.warn(`⚠️ Failed to copy resources: ${error.message}`);
+        }
+    }
+
+    /**
+     * Write an esbuild metafile to a gitignored reports directory (never
+     * under dist/, and never listed in package.json's "files", so it is
+     * never published to npm). This is the shipped-inventory input for the
+     * dependency vulnerability scanner in tools/security/sbom.mjs, which
+     * maps every bundled `node_modules` input back to its npm package.
+     */
+    writeMetafile(name, metafile) {
+        if (!metafile) {
+            return;
+        }
+        try {
+            const metaDir = path.join(__dirname, '..', 'reports', 'security', 'meta');
+            fs.mkdirSync(metaDir, { recursive: true });
+            const metaPath = path.join(metaDir, `${name}.meta.json`);
+            fs.writeFileSync(metaPath, JSON.stringify(metafile, null, 2));
+        } catch (error) {
+            console.warn(`⚠️ Failed to write esbuild metafile for ${name}: ${error.message}`);
         }
     }
 
@@ -237,7 +263,8 @@ class AgentletCoreBuilder {
         
         try {
             const result = await esbuild.build(config);
-            
+            this.writeMetafile(minified ? 'agentlet-core.min' : 'agentlet-core', result.metafile);
+
             const outputFile = config.outfile;
             const stats = fs.statSync(outputFile);
             const sizeKB = (stats.size / 1024).toFixed(2);
@@ -277,6 +304,7 @@ class AgentletCoreBuilder {
 
         try {
             const result = await esbuild.build(config);
+            this.writeMetafile('agentlet-core.esm', result.metafile);
 
             const outputFile = config.outfile;
             const stats = fs.statSync(outputFile);
@@ -306,7 +334,8 @@ class AgentletCoreBuilder {
         
         try {
             const result = await esbuild.build(this.configs.bookmarklet);
-            
+            this.writeMetafile('bookmarklet', result.metafile);
+
             const outputFile = this.configs.bookmarklet.outfile;
             let bookmarkletCode = fs.readFileSync(outputFile, 'utf8');
             
@@ -754,6 +783,7 @@ MIT
             
             // Build core library for extension
             const result = await esbuild.build(this.configs.extension);
+            this.writeMetafile('extension', result.metafile);
             
             // Copy extension files
             await this.copyExtensionFiles(extensionDir);

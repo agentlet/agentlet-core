@@ -35,10 +35,13 @@ export default defineConfig({
   // Retry on CI only
   retries: process.env.CI ? 2 : 0,
 
-  // Limit parallelism on CI (shared runners), but don't fully serialize:
-  // with 152 tests per project this keeps total wall-clock time within
-  // globalTimeout. See .github/WORKFLOWS.md for the full reasoning.
-  workers: process.env.CI ? 2 : undefined,
+  // CI now runs each Playwright project (chromium/firefox/webkit) as its own
+  // matrix job (see .github/workflows/test.yml), so a job only ever runs one
+  // browser's ~153 tests instead of all three. That leaves the whole 4 vCPU
+  // runner free for a single project, so workers go up to 4. Override with
+  // E2E_WORKERS if a specific job needs a different value. See
+  // .github/WORKFLOWS.md for the full reasoning.
+  workers: process.env.CI ? (Number(process.env.E2E_WORKERS) || 4) : undefined,
   
   // Reporter to use
   reporter: [
@@ -124,14 +127,17 @@ export default defineConfig({
   // Test match patterns
   testMatch: '**/*.spec.js',
   
-  // Timeout for the whole test run: 3 projects (chromium, firefox, webkit)
-  // x 153 tests each = 459 tests. Measured at roughly 23 minutes with two
-  // workers, which is what both a 4-core CI runner and a typical developer
-  // machine end up using. This is a safety net against a hung run, not a
-  // target, so the budget is deliberately generous and identical everywhere
+  // Timeout for the whole test run. On CI this config is now invoked once
+  // per Playwright project (chromium, firefox, webkit) as a separate matrix
+  // job in .github/workflows/test.yml, so a single CI run covers ~153 tests
+  // rather than all 459, at 4 workers on a 4 vCPU runner: 20 minutes leaves
+  // comfortable margin above the previous full-suite (3 projects, 2 workers)
+  // reference point of roughly 22 minutes. Locally this file still runs all
+  // three projects in one invocation, so it keeps the older, more generous
+  // 45-minute budget; it's a safety net against a hung run, not a target
   // (an earlier 15-minute local budget cut the suite off mid-run). See
   // .github/WORKFLOWS.md for the full reasoning.
-  globalTimeout: 2700000, // 45 minutes
+  globalTimeout: process.env.CI ? 1200000 : 2700000, // 20 min CI, 45 min local
   
   // Expect configuration
   expect: {
