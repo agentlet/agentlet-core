@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `express`, `cors`, and `dotenv` are no longer installed as runtime
+  dependencies for consumers of the npm package. They are only used by the
+  local `tools/dev-server.js` dev tooling and now live in
+  `devDependencies`.
+- Dependency vulnerabilities in dev tooling (Jest, Playwright, plop, and
+  their transitive dependencies) have been fixed.
+
 ## [2.1.0] - 2026-09-28
 
 ### Added
