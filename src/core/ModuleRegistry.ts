@@ -531,16 +531,11 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
 
             logger.log(`📦 Found ${agentlets.length} agentlet(s) in registry`);
 
-            // Extract base URL from registry URL for relative library paths
-            let baseUrl: string;
-            try {
-                const registryUrlObj = new URL(url);
-                baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
-            } catch (_error) {
-                const currentLocation = window.location.href;
-                const registryUrlObj = new URL(url, currentLocation);
-                baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
-            }
+            // Absolute registry URL: relative library paths and relative
+            // entry URLs both resolve against it, not against the host page.
+            const registryHref = new URL(url, window.location.href).href;
+            const registryUrlObj = new URL(registryHref);
+            const baseUrl = registryUrlObj.origin + registryUrlObj.pathname.replace(/[^/]+$/, '');
 
             // Add base URL to registry data if it has libraries
             if ((registryData as AgentletRegistryPayload).libraries) {
@@ -551,8 +546,14 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             // are recorded (so getRegistryEntries() lists them for a host to
             // show, e.g. a launcher UI) but not fetched here - only
             // loadModule() loads them, on demand.
-            for (const agentletConfig of agentlets as AgentletRegistryEntryConfig[]) {
-                this.registryEntries.set(agentletConfig.name, { ...agentletConfig });
+            for (const rawConfig of agentlets as AgentletRegistryEntryConfig[]) {
+                // Stored resolved, so a later loadModule(getRegistryEntries()[i])
+                // fetches the same absolute URL the eager load would have.
+                const agentletConfig: AgentletRegistryEntryConfig = {
+                    ...rawConfig,
+                    url: ModuleRegistry.resolveEntryUrl(rawConfig.url, registryHref)
+                };
+                this.registryEntries.set(agentletConfig.name, agentletConfig);
 
                 if (agentletConfig.lazy) {
                     logger.log(`📦 Skipping eager load of lazy agentlet: ${agentletConfig.name}`);
@@ -577,6 +578,26 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
             this.metrics.registryLoadFailures++;
             console.error(`❌ Failed to load registry from ${url}:`, error);
             this.emit('registry:loadFailed', { url, error: (error as Error).message });
+        }
+    }
+
+    /**
+     * Resolves a registry entry's `url` against the registry script's own
+     * absolute URL, so `"./module-bundle.js"` loads from next to the
+     * registry rather than from next to the host page. Absolute URLs pass
+     * through unchanged; a missing or unparsable value is returned as is so
+     * the existing validation in `loadAgentletModule()` still reports it.
+     * @param entryUrl - `url` field of a registry entry
+     * @param registryHref - Absolute URL of the registry script
+     */
+    static resolveEntryUrl(entryUrl: string, registryHref: string): string {
+        if (typeof entryUrl !== 'string' || !entryUrl) {
+            return entryUrl;
+        }
+        try {
+            return new URL(entryUrl, registryHref).href;
+        } catch (_error) {
+            return entryUrl;
         }
     }
 

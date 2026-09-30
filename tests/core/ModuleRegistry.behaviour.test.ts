@@ -764,6 +764,71 @@ describe('ModuleRegistry behaviour characterization', () => {
             ]);
         });
 
+        test('loadFromRegistry() resolves a relative entry url against the registry URL, not the host page', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+
+            class LazyFakeModuleClass {
+                name = '';
+            }
+            (window as unknown as Record<string, unknown>).LazyFakeModuleClass = LazyFakeModuleClass;
+
+            const promise = registry.loadFromRegistry('http://localhost:8080/dist/agentlets-registry.js');
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', {
+                detail: {
+                    agentlets: [
+                        { name: 'relative-eager', url: './module-bundle.js', module: 'LazyFakeModuleClass' }
+                    ]
+                }
+            }));
+            // Let loadFromRegistry() reach the entry's loadScript() call.
+            await Promise.resolve();
+            await Promise.resolve();
+
+            const script = document.head.querySelector('script[src="http://localhost:8080/dist/module-bundle.js"]') as HTMLScriptElement;
+            expect(script).not.toBeNull();
+            script.onload?.(new Event('load'));
+            await promise;
+
+            expect(registry.get('relative-eager')).not.toBeNull();
+            expect(registry.getRegistryEntries()[0].url).toBe('http://localhost:8080/dist/module-bundle.js');
+        });
+
+        test('loadFromRegistry() stores lazy entries with resolved urls and keeps absolute urls unchanged', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const promise = registry.loadFromRegistry('https://cdn.example.com/agentlets/registry.js');
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', {
+                detail: {
+                    agentlets: [
+                        { name: 'lazy-relative', url: 'lazy-relative.js', module: 'LazyFakeModuleClass', lazy: true },
+                        { name: 'lazy-parent', url: '../shared/lazy-parent.js', module: 'LazyFakeModuleClass', lazy: true },
+                        { name: 'lazy-absolute', url: 'https://other.example.com/lazy.js', module: 'LazyFakeModuleClass', lazy: true }
+                    ]
+                }
+            }));
+            await promise;
+
+            expect(registry.getRegistryEntries().map(entry => entry.url)).toEqual([
+                'https://cdn.example.com/agentlets/lazy-relative.js',
+                'https://cdn.example.com/shared/lazy-parent.js',
+                'https://other.example.com/lazy.js'
+            ]);
+        });
+
+        test('loadFromRegistry() resolves a relative registry URL against the host page first', async () => {
+            const registry = new ModuleRegistry({ eventBus: mockEventBus });
+            const promise = registry.loadFromRegistry('./agentlets/registry.js');
+            window.dispatchEvent(new CustomEvent('agentletRegistryLoaded', {
+                detail: {
+                    agentlets: [
+                        { name: 'lazy-page-relative', url: './module-bundle.js', module: 'LazyFakeModuleClass', lazy: true }
+                    ]
+                }
+            }));
+            await promise;
+
+            expect(registry.getRegistryEntries()[0].url).toBe(new URL('./agentlets/module-bundle.js', window.location.href).href);
+        });
+
         test('loadModule() loads and registers a lazy entry without activating it, even when its pattern matches the current URL', async () => {
             const registry = new ModuleRegistry({ eventBus: mockEventBus });
 
