@@ -151,9 +151,9 @@ module.exports = function (plop) {
       {
         type: 'input',
         name: 'registryUrl',
-        message: 'Registry URL (where agentlets-registry.json and libraries will be hosted):',
+        message: 'Registry URL (where agentlets-registry.js and libraries will be hosted):',
         when: (answers) => answers.libraryLoading === 'registry',
-        default: './agentlets-registry.json',
+        default: './agentlets-registry.js',
         validate: (input) => {
           if (!input.trim()) {
             return 'Registry URL is required for dynamic loading';
@@ -169,7 +169,7 @@ module.exports = function (plop) {
         data.folder = cliFolder || '../';
         data.template = hasMinimalFlag ? 'minimal' : 'full';
         data.libraryLoading = cliLoading || 'bundled';
-        data.registryUrl = cliRegistry || './agentlets-registry.json';
+        data.registryUrl = cliRegistry || './agentlets-registry.js';
         data.externalLibs = cliLibs || (data.libraryLoading === 'bundled' ? ['pdfjs-dist'] : []);
         // --defaults and --minimal keep the html (getContent()) template;
         // --ui=react opts into the React template otherwise.

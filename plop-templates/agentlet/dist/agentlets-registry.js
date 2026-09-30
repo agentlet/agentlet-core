@@ -18,7 +18,7 @@
 {{/if}}
         "agentlets": [
             {
-                "name": "{{name}}",
+                "name": "{{kebabCase name}}",
                 "version": "1.0.0",
                 "url": "./module-bundle.js",
                 "module": "{{camelCase name}}AgentletModule",

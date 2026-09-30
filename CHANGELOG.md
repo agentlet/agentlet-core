@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `tables.extract()` and `tables.extractAll()` accept `cellText`
+  (`'textContent'`, the default, `'innerText'` or `'blocks'`) and
+  `cellSeparator`, so text stacked in a cell ("John Davis" above "CTO")
+  reads "John Davis CTO" instead of "John DavisCTO".
+- `excludeColumns` drops columns by header text, index or RegExp, such as
+  an "Actions" or selection column.
+- `tables.extractAll()` accepts `firstPageSelector` or
+  `previousButtonSelector` to start from page 1 instead of the page
+  currently shown. Without them it still starts from the current page.
+
+### Changed
+
+- A module's optional `getStyles()` is now injected into the panel before
+  each mount, once per activation, including when `mount()` is overridden.
+  It was previously never called. CSS a module already injected itself
+  with the same string is not added twice.
+- Pagination controls marked `aria-disabled="true"` now count as disabled.
+
+### Fixed
+
+- Relative `url` values in a registry entry resolve against the registry
+  script's URL instead of the host page, so `"./module-bundle.js"` loads
+  from next to the registry. `getRegistryEntries()` returns the resolved
+  URLs.
+- Scaffolded agentlets resolve the registry and the PDF.js worker against
+  the URL the core bundle was loaded from, so the bookmarklet works on any
+  origin, not only on the dev server page. The registry now registers the
+  module itself: `src/index.js` no longer depends on the agentlet's name or
+  sets `skipRegistryModuleRegistration`.
+- The scaffold's default registry URL in registry mode points to
+  `agentlets-registry.js`, the file the scaffold generates, instead of
+  `agentlets-registry.json`.
+
 ## [2.1.1] - 2026-09-28
 
 ### Added
