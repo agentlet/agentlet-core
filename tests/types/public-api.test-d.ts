@@ -152,6 +152,22 @@ declare const tableEl: HTMLTableElement;
 const tableData: TableData = window.agentlet.tables.extract(tableEl);
 void tableData.headers;
 
+const cleanTableData: TableData = window.agentlet.tables.extract(tableEl, {
+    cellText: 'innerText',
+    cellSeparator: ' | ',
+    excludeColumns: ['Actions', 0, /select/i]
+});
+void cleanTableData.rows;
+
+void window.agentlet.tables.extractAll(tableEl, {
+    nextButtonSelector: '.next',
+    firstPageSelector: '.first',
+    previousButtonSelector: '.prev'
+});
+
+// @ts-expect-error cellText only accepts 'textContent', 'innerText' or 'blocks'
+window.agentlet.tables.extract(tableEl, { cellText: 'html' });
+
 /* -------------------------------------------------------------- */
 /* AI                                                               */
 /* -------------------------------------------------------------- */

@@ -19,16 +19,27 @@ import AgentletCore from 'agentlet-core';
         return;
     }
 
+    // Folder this core bundle was served from, e.g. http://localhost:8080/.
+    // Relative URLs below resolve against it rather than against the host
+    // page, so the bookmarklet works on any origin. document.currentScript
+    // is only set while this script first runs, so it is read right away.
+    var currentScript = document.currentScript;
+    var bundleBaseUrl = new URL('.', (currentScript && currentScript.src) || window.location.href).href;
+    function resolveFromBundle(url) {
+        return new URL(url, bundleBaseUrl).href;
+    }
+
     var agentletConfig = {};
 {{#if (eq libraryLoading 'registry')}}
-    agentletConfig.registryUrl = '{{registryUrl}}';
+    agentletConfig.registryUrl = resolveFromBundle('{{registryUrl}}');
     agentletConfig.loadingMode = 'registry';
 {{else}}
-    // Bundled mode: load registry for module script loading but skip auto-registration
-    agentletConfig.registryUrl = './agentlets-registry.js';
+    agentletConfig.registryUrl = resolveFromBundle('./agentlets-registry.js');
     agentletConfig.loadingMode = 'bundled';
-    agentletConfig.skipRegistryModuleRegistration = true; // Prevent dual registration
 {{/if}}
+    // The registry loads module-bundle.js (resolved next to the registry)
+    // and registers the class its entry names, so nothing here depends on
+    // this agentlet's name.
     agentletConfig.envVarsButton = true;
     
     // Auto-initialize Agentlet Core
@@ -38,20 +49,7 @@ import AgentletCore from 'agentlet-core';
     agentlet.init().then(() => {
         // Configure PDF worker after initialization
         if (window.agentlet && window.agentlet.configurePDFWorker) {
-            window.agentlet.configurePDFWorker('http://localhost:8080/pdf.worker.min.mjs');
-        }
-        
-        // Register local module through ModuleManager to prevent duplicates
-        if (typeof window.{{camelCase name}}AgentletModule !== 'undefined') {
-            const localModule = new window.{{camelCase name}}AgentletModule();
-            // Use ModuleManager instead of direct moduleRegistry registration
-            if (agentlet.moduleManager) {
-                agentlet.moduleManager.register(localModule, 'local-template');
-            } else {
-                // Fallback for older agentlet-core versions
-                agentlet.moduleRegistry.register(localModule);
-            }
-            console.log('🤖 Local agentlet module registered:', localModule.name);
+            window.agentlet.configurePDFWorker(resolveFromBundle('./pdf.worker.min.mjs'));
         }
     }).catch(error => {
         console.error('Failed to start Agentlet Core:', error);
