@@ -353,6 +353,178 @@ describe('TableExtractor', () => {
         });
     });
 
+    describe('extractTableData: cellText', () => {
+        const stackedTable = `
+            <table id="t">
+                <thead><tr><th><span>Contact</span></th><th>Price</th></tr></thead>
+                <tbody><tr>
+                    <td><div>John Davis</div><div>CTO</div></td>
+                    <td>$<span>12</span></td>
+                </tr></tbody>
+            </table>
+        `;
+
+        it('keeps textContent by default, gluing stacked elements together', () => {
+            document.body.innerHTML = stackedTable;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element);
+            expect(data.rows).toEqual([['John DavisCTO', '$12']]);
+        });
+
+        it('"blocks" separates block-level elements and <br> but keeps inline elements joined', () => {
+            document.body.innerHTML = `
+                <table id="t"><tbody>
+                    <tr><td><div>John Davis</div><div>CTO</div></td><td>$<span>12</span></td><td>Line 1<br>Line 2</td></tr>
+                </tbody></table>
+            `;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { cellText: 'blocks' });
+            expect(data.rows).toEqual([['John Davis CTO', '$12', 'Line 1 Line 2']]);
+        });
+
+        it('"blocks" joins lines with cellSeparator and drops empty lines', () => {
+            document.body.innerHTML = stackedTable;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { cellText: 'blocks', cellSeparator: ' | ' });
+            expect(data.headers).toEqual(['Contact', 'Price']);
+            expect(data.rows).toEqual([['John Davis | CTO', '$12']]);
+        });
+
+        it('"innerText" uses the browser rendered text when available', () => {
+            document.body.innerHTML = `
+                <table id="t"><tbody><tr><td id="c"><span>John Davis</span><span>CTO</span></td></tr></tbody></table>
+            `;
+            // jsdom has no layout, so stand in for a browser where the second
+            // span is display: block.
+            Object.defineProperty(document.getElementById('c'), 'innerText', { value: 'John Davis\n  CTO \n' });
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { cellText: 'innerText', cellSeparator: ' / ' });
+            expect(data.rows).toEqual([['John Davis / CTO']]);
+        });
+
+        it('"innerText" falls back to "blocks" where innerText is not implemented', () => {
+            document.body.innerHTML = stackedTable;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { cellText: 'innerText' });
+            expect(data.rows).toEqual([['John Davis CTO', '$12']]);
+        });
+
+        it('keeps each line untrimmed when trimWhitespace is false', () => {
+            document.body.innerHTML = '<table id="t"><tbody><tr><td><div> a </div><div>b</div></td></tr></tbody></table>';
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { cellText: 'blocks', trimWhitespace: false, cellSeparator: '|' });
+            expect(data.rows).toEqual([[' a |b']]);
+        });
+    });
+
+    describe('extractTableData: excludeColumns', () => {
+        const table = `
+            <table id="t">
+                <thead><tr><th>Name</th><th>Email</th><th> Actions </th><th>Select</th></tr></thead>
+                <tbody>
+                    <tr><td>Alice</td><td>a@example.com</td><td><button>Edit</button></td><td><input type="checkbox"></td></tr>
+                    <tr><td>Bob</td><td>b@example.com</td><td><button>Edit</button></td><td><input type="checkbox"></td></tr>
+                </tbody>
+            </table>
+        `;
+
+        it('drops columns matched by header text, case-insensitively', () => {
+            document.body.innerHTML = table;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { excludeColumns: ['actions', 'SELECT'] });
+            expect(data.headers).toEqual(['Name', 'Email']);
+            expect(data.rows).toEqual([['Alice', 'a@example.com'], ['Bob', 'b@example.com']]);
+            expect(data.metadata.totalColumns).toBe(2);
+        });
+
+        it('drops columns matched by index or RegExp', () => {
+            document.body.innerHTML = table;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { excludeColumns: [0, /^act/i] });
+            expect(data.headers).toEqual(['Email', 'Select']);
+            expect(data.rows[0]).toEqual(['a@example.com', '']);
+        });
+
+        it('ignores matchers that match nothing', () => {
+            document.body.innerHTML = table;
+            const data = extractor.extractTableData(document.getElementById('t') as unknown as Element, { excludeColumns: ['Missing', 9] });
+            expect(data.headers).toEqual(['Name', 'Email', 'Actions', 'Select']);
+        });
+
+        it('applies to every page of extractAllPages', async () => {
+            document.body.innerHTML = table;
+            const data = await extractor.extractAllPages(document.getElementById('t') as unknown as Element, { excludeColumns: ['Actions', 'Select'] });
+            expect(data.headers).toEqual(['Name', 'Email']);
+            expect(data.metadata.totalColumns).toBe(2);
+        });
+    });
+
+    describe('extractAllPages: starting from the first page', () => {
+        /** A three-page pager shown on `startPage`, with first/previous/next controls. */
+        function setUpPager(startPage: number): { table: Element; clicks: string[] } {
+            const pages = ['page1', 'page2', 'page3'];
+            let current = startPage;
+            const clicks: string[] = [];
+            document.body.innerHTML = `
+                <table id="t"><thead><tr><th>A</th></tr></thead><tbody id="body"></tbody></table>
+                <button id="first">First</button>
+                <a id="prev" href="#">Previous</a>
+                <button id="next">Next</button>
+            `;
+            const render = () => {
+                (document.getElementById('body') as HTMLElement).innerHTML = `<tr><td>${pages[current]}</td></tr>`;
+                (document.getElementById('first') as HTMLButtonElement).disabled = current === 0;
+                (document.getElementById('prev') as HTMLElement).setAttribute('aria-disabled', String(current === 0));
+                (document.getElementById('next') as HTMLButtonElement).disabled = current === pages.length - 1;
+            };
+            const on = (id: string, move: () => void) => document.getElementById(id)!.addEventListener('click', event => {
+                event.preventDefault();
+                clicks.push(id);
+                move();
+                render();
+            });
+            on('first', () => { current = 0; });
+            on('prev', () => { current -= 1; });
+            on('next', () => { current += 1; });
+            render();
+            return { table: document.getElementById('t') as unknown as Element, clicks };
+        }
+
+        it('starts from the page currently shown by default', async () => {
+            const { table } = setUpPager(1);
+            const data = await extractor.extractAllPages(table, { nextButtonSelector: '#next', delay: 0 });
+            expect(data.rows).toEqual([['page2'], ['page3']]);
+        });
+
+        it('clicks firstPageSelector once before extracting', async () => {
+            const { table, clicks } = setUpPager(2);
+            const data = await extractor.extractAllPages(table, { nextButtonSelector: '#next', firstPageSelector: '#first', delay: 0 });
+            expect(clicks).toEqual(['first', 'next', 'next']);
+            expect(data.rows).toEqual([['page1'], ['page2'], ['page3']]);
+            expect(data.metadata.totalPages).toBe(3);
+        });
+
+        it('does not click firstPageSelector when it is disabled (already on page 1)', async () => {
+            const { table, clicks } = setUpPager(0);
+            await extractor.extractAllPages(table, { nextButtonSelector: '#next', firstPageSelector: '#first', delay: 0 });
+            expect(clicks).toEqual(['next', 'next']);
+        });
+
+        it('clicks previousButtonSelector until it reports aria-disabled', async () => {
+            const { table, clicks } = setUpPager(2);
+            const data = await extractor.extractAllPages(table, { nextButtonSelector: '#next', previousButtonSelector: '#prev', delay: 0 });
+            expect(clicks).toEqual(['prev', 'prev', 'next', 'next']);
+            expect(data.rows).toEqual([['page1'], ['page2'], ['page3']]);
+        });
+
+        it('prefers firstPageSelector over previousButtonSelector', async () => {
+            const { table, clicks } = setUpPager(2);
+            await extractor.extractAllPages(table, { firstPageSelector: '#first', previousButtonSelector: '#prev', delay: 0 });
+            expect(clicks).toEqual(['first']);
+        });
+
+        it('stops on a "next" control marked aria-disabled', async () => {
+            document.body.innerHTML = `
+                <table id="t"><tbody><tr><td>1</td></tr></tbody></table>
+                <a id="next" href="#" aria-disabled="true">Next</a>
+            `;
+            const data = await extractor.extractAllPages(document.getElementById('t') as unknown as Element, { nextButtonSelector: '#next' });
+            expect(data.metadata.totalPages).toBe(1);
+        });
+    });
+
     describe('isExcelExportAvailable / ensureXLSX', () => {
         it('is false when window.XLSX is undefined', () => {
             expect(extractor.isExcelExportAvailable()).toBe(false);

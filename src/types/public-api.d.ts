@@ -1263,15 +1263,41 @@ export interface TableAllPagesData {
 export interface TableExtractionOptions {
     includeHeaderRow?: boolean;
     trimWhitespace?: boolean;
+    /**
+     * How cell text is read. `'textContent'` (default) glues text from
+     * stacked elements together ("John Davis" + "CTO" gives "John DavisCTO").
+     * `'innerText'` uses the browser's rendered text, which follows CSS, and
+     * joins its lines with `cellSeparator`. `'blocks'` splits on block-level
+     * tags and `<br>` regardless of CSS.
+     */
+    cellText?: 'textContent' | 'innerText' | 'blocks';
+    /** Joins the lines of a cell in `'innerText'` and `'blocks'` modes. Default `' '`. */
+    cellSeparator?: string;
+    /**
+     * Columns to leave out, such as an "Actions" column: a zero-based index,
+     * a header text (case-insensitive, trimmed) or a RegExp tested against
+     * each header. Header matches need `includeHeaderRow` (the default).
+     */
+    excludeColumns?: Array<number | string | RegExp>;
     [key: string]: unknown;
 }
 
 export interface TableExtractAllOptions extends TableExtractionOptions {
     maxPages?: number;
-    /** Milliseconds to wait after clicking the "next" button. */
+    /** Milliseconds to wait after each pagination click. */
     delay?: number;
     /** Pagination only runs when this is provided; the same table element is re-read after each click. */
     nextButtonSelector?: string | null;
+    /**
+     * Clicked once before extraction, unless disabled, so extraction starts
+     * from page 1 instead of the page currently shown.
+     */
+    firstPageSelector?: string | null;
+    /**
+     * Used when there is no "first page" control: clicked before extraction
+     * until it is missing or disabled. Ignored when `firstPageSelector` is set.
+     */
+    previousButtonSelector?: string | null;
 }
 
 export interface TableDownloadOptions {
@@ -1819,7 +1845,7 @@ export declare class AgentletModule {
     error(message: unknown, ...args: unknown[]): void;
     warn(message: unknown, ...args: unknown[]): void;
 
-    /** Convention used by the scaffold templates; not invoked automatically by the framework. */
+    /** CSS injected into the UI root through `injectStyles()` before each `mount()` (the core's, or an override), once per activation. */
     getStyles?(): string;
     /** Read by the core to label the panel header instead of `name`, if implemented. */
     getPanelTitle?(): string;
