@@ -7,7 +7,7 @@ Reference documentation for building agentlets on top of this library lives at [
 
 Inspired by the concepts of applets and bookmarklets, these lightweight AI tools are referred to as **agentlets**.
 
-The agentlet ecosystem includes a core framework, a collection of example implementations, and a specialized tool called the `agentlet-designer`, a dedicated agentlet for creating custom agentlets tailored to specific applications.
+The agentlet ecosystem includes a core framework, a collection of example implementations, and [`agentlet-designer`](https://github.com/agentlet/agentlet-designer), which generates custom agentlets from a live page: a Claude Code skill today, an in-page designer agentlet later.
 
 `agentlet-core` is the foundation that provides core capabilities. Developers can then build their own agentlets on top of it.
 

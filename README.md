@@ -33,7 +33,7 @@ This removes the immediate need for backend modifications, complex deployments, 
 
 ## The agentlet ecosystem
 
-The agentlet ecosystem includes a core framework, a collection of example implementations, and a specialized tool called the `agentlet-designer`, a dedicated agentlet for creating custom agentlets tailored to specific applications.
+The agentlet ecosystem includes a core framework, a collection of example implementations, and [`agentlet-designer`](https://github.com/agentlet/agentlet-designer), which generates custom agentlets from a live page: a Claude Code skill today, an in-page designer agentlet later.
 
 `agentlet-core` (this repository) is the foundation that provides core capabilities: core classes and a module loader, a build system, utility components, and test suites. Developers build their own agentlets on top of it.
 
@@ -85,6 +85,7 @@ agentlet.modules.register(new MyModule());
 - [Install](https://agentlet.io/docs/getting-started/install/)
 - [Quick demo](https://agentlet.io/docs/getting-started/quick-demo/)
 - [Scaffold a new agentlet](https://agentlet.io/docs/getting-started/scaffold/)
+- [Generate with Claude Code](https://agentlet.io/docs/getting-started/generate-with-claude-code/)
 - [Manual setup](https://agentlet.io/docs/getting-started/manual-setup/)
 
 ## Documentation
