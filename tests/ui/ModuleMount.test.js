@@ -178,4 +178,119 @@ describe('Module mount API - core integration', () => {
         expect(unmountSpy).toHaveBeenCalledTimes(1);
         expect(agentlet.mountedModule).toBe(null);
     });
+    describe('getStyles()', () => {
+        class StyledModule extends Module {
+            constructor(name = 'styled-module') {
+                super({ name, patterns: ['never-matches.example'] });
+            }
+
+            getStyles() {
+                return '.styled-module-marker { color: red; }';
+            }
+        }
+
+        const styleElementsIn = (root, name) => Array.from(root.querySelectorAll(`style[data-module="${name}"]`));
+
+        test('is injected into the UI root on mount', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            const testModule = new StyledModule();
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+
+            const styles = styleElementsIn(agentlet.ui.root, 'styled-module');
+            expect(styles).toHaveLength(1);
+            expect(styles[0].textContent).toContain('.styled-module-marker');
+            expect(document.head.querySelector('style[data-module="styled-module"]')).toBeNull();
+        });
+
+        test('is injected once across re-mounts', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            const testModule = new StyledModule();
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+            await agentlet.updateModuleContent('urlChange');
+            await agentlet.updateModuleContent('refresh');
+
+            const styles = styleElementsIn(agentlet.ui.root, 'styled-module');
+            expect(styles).toHaveLength(1);
+            expect(styles[0].textContent.match(/styled-module-marker/g)).toHaveLength(1);
+        });
+
+        test('is injected again after cleanup() removed it', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            const testModule = new StyledModule();
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+            await agentlet.updateModuleContent('moduleChange');
+            await testModule.cleanup();
+            expect(styleElementsIn(agentlet.ui.root, 'styled-module')).toHaveLength(0);
+
+            agentlet.mountedModule = null;
+            await agentlet.updateModuleContent('moduleChange');
+            expect(styleElementsIn(agentlet.ui.root, 'styled-module')).toHaveLength(1);
+        });
+
+        test('is injected when mount() is overridden too', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            class CustomMountModule extends StyledModule {
+                async mount(container) {
+                    container.textContent = 'custom';
+                }
+            }
+            const testModule = new CustomMountModule('custom-mount-styled');
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+
+            expect(styleElementsIn(agentlet.ui.root, 'custom-mount-styled')).toHaveLength(1);
+        });
+
+        test('does not duplicate CSS a module already injected itself', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            class SelfInjectingModule extends StyledModule {
+                async activateModule() {
+                    this.injectStyles(this.getStyles());
+                }
+            }
+            const testModule = new SelfInjectingModule('self-injecting');
+            await testModule.activate();
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+
+            const text = styleElementsIn(agentlet.ui.root, 'self-injecting').map(el => el.textContent).join('');
+            expect(text.match(/styled-module-marker/g)).toHaveLength(1);
+        });
+
+        test('logs and still mounts when getStyles() throws', async () => {
+            agentlet = new AgentletCore();
+            await agentlet.init();
+
+            class BrokenStylesModule extends Module {
+                constructor() {
+                    super({ name: 'broken-styles', patterns: ['never-matches.example'] });
+                }
+
+                getStyles() {
+                    throw new Error('boom');
+                }
+            }
+            const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            const testModule = new BrokenStylesModule();
+            agentlet.moduleRegistry.activeModule = testModule;
+            await agentlet.updateModuleContent('refresh');
+
+            expect(agentlet.ui.content.innerHTML).toContain('broken-styles');
+            expect(errorSpy).toHaveBeenCalled();
+            errorSpy.mockRestore();
+        });
+    });
 });

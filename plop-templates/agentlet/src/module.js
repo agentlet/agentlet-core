@@ -77,6 +77,8 @@
             `;
         }
 
+        // Injected into the panel by the core before each mount(), once
+        // per activation, so these rules apply inside the Shadow DOM too.
         getStyles() {
             return `
                 .agentlet-{{kebabCase name}}-content > h2 {

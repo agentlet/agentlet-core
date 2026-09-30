@@ -297,6 +297,29 @@ class Module {
         this.mounted = true;
         this.mountedContainer = container;
         this._mountRoot = context?.root ?? null;
+        this._applyDeclaredStyles();
+    }
+
+    /**
+     * Injects the CSS returned by an optional `getStyles()` into the UI root,
+     * once per activation: `cleanup()` clears `injectedStyles` through
+     * `removeAllStyles()`, so the next mount after a re-activation injects
+     * it again, while re-mounts in between (URL change, refresh) do not
+     * append a second copy.
+     * @private
+     */
+    private _applyDeclaredStyles(): void {
+        if (typeof this.getStyles !== 'function') {
+            return;
+        }
+        try {
+            const css = this.getStyles();
+            if (css && !this.injectedStyles.has(css)) {
+                this.injectStyles(css);
+            }
+        } catch (error) {
+            this.error('getStyles() failed:', error);
+        }
     }
 
     /**
