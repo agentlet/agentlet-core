@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public types for all of the above, and the
   `data-processing/records-copy-paste` example.
 
+### Changed
+
+- The dependency vulnerability scan now uses the shared `dependency-scan` and
+  `sbom-from-esbuild` actions from `agentlet/.github` instead of an in-repo
+  copy (`tools/security/`, `npm run security:sbom`, `npm run security:scan`).
+  The SBOM, the gate rule, the exceptions file and the code scanning
+  category are unchanged.
+
 ### Removed
 
 - The experimental extension's "Analyze with AI" context menu, which

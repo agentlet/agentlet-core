@@ -36,16 +36,17 @@ This directory contains the GitHub Actions workflows and configuration for Agent
 ### 🔒 `security.yml` - Dependency vulnerability scan
 **Trigger**: PRs to main, pushes to main, nightly schedule (03:17 UTC), manual dispatch
 - Builds the project, then generates a CycloneDX SBOM of what the published
-  bundles actually ship (`npm run security:sbom`)
-- Scans that SBOM with `osv-scanner` and gates the job on the result
-  (`npm run security:scan`) - see "Dependency vulnerability scanning" below
-  for the full design and how to run it locally
+  bundles actually ship (the shared `sbom-from-esbuild` action)
+- Scans that SBOM with `osv-scanner` and gates the job on the result (the
+  shared `dependency-scan` action) - see "Dependency vulnerability
+  scanning" below for the full design and how to run it locally
 - Uploads results to the GitHub Security tab (SARIF, via
   `github/codeql-action/upload-sarif`) and as build artifacts - skipped for
   PRs from forks, whose `GITHUB_TOKEN` is read-only, but the gate itself
   still runs and blocks there
 - On the nightly run only: opens/updates a `security`-labeled issue if the
-  gate fails on `main` itself, and separately rescans the SBOM attached to
+  gate fails on `main` itself (the action's `issue-on-failure`), and
+  separately rescans the SBOM attached to
   the latest published GitHub release, opening/updating its own
   `security`-labeled issue (distinct title) if that fails too
 
@@ -436,7 +437,7 @@ The gate therefore scans two different things:
   metafiles (`tools/build.js` passes `metafile: true` for every
   npm-published target plus the bookmarklet and extension builds, and
   writes each one to `reports/security/meta/*.meta.json`, which is
-  gitignored and never published). `tools/security/sbom.mjs` reads those
+  gitignored and never published). The shared `sbom-from-esbuild` action reads those
   metafiles, maps every `node_modules` input back to the nearest owning
   package's `package.json` (handling scoped and nested `node_modules`
   correctly, so two different versions of the same package pulled in via
@@ -448,21 +449,49 @@ The gate therefore scans two different things:
   tool is still a supply-chain risk) but never blocks a PR, since nothing
   in it necessarily ships.
 
+### Shared actions
+
+The scanner is not part of this repository. `security.yml` and
+`release.yml` call two composite actions from the organization repository
+[agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan),
+pinned by commit SHA (the trailing comment names the tag):
+
+- `agentlet/.github/actions/sbom-from-esbuild` builds the SBOM from the
+  metafiles. `metafiles` takes an explicit newline or comma separated list
+  (no glob), so the five files written by `tools/build.js` are listed in
+  the workflows. Add a new build target there when `tools/build.js` gains
+  one.
+- `agentlet/.github/actions/dependency-scan` installs a pinned,
+  checksum-verified `osv-scanner`, applies the gate, uploads the SARIF
+  (skipped on fork PRs), uploads the reports and optionally opens a tracking
+  issue. Its README documents every input.
+
+Bump the pin deliberately when a new action tag is released. The
+`osv-scanner-version` input controls the scanner version.
+
 ### Running the scan locally
 
 ```bash
 brew install osv-scanner
+git clone https://github.com/agentlet/.github.git ~/dev/agentlet-shared   # once
+SHARED=~/dev/agentlet-shared/actions/dependency-scan
+
 npm run build           # writes reports/security/meta/*.meta.json
-npm run security:sbom   # reads them, writes reports/security/sbom-bundle.cdx.json
-npm run security:scan   # runs osv-scanner against both scopes and gates
+node $SHARED/bin/sbom-from-esbuild-metafile.mjs \
+  --out=reports/security/sbom-bundle.cdx.json \
+  reports/security/meta/*.meta.json
+node $SHARED/bin/scan.mjs \
+  --blocking-sbom=reports/security/sbom-bundle.cdx.json \
+  --lockfile=package-lock.json
 ```
 
-`npm run security:scan` accepts `--min-severity=<low|medium|high|critical>`
-(default `high`), `--skip-lockfile`, and `--offline` (skips the EPSS/KEV
-network calls, marking both as unknown) - see the header comment in
-`tools/security/scan.mjs` for the full flag list. Reports land in
-`reports/security/` (gitignored): `results.sarif`, `scan-report.json`, and
-`scan-summary.md`.
+`scan.mjs` accepts `--min-severity=<low|medium|high|critical>` (default
+`high`), `--lockfile=` (empty, to skip the lockfile), `--exceptions=<path>`,
+`--out-dir=<path>` and `--offline` (skips the EPSS/KEV network calls,
+marking both as unknown). See the
+[action README](https://github.com/agentlet/.github/tree/main/actions/dependency-scan)
+for the full list. Reports land in `reports/security/` (gitignored):
+`results.sarif`, `scan-report.json` and `scan-summary.md`.
 
 ### Gate rule
 
@@ -478,7 +507,7 @@ unless a valid, unexpired entry in `security/vulnerability-exceptions.json`
 covers it. An **expired** exception is treated as if it did not exist for
 matching purposes, and additionally fails the gate on its own (to force
 either renewing or removing it) - see
-`tools/security/lib/gate-core.js`'s `evaluateGate`. The lockfile scope
+the shared action's gate. The lockfile scope
 never blocks, regardless of severity.
 
 Severity comes from OSV's `database_specific.severity` (GHSA advisories)
@@ -509,7 +538,7 @@ vector when it is not.
 - `expires` - required, `YYYY-MM-DD`. Once past, the entry stops matching
   and instead fails the gate itself until it is renewed (a new `expires`
   date) or removed.
-- `owner` - optional, for review follow-up.
+- `owner` - required by policy, for review follow-up.
 
 Review policy: an exception is a deliberate, time-boxed decision to accept
 a known risk (e.g. no upstream fix exists yet and the affected code path is
@@ -537,14 +566,11 @@ be under-flagged for that run rather than the scan crashing.
 
 ### Installing `osv-scanner` in CI
 
-`security.yml` downloads the official release binary
-(`osv-scanner_linux_amd64`) for a pinned version
-(`env.OSV_SCANNER_VERSION`) directly from `google/osv-scanner`'s GitHub
-releases, and verifies it against that same release's `SHA256SUMS` file
-before running it - no `curl | sh`. Bump `OSV_SCANNER_VERSION` deliberately
-and re-check `osv-scanner scan source --help` for flag changes when doing
-so, since `tools/security/scan.mjs` depends on the exact CLI surface of the
-pinned version.
+The `dependency-scan` action downloads the official release binary
+(`osv-scanner_linux_amd64`) for a pinned version (its `osv-scanner-version`
+input) from `google/osv-scanner`'s GitHub releases and verifies it against
+that same release's `SHA256SUMS` file before running it, with no `curl | sh`.
+The action only supports Linux x64 runners.
 
 ### Nightly rescan of the latest published release
 
@@ -554,13 +580,15 @@ at release time does not stay true forever. The nightly run of
 recent GitHub release (attached by `release.yml`, see below) and rescans it
 independently of the current `main` branch. If that rescan fails the gate,
 the workflow opens (or comments on, if one is already open) a single
-issue labeled `security` rather than opening a duplicate every night.
+issue labeled `security` rather than opening a duplicate every night. The
+issue is deduplicated by its exact title, which includes the release tag.
 
 ### SBOM attached to GitHub releases (`release.yml`)
 
 After `npm publish` succeeds, `release.yml` creates (or updates) the GitHub
 release for the pushed tag and attaches the same `sbom-bundle.cdx.json`
-generated for that build. SBOM generation happens *before* `npm publish` so
+generated for that build. SBOM generation, followed by a gate scan of that
+SBOM that fails the job on a blocking vulnerability, happens *before* `npm publish` so
 a failure there stops before anything is published; the upload to the
 release happens *after* publish so a failure there (network blip, the
 release already exists in an unexpected way) never leaves npm in a
