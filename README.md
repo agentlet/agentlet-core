@@ -96,6 +96,12 @@ Full documentation lives at **[agentlet.io/docs](https://agentlet.io/docs/)**, i
 - Guides: [AI](https://agentlet.io/docs/guides/ai/), [authentication](https://agentlet.io/docs/guides/authentication/), [dialogs and shortcuts](https://agentlet.io/docs/guides/dialogs-and-shortcuts/), [environment variables](https://agentlet.io/docs/guides/environment-variables/), forms ([AI-ready](https://agentlet.io/docs/guides/forms-ai-ready/), [extraction](https://agentlet.io/docs/guides/forms-extraction/), [filling](https://agentlet.io/docs/guides/forms-filling/), [select options](https://agentlet.io/docs/guides/forms-select-options/)), [mount API](https://agentlet.io/docs/guides/mount-api/), [script injection](https://agentlet.io/docs/guides/script-injection/), [shadow DOM](https://agentlet.io/docs/guides/shadow-dom/), [tables and Excel](https://agentlet.io/docs/guides/tables-and-excel/), [TypeScript](https://agentlet.io/docs/guides/typescript/), [z-index](https://agentlet.io/docs/guides/z-index/)
 - [Public API reference](https://agentlet.io/docs/reference/public-api/)
 
+## Security and API keys
+
+An agentlet runs inside the host page, with the page's privileges, and is not sandboxed. Any other script on that page can read `window.agentlet` and the environment variables it keeps in `localStorage`, including `OPENAI_API_KEY`. For anything beyond local experiments, point `OPENAI_BASE_URL` at a proxy on your backend so the real provider key never reaches the browser. [SECURITY.md](SECURITY.md) describes the threat model, what data leaves the page, and how to report a vulnerability.
+
+The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package.
+
 ## Consuming the package
 
 As of version 2.0.0, the package ships the built `dist` output instead of raw `src` sources: `dist/agentlet-core.js` (IIFE global, also usable via `require`), `dist/agentlet-core.esm.js` (ES module), `dist/agentlet-core.min.js` (minified IIFE), and `dist/agentlet-core.d.ts` (TypeScript declarations), about 1.4 MB compressed, no sourcemaps, no browser extension bundle, no bookmarklet HTML. Consumers no longer need their own bundler rule to transpile `agentlet-core`'s sources, the package is pre-built, so a bundler only needs to resolve and include it as-is.
