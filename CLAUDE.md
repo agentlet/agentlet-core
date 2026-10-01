@@ -45,6 +45,13 @@ These primitives enable AI developers to rapidly create agentlets that enhance t
 - Simple pagination support (user provides next button selector) and Excel download using SheetJS
 - **APIs**: `window.agentlet.tables.{extract, extractAll, download, extractAndDownload}`
 
+### Records system
+- **RecordsManager** (`src/utils/data-processing/RecordsManager.ts`) - Structured copy and paste between web apps, wired from `src/index.ts`; design in `docs/rfcs/0001-records-api.md`
+- Helpers live in `src/utils/data-processing/records/`: the envelope and validation (`envelope.ts`), built-in types and synonyms (`typeRegistry.ts`), the `from*` extractors (`extractors.ts`), the clipboard transport and formats (`ClipboardTransport.ts`, `formats.ts`), matching (`RecordMatcher.ts`, `valueConversion.ts`), mapping memory (`mappingMemory.ts`) and the preview dialog (`previewDialog.ts`)
+- Reuses `forms.quickExport()` and `FormFiller`, `tables.extract()`, `ElementSelector`, `Dialog`, `storage.local` and the event bus
+- A record is data only: never take a selector from it, never evaluate anything in it. Password, `one-time-code` and `cc-*` fields are never copied or filled
+- **APIs**: `window.agentlet.records.{create, fromForm, fromTable, fromElement, pick, copy, read, fromPasteEvent, onPaste, pasteFromClipboard, match, fill, validate, defineType, getType, listTypes}`
+
 ### Authentication system
 - **AuthManager** (`src/utils/system/AuthManager.ts`) - Customizable popup-based authentication
 - Supports OIDC, OAuth2, custom IDPs with configurable token extraction
@@ -165,6 +172,28 @@ const result = await window.agentlet.tables.extractAndDownload(tableElement, {
     nextButtonSelector: '.next-page-btn', // Required for pagination
     filename: 'complete-data.xlsx'
 });
+```
+
+### Records (structured copy and paste)
+```javascript
+// Source page: build a record and put it on the clipboard
+const record = window.agentlet.records.fromElement(cardElement, { type: 'organization' });
+await window.agentlet.records.copy(record); // custom format, text/html with the record embedded, text/plain
+
+// Other builders: create('contact', { name: 'Ada' }), fromForm(form), fromTable(table), await pick()
+
+// Target page: smart paste inside a form (scope is required), with a preview before anything is filled
+window.agentlet.records.onPaste(async ([record]) => {
+    const result = await window.agentlet.records.fill(record, form); // never submits the form
+    if (result.confirmed) console.log(`${result.successful} fields filled`);
+}, { scope: form, types: ['organization'] });
+
+// From a click, for pages that block paste events
+await window.agentlet.records.pasteFromClipboard(form, { preview: false });
+
+// Matching without filling, and custom types
+const mapping = window.agentlet.records.match(record, form); // entries, unmatchedKeys, unmatchedFields
+window.agentlet.records.defineType({ name: 'invoice', fields: [{ key: 'invoice-number' }, { key: 'total', kind: 'number' }] });
 ```
 
 ### Authentication

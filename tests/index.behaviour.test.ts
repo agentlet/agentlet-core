@@ -69,6 +69,7 @@ describe('AgentletCore behaviour', () => {
                 'Module',
                 'ModuleRegistry',
                 'PDFProcessor',
+                'RecordsManager',
                 'ScreenCapture',
                 'ScriptInjector',
                 'ShortcutManager',
