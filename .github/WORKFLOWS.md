@@ -1,473 +1,43 @@
-# GitHub Actions CI/CD Setup
+# GitHub Actions workflows
 
-This directory contains the GitHub Actions workflows and configuration for Agentlet Core.
+This repository has three workflows in `.github/workflows/`: `test.yml`, `security.yml` and `release.yml`. All run on `ubuntu-latest` with Node.js 22.x. The status badges for the first two are in the README.
 
-## Workflows
+## `test.yml`: tests
 
-### 🧪 `test.yml` - Quick Test Pipeline
-**Trigger**: Every push to `main`, PRs to `main`
-- Runs on Node.js 22.x
-- Two jobs run in parallel, with no dependency between them:
-  - `checks`: `npm ci`, Jest unit tests, lint, typecheck, build
-  - `e2e`: a 3-way matrix (`chromium`, `firefox`, `webkit`), each running
-    the Playwright suite for a single browser project
-- Uploads test artifacts (per browser project) on e2e failure
+**Trigger**: pushes to `main` and pull requests to `main`.
 
-### 🚀 `ci.yml` - Full CI/CD Pipeline  
-**Trigger**: Push to main/develop, PRs to main/develop
-- **Test Matrix**: Node.js 20.x, 22.x
-- **Steps**:
-  - Install dependencies
-  - Install Playwright browsers
-  - Linting (if available)
-  - Type checking (if available)
-  - Unit tests with Jest
-  - Build all targets
-  - Playwright tests
-  - Upload coverage to Codecov
-- **Build & Package** (main branch only):
-  - Build all distribution targets
-  - Package browser extension
-  - Upload build artifacts
-- **Security Audit**:
-  - npm audit for vulnerabilities
-  - Dependency review for PRs
+Two jobs run in parallel, with no dependency between them:
 
-### 🔒 `security.yml` - Dependency vulnerability scan
-**Trigger**: PRs to main, pushes to main, nightly schedule (03:17 UTC), manual dispatch
-- Builds the project, then generates a CycloneDX SBOM of what the published
-  bundles actually ship (the shared `sbom-from-esbuild` action)
-- Scans that SBOM with `osv-scanner` and gates the job on the result (the
-  shared `dependency-scan` action) - see "Dependency vulnerability
-  scanning" below for the full design and how to run it locally
-- Uploads results to the GitHub Security tab (SARIF, via
-  `github/codeql-action/upload-sarif`) and as build artifacts - skipped for
-  PRs from forks, whose `GITHUB_TOKEN` is read-only, but the gate itself
-  still runs and blocks there
-- On the nightly run only: opens/updates a `security`-labeled issue if the
-  gate fails on `main` itself (the action's `issue-on-failure`), and
-  separately rescans the SBOM attached to
-  the latest published GitHub release, opening/updating its own
-  `security`-labeled issue (distinct title) if that fails too
+- `checks`: `npm ci`, Jest unit tests, `npm run lint`, `npm run typecheck` and `npm run build`. Timeout: 10 minutes.
+- `e2e`: a matrix over `chromium`, `firefox` and `webkit` (`fail-fast: false`). Each job installs only its own browser with `npx playwright install --with-deps <project>` and runs `npm run test:examples -- --project=<project>`. On failure it uploads `tests/examples/test-results/` as `test-artifacts-<project>` (3 days retention). Timeout: 25 minutes.
 
-### 📦 `dependabot.yml` - Dependency Updates
-- **npm dependencies**: Weekly updates on Mondays
-- **GitHub Actions**: Weekly updates on Mondays  
-- Auto-assigns to maintainer
-- Limits to 10 open PRs
+`tests/examples/playwright.config.js` sets 4 workers on CI (override with `E2E_WORKERS`) and a `globalTimeout` of 20 minutes on CI, 45 minutes locally. Each job runs the build again through Playwright's `globalSetup`, because each job has its own checkout.
 
-## Node.js and Actions versions
+## `security.yml`: dependency vulnerability scan
 
-`test.yml` and `release.yml` both run on Node.js 22.x (the active LTS line)
-and use `actions/checkout@v7` and `actions/setup-node@v7` (`test.yml` also
-uses `actions/upload-artifact@v7`). These were bumped from Node.js 20.x and
-`@v4` after a `release.yml` run warned that Node.js 20 is deprecated for
-GitHub-hosted actions and that `actions/checkout@v4`/`actions/setup-node@v4`
-were being force-run on Node.js 24 as a result. `@v7` of both actions
-natively targets Node.js 24 (`runs.using: node24`), so no such forcing
-happens any more. `cache: 'npm'` and `registry-url` on `setup-node` are
-unchanged inputs in `@v7` and keep working the same way, which matters
-because `release.yml`'s npm publish step relies on `registry-url` for
-`NODE_AUTH_TOKEN` to be picked up.
+**Trigger**: pull requests to `main`, pushes to `main`, a nightly schedule (03:17 UTC) and manual dispatch.
 
-Both jobs run on `ubuntu-latest`. GitHub has announced that the
-`ubuntu-latest` label will migrate from Ubuntu 24.04 to Ubuntu 26.04
-starting October 19, 2026, which will also change the underlying runner
-image (vCPU count, preinstalled tooling). Neither workflow pins
-`ubuntu-24.04` today, so both will pick up that migration automatically;
-if the Playwright timing budget above (tuned for a 4 vCPU `ubuntu-latest`
-runner) or any other environment assumption in this document turns out not
-to hold on the new image, re-measure at that point rather than pinning the
-old image preemptively.
+The `scan` job installs dependencies, builds the project, generates an SBOM of what the published bundles ship (the shared `sbom-from-esbuild` action) and scans it (the shared `dependency-scan` action, which installs a pinned `osv-scanner` release checksum-verified against the release's `SHA256SUMS`). It uploads the results to the GitHub Security tab as SARIF (skipped for pull requests from forks, whose token is read-only) and as the `security-scan-reports` artifact, and fails the job if the gate failed. On the nightly run, it also opens or updates a `security`-labeled issue when the scan of `main` fails the gate (the action's `issue-on-failure`).
 
-## Setup Requirements
-
-### 1. Repository Secrets (Optional)
-For Codecov integration, add this secret to your GitHub repository:
-```
-CODECOV_TOKEN=your_codecov_token
-```
-**Note**: Coverage upload will be skipped if this token is not provided, but CI will still pass.
-
-### 2. Branch Protection Rules
-Recommended settings for `main` branch:
-- Require status checks to pass before merging
-- Require branches to be up to date before merging
-- Required status checks:
-  - `checks`
-  - `e2e (chromium)`, `e2e (firefox)`, `e2e (webkit)`
-  - `test (20.x, 22.x)` from CI pipeline
-  - `build-and-package`
-  - `security-audit`
-
-  (`main` currently has no branch protection rule configured, so these names
-  aren't enforced anywhere; keep this list in sync with the job/matrix names
-  in `test.yml` if it's ever turned on, since GitHub matches required checks
-  by exact name.)
-
-### 3. Environment Variables
-The workflows use these environment variables:
-- `NODE_ENV=test` (set automatically)
-- `CI=true` (set automatically by GitHub Actions)
-
-## Test Coverage
-- Unit tests generate coverage reports in `coverage/`
-- Coverage is uploaded to Codecov on Node.js 20.x
-- Playwright test results are stored in `tests/examples/test-results/`
-
-## Artifacts
-- **Test failures**: Test results and screenshots (3 day retention)
-- **Build artifacts**: Distribution files (30 day retention)  
-- **Extension package**: Browser extension zip (30 day retention)
-
-## Local Development
-To run the same checks locally:
-```bash
-# Unit tests
-npm test
-
-# Playwright tests  
-npm run test:examples
-
-# Build
-npm run build
-
-# Linting (if configured)
-npm run lint
-
-# Type checking (if configured)
-npm run typecheck
-```
-
-### Running two e2e suites in parallel
-
-`tests/examples/playwright.config.js` reads the port to serve examples on
-(and to point every test's `baseURL` at) from `E2E_PORT`, defaulting to
-`3030`. This matters when two worktrees of this repository sit on the same
-machine and both run `npm run test:examples`: Playwright's
-`reuseExistingServer: true` means the second run would find a server already
-listening on 3030 and reuse it, silently testing whichever checkout started
-that server instead of its own. Give each worktree its own port:
-
-```bash
-E2E_PORT=3131 npm run test:examples
-```
-
-CI always uses the default port, since each job runs in its own isolated
-environment.
-
-### Running a targeted e2e recheck in Docker
-
-`npm run test:examples` needs Playwright's own browser builds, downloaded by
-`npx playwright install`. Upstream Playwright periodically drops browser
-support for older host operating systems (for example macOS 13), so
-`playwright install` can start refusing to fetch a compatible browser on a
-machine that used to run the suite fine. When that happens, `npm run
-test:examples:docker` runs one or a few specs, in one browser, inside the
-official Playwright Docker image instead, which always ships a matching,
-working set of browsers for its own Playwright version:
-
-```bash
-npm run test:examples:docker -- tests/examples/specs/ui-dialogs.spec.js --project=chromium
-E2E_PORT=3131 npm run test:examples:docker -- tests/examples/specs/ui-dialogs.spec.js --project=chromium
-```
-
-This is a targeted recheck tool, not a substitute for a full local run of
-the suite. Running the full 537-test suite through it is slow and
-timing-sensitive: Docker Desktop's default macOS VM only gets 2 CPUs, well
-below what CI and a real host provide, and the resulting resource
-contention causes tests to time out that pass fine elsewhere. A full run
-through this script took 55 minutes and produced 517 passed, 17 failed, 3
-skipped, with every failure a timeout, mostly in webkit; the same suite
-passes cleanly and quickly in CI. CI (`ubuntu-latest`, a fresh
-`playwright install --with-deps` every run) is the reference result for the
-full suite, not a local Docker run. Use a draft PR to get a full CI run
-before merging.
-
-This is implemented by `tools/e2e-docker.sh`, which:
-- reads the exact `@playwright/test` version resolved in `package-lock.json`
-  and pulls the matching `mcr.microsoft.com/playwright:v<version>-noble`
-  image, so the container's Playwright client and browsers are always the
-  same version as the one CI and `npm run test:examples` use locally;
-- mounts the repository into the container and keeps the container's
-  `node_modules` in a separate named Docker volume (one per checkout path),
-  so Linux-only native binaries such as `esbuild`'s platform binaries never
-  collide with whatever is in the host's `node_modules`;
-- runs `npm ci` and the build inside the container (the suite's
-  `globalSetup` already runs `npm run build` before the tests, so no
-  separate build step is needed on the host or in the script);
-- checks for `python3` (the suite's `webServer` shells out to
-  `python3 -m http.server`) and installs it if a future or different image
-  tag doesn't ship it; the `-noble` tags used here already include it, so
-  this is normally a no-op;
-- runs as root inside the container (the image's default user, also needed
-  for the `python3` check above to be able to install anything), then
-  `chown`s `dist/` and `tests/examples/test-results/` back to the host user
-  afterwards so the checkout isn't left with root-owned files;
-- sets `PW_TEST_HTML_REPORT_OPEN=never`, so a run with failures never tries
-  to spawn Playwright's HTML report server. Without it, Playwright opens
-  that server (and blocks) whenever a run outside CI mode has failures;
-  inside a non-interactive container this just hangs the run indefinitely
-  after the tests themselves are done.
-
-## Status Badges
-Add these to your README.md:
-```markdown
-[![CI/CD Pipeline](https://github.com/fvinas/agentlet-core/actions/workflows/ci.yml/badge.svg)](https://github.com/fvinas/agentlet-core/actions/workflows/ci.yml)
-[![Tests](https://github.com/fvinas/agentlet-core/actions/workflows/test.yml/badge.svg)](https://github.com/fvinas/agentlet-core/actions/workflows/test.yml)
-```
-
-## Playwright e2e timing budget (`test.yml`)
-
-The `tests/examples/specs/` suite holds 153 tests, run once per Playwright
-project declared in `tests/examples/playwright.config.js`. That config used
-to declare 4 projects (`chromium`, `firefox`, `webkit`, `chromium-headed`),
-so a full run executed 4 x 153 = 612 individual tests.
-
-On CI the config forced `workers: 1` (fully serial) while capping the
-*entire* run with `globalTimeout: 300000`, or 5 minutes. A full run needs
-roughly 22 minutes at 2 workers, so a serialized run of a third more tests
-could not possibly finish inside 5 minutes. Playwright killed the run every
-time, on every machine, regardless of flakiness or hardware. This matches
-CI failing on 100% of runs since the e2e suite landed in commit `c25bf31`
-(23 September 2025), three days before the first recorded failure.
-
-Fix applied:
-
-- `workers` on CI is now `2` rather than `1`. A GitHub `ubuntu-latest`
-  runner has 4 vCPUs, which is also what Playwright's own default would
-  pick there, and each worker gets an isolated browser instance, so this
-  introduces no cross-test interference.
-- The `chromium-headed` project was removed. It was a headed Chromium with
-  a 1 second `slowMo`, but on CI it ran headless with `slowMo: 0`, making
-  it byte-for-byte equivalent to the plain `chromium` project: 153 tests of
-  duplicated work for zero extra coverage on every run. Locally its
-  1s-per-action delay made a full run of the config dramatically slower.
-  The same headed, slowed-down debugging experience remains available for
-  any project through `npm run test:examples:visible` (`--headed`) and
-  `npm run test:examples:debug`.
-- `globalTimeout` is now 45 minutes (`2700000`ms) everywhere, up from 5.
-  Measured reference point: 456 passed and 3 skipped in 22.3 minutes, with
-  2 workers on a 4-core machine. The budget is a safety net against a hung
-  run rather than a target, so it is deliberately generous and identical in
-  both environments. An earlier attempt at this fix kept a tighter
-  15 minute local budget, which cut the suite off mid-run with 157 tests
-  never executed, so there is no tight local value worth keeping.
-- `timeout: 30000` moved to the top level of the config. It previously sat
-  inside `use` as `testTimeout`, a key Playwright ignores there. Its value
-  matches Playwright's default, so this changes no behaviour; it only stops
-  the config from advertising a setting that had no effect.
-- The `test` job in `test.yml` now sets `timeout-minutes: 60`, giving the
-  whole job (checkout, `npm ci`, jest, build, browser install, e2e) room
-  above the 45 minute e2e budget.
-
-## Shortcut leak into input fields
-
-Running each Playwright project individually during the diagnosis surfaced
-a real, reproducible cross-browser bug that CI had never got far enough to
-reach: `ui-shortcuts.spec.js` "should prevent non-input shortcuts when
-disabled in input fields" failed 3 times out of 3 on Firefox only.
-
-`ShortcutManager.init()` sets `hotkeys.filter = () => true`, which disables
-the library's own input filtering, so the wrapped callback runs even when
-focus sits in a field and the manager enforces `allowInInputs` itself. That
-branch returned early without calling `event.preventDefault()`. Chromium
-inserts no character for an unhandled `Alt+H`, but Firefox inserts an `h`,
-so the key of a shortcut the user believes is blocked leaked into the
-field's value.
-
-The branch now suppresses the browser default, but only for combinations
-carrying a `ctrl`, `cmd`, `alt` or `meta` modifier. `shift` is deliberately
-excluded, and bare keys are left alone: a shortcut registered on a plain
-letter must keep typing that letter in a field, which is exactly what
-`allowInInputs: false` promises. Suppressing unconditionally would have
-broken ordinary typing on the host page for any consumer registering a
-single-key shortcut, since `preventDefault` defaults to `true`.
-
-If the suite grows significantly, re-measure with
-`CI=true npx playwright test --config=tests/examples/playwright.config.js`
-before assuming the existing budget still holds.
-
-## Splitting e2e across a per-browser matrix (`test.yml`)
-
-The fix above got CI green, but the `test` job still ran all 3 Playwright
-projects serially after `npm ci` / jest / lint / typecheck / build, in a
-single job: ~19s for everything else plus a measured 22m13s for Playwright
-(after a 47s `playwright install --with-deps`), for a total of roughly
-24 minutes of wall time per run.
-
-`test.yml` now splits that single job into two, running in parallel (no
-`needs` between them):
-
-- `checks`: checkout, setup-node, `npm ci`, jest, lint, typecheck, build.
-  Everything here together takes well under a minute on a green run;
-  `timeout-minutes: 10` leaves headroom without hiding a hang.
-- `e2e`: a matrix over `project: [chromium, firefox, webkit]` with
-  `fail-fast: false`, so one browser's failure doesn't cancel the others.
-  Each matrix job checks out the repo fresh, installs only its own browser
-  (`npx playwright install --with-deps ${{ matrix.project }}`, rather than
-  all three), and runs `npm run test:examples -- --project=${{
-  matrix.project }}`. Playwright's `globalSetup` (`npm run build`) runs
-  again inside each job, since each is a separate runner/checkout; this is
-  the same build step `checks` also runs, just duplicated across jobs to
-  keep them independent and parallel.
-
-This cuts wall time because:
-
-- The three browser projects, previously run one after another in a single
-  job, now run concurrently as three jobs. Each already-idle GitHub-hosted
-  runner is a full 4 vCPU machine to itself.
-- `tests/examples/playwright.config.js` raises CI's `workers` from `2` to
-  `4` (overridable via `E2E_WORKERS`). The old value of `2` was chosen so
-  that 3 projects' worth of tests, run in the same job, wouldn't overwhelm
-  a 4 vCPU runner; now that a job only ever runs one project's ~153 tests,
-  it can use all 4 vCPUs itself.
-- Each matrix job only installs the one browser it needs, instead of
-  `--with-deps` downloading and installing Chromium, Firefox and WebKit (and
-  their OS dependencies) every run.
-
-Expected wall time: `checks` (~20s) and `e2e` (bounded by its slowest
-matrix job, roughly a third of the old 22m13s Playwright time plus its own
-`npm ci` and single-browser install, so well under 10 minutes) run at the
-same time, for a total CI wall time well under 10 minutes, down from ~24.
-
-The per-project `globalTimeout` in `playwright.config.js` drops from 45 to
-20 minutes on CI only (`process.env.CI ? 1200000 : 2700000`): a job now
-covers one project's ~153 tests at 4 workers instead of all 459 at 2
-workers, so the old 22.3-minute full-suite reference point is a very
-generous upper bound for a single project. Local runs (`CI` unset) keep the
-45-minute budget and still exercise all three projects in one invocation
-via `npm run test:examples`, so local behaviour is unchanged. Each matrix
-job's `timeout-minutes: 25` in `test.yml` sits above that 20-minute
-in-config budget, covering checkout, `npm ci` and the single-browser
-install around it.
-
-Artifact uploads on failure are now named `test-artifacts-${{
-matrix.project }}` (e.g. `test-artifacts-firefox`) instead of a single
-`test-artifacts`, since three parallel jobs uploading to the same artifact
-name would collide.
-
-If GitHub's `ubuntu-latest` migration (see above) changes the effective
-vCPU count, or the suite grows significantly, re-measure both the
-`workers` value and the `globalTimeout`/`timeout-minutes` budgets rather
-than assuming they still hold.
-
-## `release.yml` - npm publish pipeline
-
-**Trigger**: Push of a tag matching `v*` (for example `v1.2.3`)
-
-Steps:
-- `npm ci`
-- `npm test` (Jest)
-- `npm run build`
-- `npm publish --provenance --access public`
-
-The published version is whatever is in `package.json` at the tagged
-commit, not the tag name itself. npm does not derive the version from the
-git tag, so the tag pushed and the `version` field in `package.json` must
-agree. An npm version is immutable once published, so a mismatch is not a
-recoverable mistake: pushing `v2.0.1` while `package.json` still reads
-`2.0.0` would either publish `2.0.0` under a `v2.0.1` tag, or fail with a
-confusing "version already exists" error.
-
-The workflow therefore compares the two before doing any work, in a step
-that runs ahead of `npm ci`, and fails with a message naming both values
-when they disagree. Prerelease tags such as `v2.0.0-beta.1` compare
-correctly, since the check only strips the leading `v`.
-
-### Required repository secret: `NPM_TOKEN`
-
-The workflow authenticates to the npm registry with an automation token
-that does not exist in this repository yet. A repository maintainer needs
-to create it once:
-
-1. On [npmjs.com](https://www.npmjs.com), sign in with an account that has
-   publish rights on the `agentlet-core` package, open the account menu,
-   go to **Access tokens**, and generate a new token with the
-   **Automation** type (this type is meant for CI and works even when the
-   account has two-factor authentication enabled).
-2. Copy the generated token immediately; npm only shows it once.
-3. In the GitHub repository, go to **Settings > Secrets and variables >
-   Actions**, click **New repository secret**, name it `NPM_TOKEN`, and
-   paste the token as its value.
-
-Without this secret, any push of a `v*` tag will run the workflow through
-the test and build steps and then fail at the publish step.
-
-### Why `id-token: write` matters
-
-`npm publish --provenance` asks npm to attach a cryptographically signed
-attestation of where and how the package was built (the workflow file, the
-commit, the repository). To produce that attestation, the job requests a
-short-lived OIDC token from GitHub's identity provider, which requires the
-`id-token: write` permission on the job. `contents: read` is the ordinary
-permission needed to check out the repository. Neither the checkout step
-nor `npm ci`/`npm test`/`npm run build` need `id-token: write`, but the
-final `npm publish --provenance` step does; without it the publish step
-fails immediately and none of the other steps make up for its absence.
-
-### This workflow has not been exercised
-
-`release.yml` has been added but deliberately not triggered: no `v*` tag
-has been pushed, and `npm publish` has not been run, locally or in CI.
-Actual publishing is intentionally deferred until phase 1 of the rework
-(Shadow DOM + API mount) is complete, and `package.json` is being bumped to
-`2.0.0` in a separate, unrelated pull request. Before the first real
-release, confirm the `NPM_TOKEN` secret described above has been added,
-and that `package.json`'s `version` matches the tag about to be pushed.
-The workflow verifies that last point itself and fails early if it does
-not hold, but checking before tagging avoids a pointless failed run.
-
-## Dependency vulnerability scanning (`security.yml`)
-
-### Why not just run a scanner on `dist/`
-
-`agentlet-core`'s published bundles (`dist/agentlet-core.js` and friends)
-are built with esbuild, which inlines every bundled dependency into a
-single file. A filesystem/container SBOM scanner finds zero components in
-`dist/` or in the `npm pack` tarball: there is nothing that looks like a
-`node_modules` tree to scan. `package-lock.json` lists every installed
-package, but most of them (the build toolchain, test runners, linters) are
-never shipped, so scanning only the lockfile would both miss nothing that
-matters and constantly flag things that can't affect a consumer.
-
-The gate therefore scans two different things:
-
-- **`bundle` scope (blocking)** - a CycloneDX SBOM built from the esbuild
-  metafiles (`tools/build.js` passes `metafile: true` for every
-  npm-published target plus the bookmarklet and extension builds, and
-  writes each one to `reports/security/meta/*.meta.json`, which is
-  gitignored and never published). The shared `sbom-from-esbuild` action reads those
-  metafiles, maps every `node_modules` input back to the nearest owning
-  package's `package.json` (handling scoped and nested `node_modules`
-  correctly, so two different versions of the same package pulled in via
-  different dependents are not conflated), and writes
-  `reports/security/sbom-bundle.cdx.json`. This is what a consumer of
-  `agentlet-core` actually runs.
-- **`lockfile` scope (reporting only)** - `package-lock.json` scanned
-  directly, full install tree. Useful for visibility (a compromised build
-  tool is still a supply-chain risk) but never blocks a PR, since nothing
-  in it necessarily ships.
+The nightly-only `nightly-release-scan` job downloads the SBOM attached to the latest GitHub release and rescans it, opening or updating a separate `security`-labeled issue if that fails. The issue is deduplicated by its exact title, which includes the release tag.
 
 ### Shared actions
 
-The scanner is not part of this repository. `security.yml` and
-`release.yml` call two composite actions from the organization repository
-[agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan),
-pinned by commit SHA (the trailing comment names the tag):
+The scanner is not part of this repository. `security.yml` and `release.yml` call two composite actions from the organization repository [agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan), pinned by commit SHA (the trailing comment names the tag):
 
-- `agentlet/.github/actions/sbom-from-esbuild` builds the SBOM from the
-  metafiles. `metafiles` takes an explicit newline or comma separated list
-  (no glob), so the five files written by `tools/build.js` are listed in
-  the workflows. Add a new build target there when `tools/build.js` gains
-  one.
-- `agentlet/.github/actions/dependency-scan` installs a pinned,
-  checksum-verified `osv-scanner`, applies the gate, uploads the SARIF
-  (skipped on fork PRs), uploads the reports and optionally opens a tracking
-  issue. Its README documents every input.
+- `agentlet/.github/actions/sbom-from-esbuild` builds the SBOM from the metafiles. `metafiles` takes an explicit newline or comma separated list (no glob), so the five files written by `tools/build.js` are listed in the workflows. Add a new build target there when `tools/build.js` gains one.
+- `agentlet/.github/actions/dependency-scan` installs the pinned `osv-scanner`, applies the gate, uploads the SARIF (skipped on fork pull requests), uploads the reports and optionally opens a tracking issue. Its README documents every input. It only supports Linux x64 runners.
 
-Bump the pin deliberately when a new action tag is released. The
-`osv-scanner-version` input controls the scanner version.
+Bump the pin deliberately when a new action tag is released. The `osv-scanner-version` input controls the scanner version.
+
+### Why the SBOM is built from esbuild metafiles
+
+esbuild inlines every bundled dependency into one file, so a scanner pointed at `dist/` or at the npm tarball finds no packages. `package-lock.json` lists the whole install tree, but most of it (build tools, test runners, linters) is never shipped.
+
+So the scan has two scopes:
+
+- **bundle (blocking)**: a CycloneDX SBOM built from the esbuild metafiles that `tools/build.js` writes to `reports/security/meta/*.meta.json` (gitignored, never published). The shared `sbom-from-esbuild` action maps every bundled `node_modules` input to its package and writes `reports/security/sbom-bundle.cdx.json`. This is what a consumer of agentlet-core actually runs.
+- **lockfile (reporting only)**: `package-lock.json` scanned directly. It never blocks a pull request.
 
 ### Running the scan locally
 
@@ -485,36 +55,13 @@ node $SHARED/bin/scan.mjs \
   --lockfile=package-lock.json
 ```
 
-`scan.mjs` accepts `--min-severity=<low|medium|high|critical>` (default
-`high`), `--lockfile=` (empty, to skip the lockfile), `--exceptions=<path>`,
-`--out-dir=<path>` and `--offline` (skips the EPSS/KEV network calls,
-marking both as unknown). See the
-[action README](https://github.com/agentlet/.github/tree/main/actions/dependency-scan)
-for the full list. Reports land in `reports/security/` (gitignored):
-`results.sarif`, `scan-report.json` and `scan-summary.md`.
+`scan.mjs` accepts `--min-severity=<low|medium|high|critical>` (default `high`), `--lockfile=` (empty, to skip the lockfile), `--exceptions=<path>`, `--out-dir=<path>` and `--offline` (skips the EPSS and KEV lookups). The [action README](https://github.com/agentlet/.github/tree/main/actions/dependency-scan) lists every flag. Reports land in `reports/security/` (gitignored): `results.sarif`, `scan-report.json` and `scan-summary.md`.
 
 ### Gate rule
 
-A finding in the **bundle** scope fails the gate when:
+A finding in the bundle scope fails the gate when it is high or critical severity and a fixed version is known, or when it is in CISA's Known Exploited Vulnerabilities (KEV) catalog, unless a valid entry in `security/vulnerability-exceptions.json` covers it. An expired exception stops matching and also fails the gate by itself, so it has to be renewed or removed. Severity comes from OSV's `database_specific.severity` when present, and from the CVSS v3.x base score otherwise.
 
-- it is `high` or `critical` severity **and** a fixed version is known
-  (from OSV's `fixed` event or, for GHSA-sourced advisories without one,
-  the affected-range hint), **or**
-- it is listed in CISA's Known Exploited Vulnerabilities (KEV) catalog,
-  regardless of severity,
-
-unless a valid, unexpired entry in `security/vulnerability-exceptions.json`
-covers it. An **expired** exception is treated as if it did not exist for
-matching purposes, and additionally fails the gate on its own (to force
-either renewing or removing it) - see
-the shared action's gate. The lockfile scope
-never blocks, regardless of severity.
-
-Severity comes from OSV's `database_specific.severity` (GHSA advisories)
-when present, falling back to a base-score calculation from the CVSS v3.x
-vector when it is not.
-
-### Vulnerability exceptions (`security/vulnerability-exceptions.json`)
+### Exceptions
 
 ```json
 {
@@ -530,67 +77,64 @@ vector when it is not.
 }
 ```
 
-- `id` - a GHSA or CVE id. Matches a finding on **any** of its OSV
-  aliases, so either id works.
-- `package` - optional; when present, the exception only applies to that
-  package name.
-- `reason` - required, human-readable.
-- `expires` - required, `YYYY-MM-DD`. Once past, the entry stops matching
-  and instead fails the gate itself until it is renewed (a new `expires`
-  date) or removed.
-- `owner` - required by policy, for review follow-up.
+- `id`: a GHSA or CVE id. It matches a finding on any of its OSV aliases.
+- `package`: optional. When present, the exception applies only to that package.
+- `reason`: required.
+- `expires`: required, `YYYY-MM-DD`.
+- `owner`: required by policy, for review follow-up.
 
-Review policy: an exception is a deliberate, time-boxed decision to accept
-a known risk (e.g. no upstream fix exists yet and the affected code path is
-unreachable from a bundled build). It should name a real owner and a
-realistic expiry, not a far-future date used to silence the gate
-permanently. An unused exception (nothing matched it on a given run)
-produces a warning in the scan output so stale entries get noticed and
-removed.
+An exception is a time-boxed decision to accept a known risk. Give it a real owner and a realistic expiry. An exception that matched nothing in a run produces a warning, so stale entries get noticed.
 
-### EPSS and KEV enrichment
+### EPSS and KEV data
 
-Findings are enriched, best-effort, with:
+Findings are enriched with EPSS scores (`api.first.org`) and the CISA KEV catalog. Both lookups are best effort: a network failure prints a warning and marks the data as unknown instead of failing the scan. The gate rule does not need EPSS.
 
-- **EPSS** (Exploit Prediction Scoring System) from
-  `https://api.first.org/data/v1/epss`, keyed by CVE id (GHSA ids are
-  mapped to CVE ids via OSV's `aliases`).
-- **CISA KEV** (Known Exploited Vulnerabilities) from
-  `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`.
+## `release.yml`: npm publish
 
-Both calls are wrapped so a network failure (offline dev machine, an
-outage, a firewalled CI runner) prints a warning and marks that data as
-unknown rather than failing the scan; the gate rule does not require EPSS,
-and a `kev: false` from a failed KEV fetch means a real KEV finding could
-be under-flagged for that run rather than the scan crashing.
+**Trigger**: pushing a tag that matches `v*`.
 
-### Installing `osv-scanner` in CI
+Steps, in order:
 
-The `dependency-scan` action downloads the official release binary
-(`osv-scanner_linux_amd64`) for a pinned version (its `osv-scanner-version`
-input) from `google/osv-scanner`'s GitHub releases and verifies it against
-that same release's `SHA256SUMS` file before running it, with no `curl | sh`.
-The action only supports Linux x64 runners.
+1. Check that the tag (without the leading `v`) equals the `version` in `package.json`, and fail early if not. npm versions are immutable, so a mismatch is not recoverable after publishing.
+2. `npm ci`, `npm test`, `npm run build`.
+3. Generate the SBOM (the shared `sbom-from-esbuild` action) and scan it (the shared `dependency-scan` action) before publishing, so a blocking vulnerability or a failure stops the job before anything is published.
+4. `npm publish --provenance --access public`.
+5. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
 
-### Nightly rescan of the latest published release
+The job needs `id-token: write` so that npm can attach a signed provenance attestation, and `contents: write` to create the release.
 
-New CVEs are disclosed after a version has already shipped, so a clean scan
-at release time does not stay true forever. The nightly run of
-`security.yml` downloads the `sbom-bundle.cdx.json` asset from the most
-recent GitHub release (attached by `release.yml`, see below) and rescans it
-independently of the current `main` branch. If that rescan fails the gate,
-the workflow opens (or comments on, if one is already open) a single
-issue labeled `security` rather than opening a duplicate every night. The
-issue is deduplicated by its exact title, which includes the release tag.
+### Required secret: `NPM_TOKEN`
 
-### SBOM attached to GitHub releases (`release.yml`)
+Publishing authenticates with an npm automation token stored as the repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions). Create the token on npmjs.com under Access tokens, with the Automation type, using an account that can publish `agentlet-core`. Without the secret, a tag push runs the tests and build and then fails at the publish step.
 
-After `npm publish` succeeds, `release.yml` creates (or updates) the GitHub
-release for the pushed tag and attaches the same `sbom-bundle.cdx.json`
-generated for that build. SBOM generation, followed by a gate scan of that
-SBOM that fails the job on a blocking vulnerability, happens *before* `npm publish` so
-a failure there stops before anything is published; the upload to the
-release happens *after* publish so a failure there (network blip, the
-release already exists in an unexpected way) never leaves npm in a
-half-published state - it can be retried on its own with
-`gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
+## Dependabot
+
+`.github/dependabot.yml.disabled` holds a Dependabot configuration that is not active. Rename it to `dependabot.yml` to enable it. Note that SheetJS is pinned to a tarball URL on `cdn.sheetjs.com`, which Dependabot does not track, see CONTRIBUTING.md.
+
+## Running the checks locally
+
+```bash
+npm test              # Jest unit tests
+npm run lint
+npm run typecheck
+npm run build
+npm run test:examples # Playwright e2e suite (needs `npx playwright install`)
+```
+
+### Running two e2e suites at once
+
+`tests/examples/playwright.config.js` serves the examples on the port in `E2E_PORT` (default `3030`). With two worktrees on one machine, give each its own port. Otherwise the second run reuses the first run's server and tests the wrong checkout.
+
+```bash
+E2E_PORT=3131 npm run test:examples
+```
+
+### Targeted e2e recheck in Docker
+
+When Playwright can no longer download a browser build for your host operating system, `npm run test:examples:docker` runs one or a few specs in the official Playwright Docker image instead:
+
+```bash
+npm run test:examples:docker -- tests/examples/specs/ui-dialogs.spec.js --project=chromium
+```
+
+`tools/e2e-docker.sh` pulls the image that matches the Playwright version in `package-lock.json`, keeps the container's `node_modules` in a separate named volume, runs `npm ci` in the container and sets `PW_TEST_HTML_REPORT_OPEN=never` so a failing run does not wait for the HTML report server. Use it for a targeted recheck only. A full run is slow and timing-sensitive on Docker Desktop's default macOS VM, and CI is the reference result for the full suite.

@@ -40,13 +40,13 @@ function getChromeGlobal(): ChromeGlobal | undefined {
     return (globalThis as unknown as { chrome?: ChromeGlobal }).chrome;
 }
 
-/** Mirrors the constructor's/statics' original `typeof chrome !== 'undefined' && chrome.scripting` check. */
+/** True when `chrome.scripting` is available (an extension context). */
 function detectExtensionEnvironment(): boolean {
     const chromeGlobal = getChromeGlobal();
     return typeof chromeGlobal !== 'undefined' && !!chromeGlobal.scripting;
 }
 
-/** Mirrors the constructor's/statics' original `typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage` check. */
+/** True when `chrome.runtime.sendMessage` is available (a content script context). */
 function detectContentScriptEnvironment(): boolean {
     const chromeGlobal = getChromeGlobal();
     return typeof chromeGlobal !== 'undefined' && !!chromeGlobal.runtime && !!chromeGlobal.runtime.sendMessage;
@@ -54,8 +54,7 @@ function detectContentScriptEnvironment(): boolean {
 
 /**
  * Best-effort extraction of a `.message` string from an unknown error-like
- * value, without assuming an `Error` instance - mirrors the original code's
- * untyped `error.message` access, which worked whether `error` was an
+ * value, without assuming an `Error` instance. It works whether `error` is an
  * `Error`, a `chrome.runtime.lastError`-shaped object, a plain string, or
  * something else entirely.
  */
@@ -222,9 +221,8 @@ class ScriptInjector implements ScriptInjectorAPI {
 
                 if (func) {
                     // Execute function with arguments. `args` is optional on
-                    // ScriptInjectOptions but the original code assumed it was
-                    // always provided alongside `func` (no default/guard) -
-                    // preserved here via `!` rather than adding a fallback.
+                    // ScriptInjectOptions but is expected alongside `func`
+                    // (no default or guard), hence the `!`.
                     script.textContent = `(${func.toString()})(${args!.map(arg => JSON.stringify(arg)).join(',')});`;
                 } else if (file) {
                     script.src = file;

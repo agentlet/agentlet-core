@@ -8,7 +8,7 @@ import { logger } from '../system/Logger.js';
 /**
  * Minimal shape of the `pdfjs-dist` global this file reads - only the
  * members actually called, not the full library surface. `pdfjs-dist` is
- * never imported here; `LibrarySetup.js` (see `src/libraries/LibrarySetup.js`)
+ * never imported here; `LibrarySetup` (see `src/libraries/LibrarySetup.ts`)
  * assigns it onto `window.pdfjsLib` at runtime (bundled mode) or the caller
  * loads it before calling in, so it is read through `getPdfjsLib()` (via
  * `window`) rather than a `window.pdfjsLib` typed as part of the global

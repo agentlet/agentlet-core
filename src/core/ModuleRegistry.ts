@@ -750,7 +750,7 @@ export default class ModuleRegistry implements ModuleRegistryAPI {
      * Resolves with the already-registered instance, without reloading, if
      * `entry.name` is already loaded. Records `entry` in `registryEntries`
      * regardless (so `getRegistryEntries()` reflects it), whether or not it
-     * was previously declared by a loaded registry.
+     * was declared by a loaded registry.
      * @param entry - Agentlet configuration {name, url, module, lazy?}
      */
     async loadModule(entry: AgentletRegistryEntryConfig): Promise<AgentletModule> {

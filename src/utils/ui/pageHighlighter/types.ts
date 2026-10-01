@@ -10,17 +10,16 @@ import type {
     PageHighlighterHighlightControl
 } from '../../../types/public-api';
 
-/** `showOverlay()`'s options with every default from its original spread applied. */
+/** `showOverlay()`'s options with every default applied. */
 export type ResolvedOverlayConfig = Required<PageHighlighterOverlayOptions>;
 
-/** `highlight()`'s options with every default from its original spread applied. */
+/** `highlight()`'s options with every default applied. */
 export type ResolvedHighlightConfig = Required<PageHighlighterHighlightOptions>;
 
 /**
  * What `showOverlay()` stores in `PageHighlighter.overlays` and also
  * returns to the caller: the public control plus the internal bookkeeping
- * fields (`config`, `timeoutId`) the original implementation attached to
- * that same object.
+ * fields (`config`, `timeoutId`) attached to that same object.
  */
 export interface OverlayEntry extends PageHighlighterOverlayControl {
     config: ResolvedOverlayConfig;
@@ -29,8 +28,8 @@ export interface OverlayEntry extends PageHighlighterOverlayControl {
 
 /**
  * What `highlight()` stores in `PageHighlighter.highlights` and also
- * returns to the caller: the public control plus the resolved `config` the
- * original implementation attached to that same object.
+ * returns to the caller: the public control plus the resolved `config`
+ * attached to that same object.
  */
 export interface HighlightEntry extends PageHighlighterHighlightControl {
     config: ResolvedHighlightConfig;

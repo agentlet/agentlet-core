@@ -1,6 +1,8 @@
 # Contributing to Agentlet Core
 
-Thank you for your interest in contributing to Agentlet Core! We welcome contributions from the community and are grateful for any help you can provide.
+Thank you for your interest in contributing to agentlet-core. Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
+
+This project is developed with heavy use of Claude Code. [CLAUDE.md](CLAUDE.md) holds the conventions it follows (commit format, TypeScript rules, documentation style), and they apply to human contributors too.
 
 ## How to Contribute
 
@@ -48,9 +50,10 @@ We welcome feature requests! Please create an issue with:
 
 5. **Test Your Changes**
    ```bash
-   npm run build
-   npm run test
+   npm run typecheck
    npm run lint
+   npm test
+   npm run build
    ```
 
 6. **Commit Your Changes**
@@ -101,26 +104,25 @@ We welcome feature requests! Please create an issue with:
 
 ### Code Style
 
-- Use consistent indentation (2 spaces)
-- Follow JavaScript ES6+ conventions
+- Indent with 4 spaces
+- Write modern ES modules and TypeScript
 - Use meaningful variable and function names
 - Add comments for complex logic
 - Keep functions small and focused
 
 ### TypeScript
 
-agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `tests/` accept `.ts` files side by side with the existing `.js` files, and the following rules apply to any PR that touches `src/`:
+All of `src/` is TypeScript (`.ts`). The following rules apply to any PR that touches `src/`:
 
-- Write every new file under `src/` in TypeScript (`.ts`). This keeps the amount of untyped code from growing while the migration is in progress.
-- If your PR touches an existing `.js` file under `src/` and that file is under 300 lines, convert it to `.ts` in the same PR: rename it with `git mv`, add strict types, and keep the behaviour and existing tests unchanged. Larger files can stay JavaScript for now; convert them in a dedicated PR instead of bundling a large rewrite with an unrelated change.
+- Write every new file under `src/` in TypeScript.
 - Avoid `any`. `typescript-eslint` rejects explicit `any` in `.ts` files as an error. When a value is genuinely dynamic, use `unknown` (or a precise union) and add a one-line comment explaining why. If `any` is truly unavoidable, suppress it locally with `eslint-disable-next-line` and a reason on the same line, rather than disabling the rule broadly.
 - You never have to write TypeScript to build an agentlet on top of this library: agentlets consume the published declarations (see [TypeScript support](https://agentlet.io/docs/guides/typescript/)) and can stay plain JavaScript.
-- Keep the `.js` extension in relative imports even after a file is converted to `.ts` (e.g. `import { EventBus } from './EventBus.js'`). esbuild, `tsc` (`moduleResolution: bundler`), and Jest's `moduleNameMapper` all resolve it, so imports do not need to change when a file is converted.
+- Keep the `.js` extension in relative imports even though the target file is `.ts` (e.g. `import { EventBus } from './EventBus.js'`). esbuild, `tsc` (`moduleResolution: bundler`), and Jest's `moduleNameMapper` all resolve it.
 - Share option and shape types with the public API instead of redefining them: import them from `src/types/public-api.d.ts` with `import type`, and update the conformance checks in `tests/types/public-api.test-d.ts` whenever a public class's shape changes.
 - Declare optional or duck-typed members (hooks the core detects with `typeof x === 'function'`) through a declaration merge, for example `interface Module { getPanelTitle?(): string }`, not as an uninitialized class field. An uninitialized field can become an own property set to `undefined` depending on the transpiler, which would shadow a subclass's implementation.
 - Run `npm run typecheck` to type-check the project with `tsc`; it must pass, together with `npm test`, `npm run build`, and `npm run lint`, before you commit.
 - esbuild compiles `.ts` sources natively, so no extra build step is needed.
-- Tests may be written in `.ts`; Jest transforms them with babel-jest, the same as `.js` tests.
+- Tests may be written in `.ts` or `.js`; Jest transforms both with babel-jest.
 
 ### Public API declarations (dist/agentlet-core.d.ts)
 
@@ -163,13 +165,14 @@ When creating new modules:
 - Include proper error handling
 - Add appropriate lifecycle hooks
 - Test your module thoroughly
+- Remember that modules are not sandboxed: they run with the host page's privileges. See [SECURITY.md](SECURITY.md)
 
 ### Testing
 
 - Write tests for new functionality
 - Ensure all existing tests continue to pass
 - Test in multiple browsers when possible
-- Test both as a bookmarklet and browser extension
+- For UI changes, try the built bundle as a bookmarklet on a real page (see the Quick start in the README). The browser extension in `extension/` is an unpublished experiment
 
 ### Documentation
 
@@ -194,29 +197,20 @@ agentlet-core/
 └── dist/                  # Built files (generated)
 ```
 
-## Module Registry
+## Sharing modules
 
-If you're creating modules for the community:
-
-1. **Publish to npm** with the `agentlet-module` keyword
-2. **Submit to the registry** by creating an issue with your module details
-3. **Follow security guidelines** - modules are sandboxed but should still be secure
-4. **Provide documentation** and examples for your module
+There is no public module registry. If you build a module for others, publish it as its own package or repository. Modules are not sandboxed: a module runs with the host page's privileges and can read everything the page can, so review any third-party module before you load it. See [SECURITY.md](SECURITY.md) for the threat model.
 
 ## Getting Help
 
 - **GitHub Issues**: For bug reports and feature requests
-- **Discussions**: For questions and community support
-- **Documentation**: Check the README.md and inline documentation
+- **Documentation**: [agentlet.io/docs](https://agentlet.io/docs/), the README and the inline documentation
+- **Security problems**: Use the [security advisory form](https://github.com/agentlet/agentlet-core/security/advisories/new), not a public issue
 
 ## Code of Conduct
 
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating you agree to abide by it.
 
 ## License
 
-By contributing to Agentlet Core, you agree that your contributions will be licensed under the MIT License.
-
-## Recognition
-
-Contributors will be recognized in the project's README.md and release notes. Thank you for helping make Agentlet Core better!
+By contributing to agentlet-core, you agree that your contributions will be licensed under the MIT License.

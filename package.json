@@ -1,7 +1,7 @@
 {
   "name": "agentlet-core",
   "version": "2.2.0",
-  "description": "Core framework for AI-powered bookmarklet system with extensible plugin architecture",
+  "description": "Side panel framework for web apps you cannot change: read and fill forms, export tables to Excel, capture the page and call an AI model, from a bookmarklet or extension",
   "main": "dist/agentlet-core.js",
   "types": "./dist/agentlet-core.d.ts",
   "files": [
@@ -53,10 +53,13 @@
   },
   "keywords": [
     "bookmarklet",
-    "browser extension",
-    "agents",
+    "browser-extension",
+    "browser-automation",
+    "web-automation",
+    "form-filling",
+    "excel-export",
     "ai",
-    "automation",
+    "agents",
     "plugin-system"
   ],
   "author": "Agentlet Core Team",
@@ -68,7 +71,7 @@
   "bugs": {
     "url": "https://github.com/agentlet/agentlet-core/issues"
   },
-  "homepage": "https://github.com/agentlet/agentlet-core#readme",
+  "homepage": "https://agentlet.io",
   "devDependencies": {
     "@babel/core": "^7.28.0",
     "@babel/preset-env": "^7.28.0",

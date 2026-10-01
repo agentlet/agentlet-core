@@ -36,8 +36,8 @@ export default class ModuleManager implements ModuleManagerAPI {
      * `.getAll()`, regardless of which path a module was registered
      * through - notably including the registry-script loader
      * (`ModuleRegistry.loadAgentletModule()`/`loadModule()`), which
-     * registers directly on `ModuleRegistry` and previously never reached
-     * this class's own map at all.
+     * registers directly on `ModuleRegistry` and so never goes through
+     * `ModuleManager`.
      */
     get modules(): Map<string, AgentletModule> {
         return this.moduleRegistry.modules;

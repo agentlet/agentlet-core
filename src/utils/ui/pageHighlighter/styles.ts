@@ -475,7 +475,7 @@ const STYLES = `
  * Injects PageHighlighter's stylesheet into `<head>` once per instance.
  * `context.styleInjected` only guards re-injection on the *same* instance -
  * a second PageHighlighter instance injects its own separate `<style>`
- * element, matching the original per-instance (not global) dedup.
+ * element (the dedup is per instance, not global).
  */
 export function ensureStyles(context: PageHighlighterContext): void {
     if (context.styleInjected) return;

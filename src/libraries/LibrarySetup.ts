@@ -43,8 +43,8 @@ interface PdfjsLibModule {
  * Minimal shape of the `hotkeys-js` module this file forwards to
  * `window.hotkeys` and to `ShortcutManager.init()`. Mirrors the narrower,
  * separately-declared (and unexported) `HotkeysLike` in
- * `ShortcutManager.ts` - duplicated here rather than imported, matching
- * how other converted files type third-party globals locally. The
+ * `ShortcutManager.ts` - duplicated here rather than imported, the same
+ * way other files type third-party globals locally. The
  * callback's `handler` argument is typed `unknown` rather than mirroring
  * `ShortcutManager.ts`'s own `HotkeysHandler` (`{ shortcut?: string; [key:
  * string]: unknown }`): the real `hotkeys-js` value's handler argument
@@ -171,21 +171,20 @@ export class LibrarySetup implements LibrarySetupAPI {
         // its own module body (see `node_modules/pdfjs-dist/build/pdf.mjs`),
         // which happens before `initializeAll()`/`setupPDFJS()` ever run -
         // `window.pdfjsLib` is therefore *always* already defined by this
-        // point in that build. The previous `if (typeof globals.pdfjsLib ===
-        // 'undefined')` guard wrapped this whole method, so `pdfWorkerUrl`
-        // was silently never applied there, and PDF conversion failed with
-        // pdf.js's own "No GlobalWorkerOptions.workerSrc specified" until a
-        // host called `configurePDFWorker()` by hand.
+        // point in that build. So the worker URL is set unconditionally:
+        // guarding on `window.pdfjsLib` being undefined would skip
+        // `pdfWorkerUrl` here and PDF conversion would fail with pdf.js's own
+        // "No GlobalWorkerOptions.workerSrc specified".
         const activeLib = globals.pdfjsLib as PdfjsLibModule;
         const workerSrc = this.resolvePDFWorkerSrc();
 
         activeLib.GlobalWorkerOptions.workerSrc = workerSrc;
         // `verbosity` is not part of pdfjs-dist's own `GlobalWorkerOptions`
-        // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`)
-        // but the pre-conversion code has always set it anyway - kept as a
-        // narrow cast rather than widening `PdfjsLibModule` itself (likely
-        // a no-op against modern pdfjs-dist, since nothing in the library
-        // reads `GlobalWorkerOptions.verbosity` for logging).
+        // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`),
+        // so it is set through a narrow cast rather than by widening
+        // `PdfjsLibModule` itself. Likely a no-op against modern pdfjs-dist,
+        // since nothing in the library reads `GlobalWorkerOptions.verbosity`
+        // for logging.
         (activeLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
 
         logger.log('📄 PDF.js worker URL set to:', workerSrc);

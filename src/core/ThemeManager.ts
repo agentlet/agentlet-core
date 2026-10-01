@@ -15,8 +15,7 @@ import type { AgentletTheme, AgentletCoreConfig, ThemeManagerAPI } from '../type
  * which is ignored, since it doesn't affect the black/white pick against
  * an opaque header). Anything this doesn't recognise - a CSS custom
  * property (`var(...)`), a gradient, `hsl()`/`oklch()`/etc, a named colour
- * like `navy` - falls back to the framework's pre-existing dark default so
- * behaviour for those callers is unchanged.
+ * like `navy` - falls back to the framework's dark default.
  */
 export function contrastingTextColor(backgroundColor: string): string {
     const rgb = parseRgbComponents(backgroundColor.trim());

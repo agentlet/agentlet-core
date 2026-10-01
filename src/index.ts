@@ -32,7 +32,7 @@ import { UIManager } from './ui/UIManager.js';
 import { PanelManager } from './ui/PanelManager.js';
 import { GlobalAPI } from './core/GlobalAPI.js';
 
-// Import external libraries (jQuery removed)
+// External libraries
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import hotkeys from 'hotkeys-js';
@@ -47,8 +47,8 @@ import hotkeys from 'hotkeys-js';
 // PDF.js. It's loaded lazily via `await import('pdfjs-dist')` inside init()
 // instead, right before `librarySetup.initializeAll(...)`. In the single-file
 // esbuild bundles (no code splitting - see tools/build.js) this compiles to a
-// lazily-evaluated module inlined in the same output file: pdf.js ships in
-// dist/ exactly as before, its code just isn't executed until init() runs.
+// lazily-evaluated module inlined in the same output file: pdf.js is part of
+// dist/, its code just isn't executed until init() runs.
 
 import type {
     AgentletAPI,
@@ -80,7 +80,7 @@ import { logger, setDebugMode } from './utils/system/Logger.js';
  * (see `src/core/Module.ts`) intentionally left off the public
  * `AgentletModule` type in `src/types/public-api.d.ts` - duck-typed modules
  * that don't extend `Module` never have them either, hence the
- * `typeof x === 'function'` guards below (unchanged from the original JS).
+ * `typeof x === 'function'` guards below.
  */
 type ModuleWithInternalMountHooks = AgentletModule & {
     _beforeMount?(container: HTMLElement, context: ModuleMountContext): void;
@@ -146,16 +146,15 @@ class AgentletCore {
      */
     shortcutManager: ShortcutManager | null;
     /**
-     * Definite assignment assertion (`!`): preserves a pre-existing
-     * evaluation-order quirk. `librarySetup` is assigned further down the
-     * constructor than `tableExtractor`/`aiManager`/`shortcutManager`, all
-     * three of which receive it as a constructor argument - so at that point
-     * `this.librarySetup` is actually still `undefined`, and each of those
+     * Definite assignment assertion (`!`). `librarySetup` is assigned further
+     * down the constructor than `tableExtractor`/`aiManager`/`shortcutManager`,
+     * all three of which receive it as a constructor argument - so at that
+     * point `this.librarySetup` is still `undefined`, and each of those
      * constructors' own `= null` default parameter kicks in instead (passing
      * `undefined` explicitly triggers a default parameter the same as
      * omitting the argument). TypeScript's "used before being assigned"
-     * check (correctly) flags this ordering; the assertion preserves the
-     * exact original statement order rather than the object it warns about.
+     * check flags this ordering; the assertion keeps the statement order as
+     * it is.
      *
      * Typed as the concrete class (not the narrower, agentlet-author-facing
      * `LibrarySetupAPI` from public-api.d.ts) because `init()` calls
@@ -472,9 +471,9 @@ class AgentletCore {
             if (this.envManager) {
                 // loadFromStorage() belongs to LocalStorageEnvironmentVariablesManager
                 // (src/utils/config-persistence/EnvManager.ts), not the public EnvAPI
-                // a custom envManager only needs to implement - calling it
-                // unconditionally here is pre-existing behavior (it throws for a
-                // custom envManager that doesn't define it), preserved as-is.
+                // a custom envManager only needs to implement - it is called
+                // unconditionally, so a custom envManager that doesn't define it
+                // makes init() throw.
                 (this.envManager as EnvAPI & { loadFromStorage(): void }).loadFromStorage();
             }
 
@@ -502,10 +501,9 @@ class AgentletCore {
 
         } catch (error) {
             console.error('❌ Failed to initialize Agentlet Core:', error);
-            // Preserves the original unguarded `error.message` access (TS types a
-            // catch binding as `unknown`, requiring this cast): if something
-            // other than an `Error` is thrown, `.message` is `undefined` and
-            // that is what gets emitted - a pre-existing quirk, not "fixed" here.
+            // `error` is typed `unknown`, hence the cast. If something other
+            // than an `Error` is thrown, `.message` is `undefined` and that is
+            // what the event carries.
             this.eventBus.emit('core:initializationFailed', { error: (error as Error).message });
             throw error;
         }
@@ -1312,9 +1310,7 @@ class AgentletCore {
             this.ui.host = null;
 
             // Remove image overlay if present
-            // (pre-existing bug fix: hideImageOverlay() only ever existed on
-            // UIManager, so this call always threw and silently aborted the
-            // rest of cleanup() - noticed while testing shadow DOM cleanup)
+            // hideImageOverlay() lives on UIManager, not on AgentletCore.
             if (this.uiManager) {
                 this.uiManager.hideImageOverlay();
             }
@@ -1368,12 +1364,11 @@ class AgentletCore {
         // Get storage type for header using the mandatory name() method
         //
         // this.envManager is read fresh at each of the three sites below
-        // (here, and inside window.removeEnvVar/addEnvVar further down),
-        // exactly as the original did, rather than being captured once into
-        // a local - the cast is only to satisfy TypeScript's non-null
-        // narrowing, which (correctly) does not persist through the
-        // window.removeEnvVar/addEnvVar closures defined later in this
-        // method.
+        // (here, and inside window.removeEnvVar/addEnvVar further down)
+        // rather than being captured once into a local. The cast only
+        // satisfies TypeScript's non-null narrowing, which does not persist
+        // through the window.removeEnvVar/addEnvVar closures defined later in
+        // this method.
         const storageType = (this.envManager as EnvAPI).name();
 
         const content = `
@@ -1555,7 +1550,7 @@ class AgentletCore {
             // These inputs live inside the fullscreen Dialog content, itself
             // mounted in the UI root (shadow root in shadowDom mode), hence
             // this.ui.query() rather than document.getElementById(). Queried
-            // fresh at each use (not cached in a local), same as the original.
+            // fresh at each use (not cached in a local).
             const key = (this.ui.query('#env-var-key') as HTMLInputElement).value.trim();
             const value = (this.ui.query('#env-var-value') as HTMLInputElement).value.trim();
 
@@ -1590,8 +1585,8 @@ class AgentletCore {
             //
             // See the comment in cleanup() above for why
             // Reflect.deleteProperty() is used instead of the `delete`
-            // operator here. `clearEnvVars` is never actually assigned
-            // anywhere (pre-existing dead code, kept as-is).
+            // operator here. `clearEnvVars` is never assigned anywhere, so
+            // deleting it is a no-op.
             Reflect.deleteProperty(window, 'removeEnvVar');
             Reflect.deleteProperty(window, 'addEnvVar');
             Reflect.deleteProperty(window, 'clearEnvVars');
@@ -1603,10 +1598,9 @@ class AgentletCore {
      * Generate HTML for environment variables list (including the add form)
      */
     generateEnvVarsListHTML(): string {
-        // Unconditional access, same as the original: this method is only
-        // ever reached (via showEnvVarsDialog()'s own guard) when envManager
-        // is set, but refreshEnvVarsDialog() calls it without re-checking -
-        // preserved as-is rather than adding a new defensive fallback.
+        // Unconditional access: this method is only reached (via
+        // showEnvVarsDialog()'s own guard) when envManager is set, but
+        // refreshEnvVarsDialog() calls it without re-checking.
         const currentVars = (this.envManager as EnvAPI).getAll();
 
         const formatValue = (value: string): string => {
