@@ -141,12 +141,15 @@ agentlet-core is migrating to TypeScript gradually, file by file. `src/` and `te
 
 ### Dependency vulnerability scanning
 
-`npm run build && npm run security:sbom && npm run security:scan` checks
-what agentlet-core's published bundles actually ship against known
-vulnerabilities and blocks on high/critical findings with a fix or KEV
-listing (see `.github/WORKFLOWS.md`'s "Dependency vulnerability scanning"
-section for the full design). Requires `osv-scanner` on `PATH`
-(`brew install osv-scanner`). Do not add a bundled runtime dependency
+The `security.yml` workflow checks what agentlet-core's published bundles
+actually ship against known vulnerabilities and blocks on high/critical
+findings with a fix or KEV listing. It uses the shared
+[dependency-scan](https://github.com/agentlet/.github/tree/main/actions/dependency-scan)
+and `sbom-from-esbuild` actions, so there is no scanner code in this
+repository. See `.github/WORKFLOWS.md`'s "Dependency vulnerability
+scanning" section for the design and the commands to run the scan locally
+(`brew install osv-scanner`, then `npm run build` and the CLIs from a clone
+of `agentlet/.github`). Do not add a bundled runtime dependency
 without checking this passes, and never widen
 `security/vulnerability-exceptions.json` without a real owner and a
 realistic expiry date.
