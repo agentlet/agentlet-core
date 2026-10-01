@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/agentlet/agentlet-core/security/advisories/new
+    about: Report vulnerabilities privately through a GitHub security advisory. Please do not open a public issue.
+  - name: Documentation
+    url: https://agentlet.io/docs/
+    about: Guides, concepts and the API reference.
