@@ -1461,12 +1461,13 @@ export interface RecordOnPasteOptions {
     /** Only react to records of these types. */
     types?: string[];
     /**
-     * Where to listen. Default `document`. Pass the target form so a paste
-     * outside it is never touched. A paste without a record is never
-     * intercepted, and `preventDefault()` is only called on a paste that
-     * carries a record the handler receives.
+     * Where to listen, required: typically the target form. A paste outside
+     * it is never touched. A paste without a record is never intercepted, and
+     * `preventDefault()` is only called on a paste inside the scope that
+     * carries a record the handler receives. Throws a `TypeError` if it is
+     * not an `Element`.
      */
-    scope?: Element | Document;
+    scope: Element;
 }
 
 export interface RecordMatchOptions {
@@ -1571,7 +1572,7 @@ export interface RecordsAPI {
     read(): Promise<AgentletRecord[] | null>;
     fromPasteEvent(event: ClipboardEvent): AgentletRecord[] | null;
     /** Returns an unsubscribe function. */
-    onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options?: RecordOnPasteOptions): () => void;
+    onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options: RecordOnPasteOptions): () => void;
     /**
      * Fallback for pages that block paste events: `read()`, then `fill()` with
      * the first record whose type is allowed. Call it from a click. Resolves

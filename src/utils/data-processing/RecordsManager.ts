@@ -234,8 +234,11 @@ class RecordsManager implements RecordsManagerAPI {
         return payload ? payloadRecords(payload) : null;
     }
 
-    onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options: RecordOnPasteOptions = {}): () => void {
-        const scope = options.scope ?? document;
+    onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options: RecordOnPasteOptions): () => void {
+        const scope = options?.scope;
+        if (!scope || typeof (scope as Element).addEventListener !== 'function' || (scope as Node).nodeType !== Node.ELEMENT_NODE) {
+            throw new TypeError('onPaste() needs options.scope, the element to listen in (usually the target form)');
+        }
         const listener = (event: Event) => {
             const pasteEvent = event as ClipboardEvent;
             let records = this.fromPasteEvent(pasteEvent);

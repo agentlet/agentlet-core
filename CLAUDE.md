@@ -182,7 +182,7 @@ await window.agentlet.records.copy(record); // custom format, text/html with the
 
 // Other builders: create('contact', { name: 'Ada' }), fromForm(form), fromTable(table), await pick()
 
-// Target page: smart paste inside a form, with a preview before anything is filled
+// Target page: smart paste inside a form (scope is required), with a preview before anything is filled
 window.agentlet.records.onPaste(async ([record]) => {
     const result = await window.agentlet.records.fill(record, form); // never submits the form
     if (result.confirmed) console.log(`${result.successful} fields filled`);

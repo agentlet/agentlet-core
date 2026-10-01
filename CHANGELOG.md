@@ -25,8 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   format, `text/html` with the record embedded in `data-agentlet-record`,
   and `text/plain` (a table, a list or `Label: value` lines). It retries
   without the custom format where the browser rejects it, as Firefox does.
-  `read()`, `fromPasteEvent()` and `onPaste()` read it back. A paste without
-  a record is never intercepted. `pasteFromClipboard()` reads the clipboard
+  `read()`, `fromPasteEvent()` and `onPaste()` read it back. `onPaste()`
+  requires a `scope` element, usually the target form, and throws a
+  `TypeError` without it. A paste without a record is never intercepted. `pasteFromClipboard()` reads the clipboard
   from a click, for pages that block paste events.
 - Filling: `match()` maps record fields to a target form by remembered
   mapping, `autocomplete`, `name` or `id`, label and input type, with a veto

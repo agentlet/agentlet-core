@@ -176,9 +176,10 @@ interface RecordsAPI {
   fromPasteEvent(event: ClipboardEvent): AgentletRecord[] | null;
   pasteFromClipboard(target: Element, options?: PasteFromClipboardOptions): Promise<RecordFillResult | null>;
   // pasteFromClipboard: read(), first record matching options.types, then fill(); call it from a click
-  onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options?: OnPasteOptions): () => void;
-  // onPaste: listens on the document (or options.scope); only calls handler, and only calls
-  // preventDefault(), when the paste carries a record; returns an unsubscribe function
+  onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options: OnPasteOptions): () => void;
+  // onPaste: listens on options.scope (required, usually the target form; throws TypeError if missing);
+  // only calls handler, and only calls preventDefault(), when a paste inside the scope carries a record;
+  // returns an unsubscribe function
 
   // Mapping and fill on the target page
   match(record: AgentletRecord, target: Element, options?: MatchOptions): FieldMapping;
@@ -302,7 +303,7 @@ window.agentlet.records.onPaste(async ([record]) => {
   if (result.confirmed) {
     window.agentlet.utils.MessageBubble.success(`${result.successful} fields filled`);
   }
-}, { types: ['organization'] });
+}, { scope: document.querySelector('form#supplier'), types: ['organization'] });
 ```
 
 Pasting the same record into a spreadsheet gives a two-column table, with no agentlet involved.
@@ -320,7 +321,7 @@ Maintainer decisions on the open questions, 2026-10-01.
 
 1. **Name:** `records`. `clipboard` stays rejected because the clipboard is only the phase 1 transport.
 2. **Built-in types:** `contact`, `address` and `organization` stay in core, as specified.
-3. **`onPaste` scope:** smart paste triggers only inside the target form, and only when the paste carries a record. An agentlet passes `scope: form`. A paste without a record is never intercepted and never has `preventDefault()` called on it, including inside text inputs.
+3. **`onPaste` scope:** smart paste triggers only inside the target form, and only when the paste carries a record. `scope` is required: an agentlet passes `scope: form`, and `onPaste()` throws a `TypeError` without it, so there is no document-wide default that could swallow a paste into a comment box or a search field. A paste without a record is never intercepted and never has `preventDefault()` called on it, including inside text inputs.
 4. **Fallback when a record does not survive a paste on an engine:** a user gesture calls `navigator.clipboard.read()` and runs the same match, preview and fill flow.
    - The API is `records.pasteFromClipboard(target, options)`. It reads the clipboard, takes the first record that matches `options.types` (if given), then calls `fill()`. It returns `null` when the clipboard holds no record. It must be called from a user gesture such as a click. An agentlet puts a "Paste record" button in its own panel and calls it. `read()` plus `fill()` called by hand is equivalent.
    - The spike shows no engine needs this today: the `paste` event carries the record in Chromium, Firefox and WebKit. The button is still the documented path for pages that block paste events and for engines where a future release strips the embedding.

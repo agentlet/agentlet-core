@@ -29,7 +29,7 @@ describe('records.onPaste()', () => {
     it('calls the handler with the records and the event, and takes over the paste', () => {
         const { manager, emit } = makeManager();
         const handler = jest.fn();
-        manager.onPaste(handler);
+        manager.onPaste(handler, { scope: document.body });
         const event = pasteEvent(withRecord());
         document.body.dispatchEvent(event);
         expect(handler).toHaveBeenCalledTimes(1);
@@ -42,7 +42,7 @@ describe('records.onPaste()', () => {
     it('returns an unsubscribe function that stops the handler', () => {
         const { manager } = makeManager();
         const handler = jest.fn();
-        const unsubscribe = manager.onPaste(handler);
+        const unsubscribe = manager.onPaste(handler, { scope: document.body });
         unsubscribe();
         const event = pasteEvent(withRecord());
         document.body.dispatchEvent(event);
@@ -60,7 +60,7 @@ describe('records.onPaste()', () => {
         setPage('<input id="field">');
         const { manager } = makeManager();
         const handler = jest.fn();
-        manager.onPaste(handler);
+        manager.onPaste(handler, { scope: document.body });
         const event = pasteEvent(data);
         const preventDefault = jest.spyOn(event, 'preventDefault');
         document.getElementById('field')?.dispatchEvent(event);
@@ -72,7 +72,7 @@ describe('records.onPaste()', () => {
     it('ignores a paste event that has no clipboardData', () => {
         const { manager } = makeManager();
         const handler = jest.fn();
-        manager.onPaste(handler);
+        manager.onPaste(handler, { scope: document.body });
         const event = new Event('paste', { bubbles: true, cancelable: true });
         document.body.dispatchEvent(event);
         expect(handler).not.toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe('records.onPaste()', () => {
     it('only reacts to the listed types, and leaves other pastes alone', () => {
         const { manager } = makeManager();
         const handler = jest.fn();
-        manager.onPaste(handler, { types: ['organization'] });
+        manager.onPaste(handler, { scope: document.body, types: ['organization'] });
         const other = pasteEvent(withRecord('contact'));
         document.body.dispatchEvent(other);
         expect(handler).not.toHaveBeenCalled();
@@ -91,6 +91,12 @@ describe('records.onPaste()', () => {
         document.body.dispatchEvent(match);
         expect(handler).toHaveBeenCalledTimes(1);
         expect(match.defaultPrevented).toBe(true);
+    });
+
+    it.each([undefined, {}, { scope: null }, { scope: document }, { scope: 'form' }, { scope: {} }])('throws a TypeError when scope is missing or not an element: %p', (options) => {
+        const { manager } = makeManager();
+        expect(() => manager.onPaste(jest.fn(), options as never)).toThrow(TypeError);
+        expect(() => manager.onPaste(jest.fn(), options as never)).toThrow(/scope/);
     });
 
     it('listens only inside the scope', () => {
@@ -114,7 +120,7 @@ describe('records.onPaste()', () => {
         const handler = jest.fn()
             .mockImplementationOnce(() => { throw new Error('boom'); })
             .mockImplementationOnce(() => Promise.reject(new Error('async boom')));
-        manager.onPaste(handler);
+        manager.onPaste(handler, { scope: document.body });
         document.body.dispatchEvent(pasteEvent(withRecord()));
         document.body.dispatchEvent(pasteEvent(withRecord()));
         await Promise.resolve();
@@ -128,8 +134,8 @@ describe('records.onPaste()', () => {
         const { manager } = makeManager();
         const first = jest.fn();
         const second = jest.fn();
-        manager.onPaste(first);
-        manager.onPaste(second);
+        manager.onPaste(first, { scope: document.body });
+        manager.onPaste(second, { scope: document.body });
         document.body.dispatchEvent(pasteEvent(withRecord()));
         expect(first).toHaveBeenCalledTimes(1);
         expect(second).toHaveBeenCalledTimes(1);
@@ -194,7 +200,7 @@ describe('window.agentlet.records', () => {
         core = new AgentletCore();
         await core.init();
         const handler = jest.fn();
-        window.agentlet.records.onPaste(handler);
+        window.agentlet.records.onPaste(handler, { scope: document.body });
         await core.cleanup();
         document.body.dispatchEvent(pasteEvent(withRecord()));
         expect(handler).not.toHaveBeenCalled();

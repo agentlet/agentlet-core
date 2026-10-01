@@ -701,6 +701,15 @@ window.agentlet.records.create('contact', { name: { first: 'Ada' } });
 // @ts-expect-error a field kind must be one of the listed kinds
 window.agentlet.records.defineType({ name: 'bad', fields: [{ key: 'x', kind: 'color' }] });
 
+// @ts-expect-error onPaste() needs a scope element
+window.agentlet.records.onPaste(() => undefined, { types: ['organization'] });
+
+// @ts-expect-error onPaste() needs options with a scope
+window.agentlet.records.onPaste(() => undefined);
+
+// @ts-expect-error the scope is an Element, not the document
+window.agentlet.records.onPaste(() => undefined, { scope: document });
+
 // @ts-expect-error fill() needs a target element
 window.agentlet.records.fill(recordsCreated);
 
