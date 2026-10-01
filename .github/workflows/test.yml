@@ -69,8 +69,29 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Read the Playwright version
+      id: playwright
+      run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    # Browser downloads are occasionally very slow on hosted runners, enough
+    # to push the job past timeout-minutes. The cache key changes with the
+    # Playwright version, so an upgrade downloads the matching browser once.
+    - name: Cache Playwright browser (${{ matrix.project }})
+      id: playwright-cache
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.project }}
+
     - name: Install Playwright browser (${{ matrix.project }})
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: npx playwright install --with-deps ${{ matrix.project }}
+
+    # The cache holds the browser only. Its system libraries still come from
+    # apt on every run.
+    - name: Install Playwright system dependencies (${{ matrix.project }})
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: npx playwright install-deps ${{ matrix.project }}
 
     - name: Run Playwright tests (${{ matrix.project }})
       run: npm run test:examples -- --project=${{ matrix.project }}
