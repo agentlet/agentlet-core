@@ -9,7 +9,7 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through GitHub: [open a security advisory](https://github.com/agentlet/agentlet-core/security/advisories/new). Please do not open a public issue.
+Report vulnerabilities privately, either through GitHub ([open a security advisory](https://github.com/agentlet/agentlet-core/security/advisories/new)) or by email to [security@agentlet.io](mailto:security@agentlet.io). Please do not open a public issue.
 
 You will get an acknowledgement within a few days. Fixes ship as a patch release with an entry in the changelog.
 

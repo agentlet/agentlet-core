@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an addition or a change to agentlet-core
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What are you trying to do with an agentlet that is hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you would like to see. API sketches are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried, or other tools that handle this.
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment mode this matters for
+      multiple: true
+      options:
+        - Bookmarklet
+        - Browser extension
+        - Embedded in the app
+        - All of them

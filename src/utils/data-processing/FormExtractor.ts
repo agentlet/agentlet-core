@@ -24,8 +24,7 @@ type FormMetadata = FormExtractionResult['metadata'];
  * runtime duck typing rather than narrowing per tag - e.g. reading
  * `.checked` on a `<select>`, which is simply `undefined` at runtime and
  * harmless because every read here is gated by a `getElementType()` check
- * or a falsy-fallback (`|| false`, `? ... : []`, etc), exactly as the
- * original `.js` relied on.
+ * or a falsy-fallback (`|| false`, `? ... : []`, etc).
  *
  * Members present on ALL of `HTMLInputElement`/`HTMLSelectElement`/
  * `HTMLTextAreaElement`/`HTMLButtonElement` stay required; the rest -

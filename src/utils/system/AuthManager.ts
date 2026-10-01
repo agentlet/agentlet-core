@@ -226,7 +226,7 @@ class AuthManager implements AuthManagerAPI {
     handleAuthMessage(data: unknown): void {
         // Expected message format: { type: 'auth_result', success: true/false, token?: string, error?: string }
         if (data && typeof data === 'object') {
-            // Dynamic shape posted by the popup, same as the original untyped JS.
+            // Dynamic shape posted by the popup.
             const message = data as { type?: string; success?: boolean; token?: string; error?: string };
             if (message.type === 'auth_result') {
                 if (message.success && message.token) {
@@ -286,7 +286,7 @@ class AuthManager implements AuthManagerAPI {
 
         // Store user info from authentication result
         // `user_info`/`userInfo` is whatever shape the popup or custom
-        // messageHandler sent - dynamic by design, same as the original.
+        // messageHandler sent - dynamic by design.
         this.authenticatedUser = (additionalData.user_info ?? additionalData.userInfo ?? null) as Record<string, unknown> | null;
 
         // Update button to show user info
@@ -458,7 +458,7 @@ class AuthManager implements AuthManagerAPI {
         if (!userInfo) return 'U';
 
         // `name`/`username` are whatever shape the IDP or custom auth flow
-        // sent - dynamic by design, same as the original untyped JS.
+        // sent - dynamic by design.
         if (userInfo.name) {
             const nameParts = (userInfo.name as string).trim().split(/\s+/);
             if (nameParts.length >= 2) {

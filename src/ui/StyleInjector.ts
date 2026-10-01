@@ -19,10 +19,9 @@ export type StyleInjectorRoot = ShadowRoot | HTMLElement | null;
  * `root` narrowed with the optional `adoptedStyleSheets` API, which only
  * `ShadowRoot`/`Document` declare in lib.dom.d.ts (not `HTMLElement`, the
  * other member of {@link StyleInjectorRoot}). Accessed through a runtime
- * `typeof root.adoptedStyleSheets !== 'undefined'` duck-type check exactly
- * like the pre-conversion JS - real browsers, jsdom (no support), and the
- * plain-object test doubles in tests/ui/StyleInjector.test.js all flow
- * through the same check.
+ * `typeof root.adoptedStyleSheets !== 'undefined'` duck-type check, so real
+ * browsers, jsdom (no support) and the plain-object test doubles in
+ * tests/ui/StyleInjector.test.js all flow through the same check.
  */
 type AdoptedStyleSheetsRoot = (ShadowRoot | HTMLElement) & { adoptedStyleSheets?: CSSStyleSheet[] };
 

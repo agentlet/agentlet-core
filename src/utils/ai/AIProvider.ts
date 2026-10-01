@@ -255,9 +255,8 @@ export class OpenAIProvider extends BaseAIProvider {
 
         for (let attempt = 1; attempt <= this.options.maxRetries; attempt++) {
             try {
-                // `timeout` is not a real `fetch()` RequestInit option; it is carried
-                // over unused from the original implementation (fetch never applied
-                // any timeout here) rather than "fixed" as part of this conversion.
+                // `timeout` is not a real `fetch()` RequestInit option, so no
+                // timeout is applied to the request.
                 const response = await fetch(url, requestOptions as unknown as RequestInit);
 
                 if (!response.ok) {

@@ -62,8 +62,8 @@ coverage/
 .nyc_output
 
 # Dependency vulnerability scan output (esbuild metafiles, generated SBOM,
-# osv-scanner reports) - regenerated on demand by `npm run security:sbom`
-# and `npm run security:scan`, never committed or published.
+# osv-scanner reports) - regenerated on demand by `npm run build` and the
+# shared dependency-scan tooling, never committed or published.
 reports/
 
 # Cache directories

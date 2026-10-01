@@ -43,6 +43,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public types for all of the above, and the
   `data-processing/records-copy-paste` example.
 
+### Changed
+
+- The dependency vulnerability scan now uses the shared `dependency-scan` and
+  `sbom-from-esbuild` actions from `agentlet/.github` instead of an in-repo
+  copy (`tools/security/`, `npm run security:sbom`, `npm run security:scan`).
+  The SBOM, the gate rule, the exceptions file and the code scanning
+  category are unchanged.
+
+### Documentation
+
+- The README now opens with what agentlet-core does, has a Quick start that
+  works from npm or a CDN bookmarklet without cloning the repository, and
+  compares agentlet with userscripts, hand-written extensions and RPA.
+- The README states the measured bundle size: `dist/agentlet-core.min.js` is
+  1.30 MB minified and 378 KB gzipped, and `dist/pdf.worker.min.mjs` is a
+  separate 1.04 MB file. The earlier "about 1.4 MB compressed" figure was
+  wrong.
+- CONTRIBUTING.md no longer says the codebase is migrating to TypeScript or
+  that modules are sandboxed, and no longer mentions a module registry. There
+  is no public registry, and modules run with the host page's privileges.
+- `.github/WORKFLOWS.md` describes the workflows that exist (`test.yml`,
+  `security.yml`, `release.yml`).
+
 ### Removed
 
 - The experimental extension's "Analyze with AI" context menu, which

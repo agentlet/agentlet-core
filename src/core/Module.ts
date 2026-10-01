@@ -125,7 +125,7 @@ class Module {
      * the substring semantics (e.g. `'localhost:*' + '/admin'` matches
      * `'http://localhost:3000/admin'`). Every other regex-special character
      * in a glob pattern is escaped and matched literally. A string with no
-     * `*` at all keeps the original substring behavior exactly.
+     * `*` at all matches by plain substring.
      *
      * Object patterns (`{ type: 'includes' | 'exact' | 'regex', value }`)
      * are unaffected by any of this.
@@ -344,8 +344,8 @@ class Module {
      * core calls the internal `_beforeMount()`/`_afterUnmount()` steps around
      * `mount()`/`unmount()`), so an override can rely on `this.mounted` to
      * decide whether to update an already-mounted root in place instead of
-     * re-rendering. The default implementation keeps today's `getContent()`
-     * based rendering working unchanged for every existing agentlet.
+     * re-rendering. The default implementation renders `getContent()`, so
+     * modules that only define `getContent()` need no `mount()`.
      */
     async mount(container: HTMLElement, context: ModuleMountContext): Promise<void> {
         this._beforeMount(container, context);
@@ -485,9 +485,9 @@ class Module {
 
     // Utility methods
     //
-    // Unlike the informational console.log calls converted to logger.log()
+    // Unlike the informational console.log calls that go through logger.log()
     // elsewhere in this codebase (see src/utils/system/Logger.ts), log()
-    // here is left calling console.log directly, same as error()/warn()
+    // here calls console.log directly, same as error()/warn()
     // right below it: this is a public convenience API for AGENTLET
     // AUTHORS to log their own module's messages (this.log(...) inside
     // their own module code), not internal framework chatter - gating it

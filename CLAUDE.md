@@ -5,7 +5,7 @@ Reference documentation for building agentlets on top of this library lives at [
 ## Project overview
 **Agentlet** is a JavaScript bookmarklet framework that offers a modular foundation for building intelligent web automation tools powered by AI. It enables you to enhance and modernize your web applications in a powerful and unconventional way. The framework features a plugin-based architecture, advanced form handling, authentication management, screenshot utilities, and everything you need to quickly implement AI-powered tools via bookmarklets. Agentlet can also be embedded as a browser extension, offering a more robust alternative to the basic bookmarklet setup when your technical environment allows it.
 
-Inspired by the concepts of applets and bookmarklets, these lightweight AI tools are referred to as **agentlets**.
+Inspired by the concepts of applets and bookmarklets, these small AI tools are referred to as **agentlets**.
 
 The agentlet ecosystem includes a core framework, a collection of example implementations, and [`agentlet-designer`](https://github.com/agentlet/agentlet-designer), which generates custom agentlets from a live page: a Claude Code skill today, an in-page designer agentlet later.
 
