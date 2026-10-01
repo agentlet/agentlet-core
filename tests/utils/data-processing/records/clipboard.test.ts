@@ -1,15 +1,16 @@
 /**
  * Tests for the clipboard transport through `records.copy()`, `read()` and
  * `fromPasteEvent()`, with a mocked clipboard: the formats written, the
- * fallback when the custom format is rejected, the size limit and the
+ * fallback when the custom format is rejected, the copy event fallback when
+ * the clipboard API refuses or is missing, the size limit and the
  * sensitive-data rule on copy.
  */
 import type { AgentletRecord } from '../../../../src/types/public-api';
 import { MAX_RECORD_BYTES } from '../../../../src/utils/data-processing/records/envelope.js';
 import { toBase64Url } from '../../../../src/utils/data-processing/records/text.js';
 import {
-    FakeClipboardItem, fieldsRecord, installClipboard, installRealDom, makeManager, pasteEvent, removeClipboard,
-    uninstallLayout, writtenFormats, type FakeClipboard
+    FakeClipboardItem, fieldsRecord, installClipboard, installExecCommand, installRealDom, makeManager, pasteEvent, removeClipboard,
+    uninstallLayout, writtenFormats, type FakeClipboard, type FakeExecCommand
 } from './helpers.js';
 
 const CUSTOM = 'web application/vnd.agentlet.record+json';
@@ -19,7 +20,12 @@ afterAll(uninstallLayout);
 
 let clipboard: FakeClipboard;
 beforeEach(() => { clipboard = installClipboard(); });
-afterEach(() => { removeClipboard(); });
+let execCommand: FakeExecCommand | null = null;
+afterEach(() => {
+    removeClipboard();
+    execCommand?.restore();
+    execCommand = null;
+});
 
 function organization(): AgentletRecord {
     const { manager } = makeManager();
@@ -42,6 +48,7 @@ describe('records.copy()', () => {
         expect(clipboard.write.mock.calls[0][0]).toHaveLength(1);
         expect(result.formats).toEqual([CUSTOM, 'text/html', 'text/plain']);
         expect(result.customFormat).toBe(true);
+        expect(result.method).toBe('clipboard-api');
         expect(result.records).toBe(1);
         expect(result.bytes).toBeGreaterThan(50);
 
@@ -144,23 +151,181 @@ describe('records.copy()', () => {
         it('rejects when the write without the custom format fails too', async () => {
             clipboard.write.mockRejectedValue(new Error('denied'));
             const { manager, emit } = makeManager();
-            await expect(manager.copy(organization())).rejects.toThrow('denied');
+            await expect(manager.copy(organization())).rejects.toThrow(/blocked by the browser.*denied/);
             expect(emit).not.toHaveBeenCalled();
         });
     });
 
-    it('falls back to plain text when there is no ClipboardItem', async () => {
-        installClipboard({ withItem: false });
-        const { manager } = makeManager();
-        const result = await manager.copy(organization());
-        expect(result.formats).toEqual(['text/plain']);
-        expect(result.customFormat).toBe(false);
-    });
+    describe('when the clipboard API refuses or is missing', () => {
+        const denied = () => new DOMException('Write permission denied.', 'NotAllowedError');
 
-    it('rejects when the clipboard is not available', async () => {
-        removeClipboard();
-        const { manager } = makeManager();
-        await expect(manager.copy(organization())).rejects.toThrow(/not available/);
+        it('falls back to a copy event when clipboard.write rejects, even without the custom format', async () => {
+            execCommand = installExecCommand();
+            clipboard.write.mockRejectedValue(denied());
+            const { manager, emit } = makeManager();
+            const result = await manager.copy(organization());
+
+            expect(clipboard.write).toHaveBeenCalledTimes(2);
+            expect(execCommand.exec).toHaveBeenCalledWith('copy');
+            expect(execCommand.events.count).toBe(1);
+            expect(execCommand.events.defaultPrevented).toBe(true);
+            expect(result.method).toBe('copy-event');
+            expect(result.formats).toEqual(['text/html', 'text/plain']);
+            expect(result.customFormat).toBe(false);
+            expect(result.records).toBe(1);
+            expect(result.bytes).toBeGreaterThan(50);
+            expect(emit).toHaveBeenCalledWith('records:copied', expect.objectContaining({ type: 'organization' }));
+        });
+
+        it('falls back when only the custom format attempt and the retry both reject', async () => {
+            execCommand = installExecCommand();
+            clipboard.write
+                .mockRejectedValueOnce(new DOMException('type not supported', 'NotAllowedError'))
+                .mockRejectedValueOnce(denied());
+            const { manager } = makeManager();
+            const result = await manager.copy(organization());
+            expect(clipboard.write).toHaveBeenCalledTimes(2);
+            expect(result.method).toBe('copy-event');
+        });
+
+        it('uses the copy event without touching the API when navigator.clipboard is missing', async () => {
+            removeClipboard();
+            execCommand = installExecCommand();
+            const { manager } = makeManager();
+            const result = await manager.copy(organization());
+            expect(result.method).toBe('copy-event');
+            expect(execCommand.events.count).toBe(1);
+        });
+
+        it('uses the copy event first when there is no ClipboardItem', async () => {
+            installClipboard({ withItem: false });
+            execCommand = installExecCommand();
+            const { manager } = makeManager();
+            const result = await manager.copy(organization());
+            expect(result.method).toBe('copy-event');
+            expect(clipboard.write).not.toHaveBeenCalled();
+        });
+
+        it('runs the copy event before any await when the permissions policy blocks the frame', async () => {
+            execCommand = installExecCommand();
+            Object.defineProperty(document, 'permissionsPolicy', { value: { allowsFeature: (feature: string) => feature !== 'clipboard-write' }, configurable: true });
+            try {
+                const { manager } = makeManager();
+                const pending = manager.copy(organization());
+                // Synchronous: the gesture is still held, nothing was awaited.
+                expect(execCommand.exec).toHaveBeenCalledTimes(1);
+                const result = await pending;
+                expect(result.method).toBe('copy-event');
+                expect(clipboard.write).not.toHaveBeenCalled();
+            } finally {
+                delete (document as unknown as { permissionsPolicy?: unknown }).permissionsPolicy;
+            }
+        });
+
+        it('sets text/html with the record embedded and text/plain, and the record round-trips through fromPasteEvent', async () => {
+            execCommand = installExecCommand();
+            clipboard.write.mockRejectedValue(denied());
+            const { manager } = makeManager();
+            await manager.copy(organization());
+
+            expect(Object.keys(execCommand.data)).toEqual(['text/html', 'text/plain']);
+            expect(execCommand.data['text/plain']).toBe('Organization: Example SAS\nSIREN: 123456789\nPostal code: 75001');
+            expect(execCommand.data['text/html'].startsWith('<dl data-agentlet-record="')).toBe(true);
+            expect(embedded(execCommand.data['text/html'])).toMatchObject({ agentlet: 'record', type: 'organization', fields: { siren: '123456789' } });
+
+            const records = manager.fromPasteEvent(pasteEvent(execCommand.data) as ClipboardEvent);
+            expect(records).toHaveLength(1);
+            expect(records?.[0]).toMatchObject({ type: 'organization', fields: { organization: 'Example SAS', siren: '123456789', 'postal-code': '75001' } });
+        });
+
+        it('writes a list through the copy event as a table with the list embedded', async () => {
+            execCommand = installExecCommand();
+            removeClipboard();
+            const { manager } = makeManager();
+            const result = await manager.copy([fieldsRecord('contact', { name: 'Ada' }), fieldsRecord('contact', { name: 'Grace' })]);
+            expect(result.records).toBe(2);
+            expect(execCommand.data['text/html']).toMatch(/^<table data-agentlet-record="/);
+            expect(manager.fromPasteEvent(pasteEvent(execCommand.data) as ClipboardEvent)).toHaveLength(2);
+        });
+
+        it('rejects with a clear error naming both attempts when execCommand returns false', async () => {
+            execCommand = installExecCommand({ result: false });
+            clipboard.write.mockRejectedValue(denied());
+            const { manager, emit } = makeManager();
+            const error = await manager.copy(organization()).catch((caught: Error) => caught);
+            expect(error).toBeInstanceOf(Error);
+            const message = (error as Error).message;
+            expect(message).toMatch(/blocked by the browser/);
+            expect(message).toContain('navigator.clipboard.write() failed (Write permission denied.)');
+            expect(message).toContain('copy event fallback failed (execCommand("copy") returned false)');
+            expect(emit).not.toHaveBeenCalled();
+        });
+
+        it('rejects when the copy event never fires or has no clipboardData', async () => {
+            clipboard.write.mockRejectedValue(denied());
+            execCommand = installExecCommand({ fireEvent: false });
+            await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*did not fire/);
+            execCommand.restore();
+            execCommand = installExecCommand({ noClipboardData: true });
+            await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*no clipboardData/);
+        });
+
+        it('rejects when execCommand throws, and when it does not exist', async () => {
+            clipboard.write.mockRejectedValue(denied());
+            execCommand = installExecCommand();
+            execCommand.exec.mockImplementation(() => { throw new Error('SecurityError'); });
+            await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*SecurityError/);
+            execCommand.restore();
+            execCommand = null;
+            Object.defineProperty(document, 'execCommand', { value: undefined, configurable: true, writable: true });
+            await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*execCommand is not available/);
+        });
+
+        it('names the missing clipboard and the failed fallback when neither path works', async () => {
+            removeClipboard();
+            const { manager } = makeManager();
+            await expect(manager.copy(organization())).rejects.toThrow(/blocked by the browser.*navigator\.clipboard is not available.*copy event fallback failed/);
+        });
+
+        it('removes the copy listener in every case', async () => {
+            const addSpy = jest.spyOn(document, 'addEventListener');
+            const removeSpy = jest.spyOn(document, 'removeEventListener');
+            const copyCalls = (spy: jest.SpyInstance) => spy.mock.calls.filter(call => call[0] === 'copy');
+            try {
+                const attempt = async (setup: () => void) => {
+                    addSpy.mockClear();
+                    removeSpy.mockClear();
+                    setup();
+                    await makeManager().manager.copy(organization()).catch(() => undefined);
+                    expect(copyCalls(addSpy)).toHaveLength(1);
+                    expect(copyCalls(addSpy)[0][2]).toBe(true);
+                    expect(copyCalls(removeSpy)).toHaveLength(1);
+                    expect(copyCalls(removeSpy)[0][1]).toBe(copyCalls(addSpy)[0][1]);
+                    expect(copyCalls(removeSpy)[0][2]).toBe(true);
+                    execCommand?.restore();
+                };
+                clipboard.write.mockRejectedValue(denied());
+                await attempt(() => { execCommand = installExecCommand(); });
+                await attempt(() => { execCommand = installExecCommand({ result: false }); });
+                await attempt(() => { execCommand = installExecCommand({ fireEvent: false }); });
+                await attempt(() => {
+                    execCommand = installExecCommand();
+                    execCommand.exec.mockImplementation(() => { throw new Error('boom'); });
+                });
+                await attempt(() => { removeClipboard(); execCommand = installExecCommand(); });
+            } finally {
+                addSpy.mockRestore();
+                removeSpy.mockRestore();
+            }
+        });
+
+        it('does not use the fallback when the API write succeeds', async () => {
+            execCommand = installExecCommand();
+            const { manager } = makeManager();
+            const result = await manager.copy(organization());
+            expect(result.method).toBe('clipboard-api');
+            expect(execCommand.exec).not.toHaveBeenCalled();
+        });
     });
 
     describe('size limit', () => {

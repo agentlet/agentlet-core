@@ -29,6 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires a `scope` element, usually the target form, and throws a
   `TypeError` without it. A paste without a record is never intercepted. `pasteFromClipboard()` reads the clipboard
   from a click, for pages that block paste events.
+- `copy()` falls back to a `copy` event with `text/html` (record embedded)
+  and `text/plain` when `navigator.clipboard.write()` is missing or refused,
+  as in webviews, iframes without the `clipboard-write` permissions policy
+  and locked-down browsers. It needs no clipboard permission, only a user
+  gesture, and smart paste keeps working. `RecordCopyResult.method` reports
+  `'clipboard-api'` or `'copy-event'`. If both paths fail, `copy()` rejects
+  with an error that says copying was blocked by the browser and names both
+  attempts.
 - Filling: `match()` maps record fields to a target form by remembered
   mapping, `autocomplete`, `name` or `id`, label and input type, with a veto
   for a value a field cannot take. `fill()` shows a preview dialog, then

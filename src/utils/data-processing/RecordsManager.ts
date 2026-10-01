@@ -217,7 +217,7 @@ class RecordsManager implements RecordsManagerAPI {
 
         const outcome = await this.transport.write(payload);
         this.emitEvent('records:copied', items);
-        return { formats: outcome.formats, customFormat: outcome.customFormat, records: items.length, bytes: outcome.bytes };
+        return { formats: outcome.formats, customFormat: outcome.customFormat, records: items.length, bytes: outcome.bytes, method: outcome.method };
     }
 
     async read(): Promise<AgentletRecord[] | null> {

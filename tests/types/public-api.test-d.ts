@@ -624,8 +624,10 @@ const recordsCopied = window.agentlet.records.copy([recordsCreated]);
 void recordsCopied.then(result => {
     const formats: string[] = result.formats;
     const customFormat: boolean = result.customFormat;
+    const method: 'clipboard-api' | 'copy-event' = result.method;
     void formats;
     void customFormat;
+    void method;
 });
 void window.agentlet.records.read().then((records: AgentletRecord[] | null) => records);
 const recordsUnsubscribe: () => void = window.agentlet.records.onPaste((records, event) => {

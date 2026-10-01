@@ -125,6 +125,52 @@ export function removeClipboard(): void {
     (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = undefined;
 }
 
+export interface FakeExecCommand {
+    /** The `document.execCommand` mock. */
+    exec: jest.Mock<boolean, [string]>;
+    /** What the `copy` event listeners set through `clipboardData.setData`. */
+    data: Record<string, string>;
+    /** Number of `copy` events dispatched. */
+    events: { count: number; defaultPrevented: boolean };
+    restore(): void;
+}
+
+/**
+ * Installs a `document.execCommand('copy')` that dispatches a cancelable
+ * `copy` event whose `clipboardData` records `setData` calls, as a browser
+ * does (jsdom has no `execCommand`). `result` is what it returns;
+ * `fireEvent: false` simulates a browser that returns true without firing it.
+ */
+export function installExecCommand(options: { result?: boolean; fireEvent?: boolean; noClipboardData?: boolean } = {}): FakeExecCommand {
+    const { result = true, fireEvent = true, noClipboardData = false } = options;
+    const data: Record<string, string> = {};
+    const events = { count: 0, defaultPrevented: false };
+    const original = (document as unknown as { execCommand?: unknown }).execCommand;
+    const exec = jest.fn<boolean, [string]>((command: string) => {
+        if (command === 'copy' && fireEvent) {
+            const event = new Event('copy', { bubbles: true, cancelable: true });
+            if (!noClipboardData) {
+                Object.defineProperty(event, 'clipboardData', {
+                    value: { setData: (type: string, value: string) => { data[type] = value; } }
+                });
+            }
+            events.count += 1;
+            document.body.dispatchEvent(event);
+            events.defaultPrevented = event.defaultPrevented;
+        }
+        return result;
+    });
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true, writable: true });
+    return {
+        exec,
+        data,
+        events,
+        restore: () => {
+            Object.defineProperty(document, 'execCommand', { value: original, configurable: true, writable: true });
+        }
+    };
+}
+
 /** A `paste` event whose `clipboardData` serves `data` (type to content). */
 export function pasteEvent(data: Record<string, string>, throwOn: string[] = []): Event {
     const event = new Event('paste', { bubbles: true, cancelable: true });
