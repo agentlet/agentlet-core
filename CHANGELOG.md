@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `window.agentlet.records`: structured copy and paste between web apps, as
+  designed in `docs/rfcs/0001-records-api.md`. A record is a small versioned
+  JSON envelope (type, typed fields, labels, source). It is data only: no
+  selector or code is ever taken from it.
+- Building records: `create()`, `fromForm()`, `fromTable()`, `fromElement()`
+  (a table, a form, a `dl`, or label and value pairs) and `pick()`, which
+  uses the element selector. `validate()` checks any value against the
+  envelope, rejects an unknown major version, ignores unknown top-level keys
+  and enforces a 1 MB limit.
+- Record types: `defineType()`, `getType()` and `listTypes()`, with the
+  built-in types `table`, `fields`, `contact`, `address` and `organization`
+  on the HTML `autocomplete` vocabulary, with English and French synonyms.
+- Clipboard transport: `copy()` writes the custom `web application/...`
+  format, `text/html` with the record embedded in `data-agentlet-record`,
+  and `text/plain` (a table, a list or `Label: value` lines). It retries
+  without the custom format where the browser rejects it, as Firefox does.
+  `read()`, `fromPasteEvent()` and `onPaste()` read it back. `onPaste()`
+  requires a `scope` element, usually the target form, and throws a
+  `TypeError` without it. A paste without a record is never intercepted. `pasteFromClipboard()` reads the clipboard
+  from a click, for pages that block paste events.
+- Filling: `match()` maps record fields to a target form by remembered
+  mapping, `autocomplete`, `name` or `id`, label and input type, with a veto
+  for a value a field cannot take. `fill()` shows a preview dialog, then
+  fills through `forms.fill()`. It never submits the form. Corrections made
+  in the preview are remembered per record type and form, on the target
+  origin, with `storage.local`.
+- Password, `one-time-code` and `cc-*` fields are never copied and never
+  filled. `copy()` accepts `redact` to drop more keys. The clipboard can be
+  read by other applications: never copy secrets.
+- The events `records:copied`, `records:pasted` and `records:filled` carry
+  the record type, counts and the source origin, never values.
+- Public types for all of the above, and the
+  `data-processing/records-copy-paste` example.
+
+### Removed
+
+- The experimental extension's "Analyze with AI" context menu, which
+  showed a canned word count and keyword sentiment instead of an AI
+  answer, and inserted the selected text into the dialog as HTML. Its AI
+  assistant now calls `window.agentlet.ai`, and its welcome page no
+  longer claims features it does not have.
+
 ### Security
 
 - Form extraction (`forms.extract()`, `exportForAI()`, `quickExport()`)
@@ -23,14 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where API keys live, how to proxy the provider key, and what data leaves
   the page. Vulnerabilities are reported through GitHub security
   advisories, as the previous email address did not receive mail.
-
-### Removed
-
-- The experimental extension's "Analyze with AI" context menu, which
-  showed a canned word count and keyword sentiment instead of an AI
-  answer, and inserted the selected text into the dialog as HTML. Its AI
-  assistant now calls `window.agentlet.ai`, and its welcome page no
-  longer claims features it does not have.
 
 ## [2.2.0] - 2026-10-01
 

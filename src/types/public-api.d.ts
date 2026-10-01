@@ -1340,6 +1340,268 @@ export interface TablesAPI {
 }
 
 /* ------------------------------------------------------------------ */
+/* Records (window.agentlet.records)                                  */
+/* ------------------------------------------------------------------ */
+
+/** A field value in a record. Nested data is not part of version 1; a list goes in a `table` record. */
+export type RecordValue = string | number | boolean | null;
+
+/** Used for validation and normalization when a record is filled into a form. */
+export type RecordFieldKind = 'text' | 'number' | 'date' | 'boolean' | 'email' | 'tel' | 'url';
+
+export interface RecordFieldDefinition {
+    /**
+     * Field key. Use an HTML `autocomplete` token (`name`, `email`,
+     * `postal-code`, ...) when one fits, otherwise a lowercase hyphenated key
+     * such as `siren` or `invoice-number`.
+     */
+    key: string;
+    /** Human label, used by the preview and the text fallbacks. */
+    label?: string;
+    /** Default `'text'`. A `date` is written into `input[type=date]` as `YYYY-MM-DD`. */
+    kind?: RecordFieldKind;
+    required?: boolean;
+    /** Extra label texts the matcher accepts for this key (English, French, ...). */
+    synonyms?: string[];
+}
+
+export interface RecordTypeDefinition {
+    /** Lowercase letters, digits and hyphens, for example `invoice`. */
+    name: string;
+    label?: string;
+    fields: RecordFieldDefinition[];
+}
+
+/**
+ * Set by the API from the current page, never by the caller. On a record
+ * that was read from the clipboard it is only what the copying page claimed:
+ * anyone can write any value there, so treat it as a hint shown to the user,
+ * not as proof of origin.
+ */
+export interface RecordSource {
+    url: string;
+    origin: string;
+    title: string;
+    /** ISO 8601 timestamp. Refreshed by `copy()`. */
+    copiedAt: string;
+}
+
+interface RecordEnvelopeBase {
+    agentlet: 'record';
+    /** Readers reject an unknown major version and ignore unknown top-level keys. */
+    version: 1;
+    /** Human labels for keys that are not self-explanatory. */
+    labels?: Record<string, string>;
+    source?: RecordSource;
+}
+
+/**
+ * A flat set of typed fields. A record is data only: nothing in it is ever
+ * evaluated, and no selector is ever taken from it. Target selectors are
+ * computed on the target page.
+ */
+export interface FieldsRecord extends RecordEnvelopeBase {
+    type: string;
+    fields: Record<string, RecordValue>;
+}
+
+/** A table: `columns` plus `rows`. Its `type` is always `'table'`. */
+export interface TableRecord extends RecordEnvelopeBase {
+    type: 'table';
+    columns: string[];
+    rows: RecordValue[][];
+}
+
+/** Tell the two shapes apart with `'columns' in record`. */
+export type AgentletRecord = FieldsRecord | TableRecord;
+
+export interface RecordCreateOptions {
+    /** Human labels for keys that are not self-explanatory. */
+    labels?: Record<string, string>;
+}
+
+export interface RecordFromFormOptions {
+    /** Record type. Default `'fields'`. */
+    type?: string;
+    /** Keep fields whose value is empty. Default `false`. */
+    includeEmpty?: boolean;
+    /** Keys to drop in addition to the sensitive ones. */
+    redact?: string[];
+}
+
+export type RecordFromTableOptions = TableExtractionOptions;
+
+export interface RecordFromElementOptions extends RecordFromFormOptions {
+    /** Options forwarded to `tables.extract()` when the element is a table. */
+    table?: TableExtractionOptions;
+}
+
+export interface RecordPickOptions extends RecordFromElementOptions {
+    /** Overlay instruction text. */
+    message?: string;
+    /** Restricts which elements can be picked, e.g. `'table, dl'`. */
+    selector?: string;
+}
+
+export interface RecordCopyOptions {
+    /** Keys to drop in addition to the sensitive ones. */
+    redact?: string[];
+}
+
+export interface RecordCopyResult {
+    /** The clipboard types written, for example `['web application/vnd.agentlet.record+json', 'text/html', 'text/plain']`. */
+    formats: string[];
+    /**
+     * Whether the custom format was written. `false` where the browser
+     * rejects it (Firefox does today): the record then travels in the
+     * `data-agentlet-record` attribute of the HTML.
+     */
+    customFormat: boolean;
+    /** Number of records written. */
+    records: number;
+    /** Size of the serialized envelope, in bytes. */
+    bytes: number;
+}
+
+export interface RecordOnPasteOptions {
+    /** Only react to records of these types. */
+    types?: string[];
+    /**
+     * Where to listen, required: typically the target form. A paste outside
+     * it is never touched. A paste without a record is never intercepted, and
+     * `preventDefault()` is only called on a paste inside the scope that
+     * carries a record the handler receives. Throws a `TypeError` if it is
+     * not an `Element`.
+     */
+    scope: Element;
+}
+
+export interface RecordMatchOptions {
+    /** Entries below this confidence go to `unmatchedKeys`. Default `0.6`. */
+    minConfidence?: number;
+    /** Apply the mappings remembered for this record type and form. Default `true`. */
+    remember?: boolean;
+}
+
+export type RecordMatchReason = 'remembered' | 'autocomplete' | 'name' | 'label' | 'type' | 'manual';
+
+export interface RecordFieldMappingEntry {
+    /** Record field key. */
+    key: string;
+    /** Computed on the target page, never taken from the record. */
+    selector: string;
+    /** 0 to 1. */
+    confidence: number;
+    reason: RecordMatchReason;
+}
+
+export interface RecordFieldMapping {
+    target: Element;
+    entries: RecordFieldMappingEntry[];
+    /** Record fields with no target field. */
+    unmatchedKeys: string[];
+    /** Target selectors with no record field. */
+    unmatchedFields: string[];
+}
+
+export interface RecordFillOptions {
+    /** Show the preview dialog before filling. Default `true`. */
+    preview?: boolean;
+    /** Default `0.6`. Below it, the field is left for the user in the preview, and skipped when `preview` is `false`. */
+    minConfidence?: number;
+    /** Read and write the mapping memory. Default `true`. */
+    remember?: boolean;
+    /** Forwarded to `forms.fill()`. */
+    fill?: FormFillOptions;
+}
+
+export interface RecordFillResult extends FormFillResult {
+    mapping: RecordFieldMapping;
+    /** `false` if the user cancelled the preview. */
+    confirmed: boolean;
+}
+
+export interface RecordPasteFromClipboardOptions extends RecordFillOptions {
+    /** Only use a record of one of these types. */
+    types?: string[];
+}
+
+export type RecordValidationResult =
+    | { valid: true; record: AgentletRecord }
+    | { valid: false; errors: string[] };
+
+/**
+ * Payload of `records:copied`, `records:pasted` and `records:filled` on
+ * `window.agentlet.eventBus`. It never carries field values.
+ */
+export interface RecordEventPayload {
+    type: string;
+    /** Number of fields (columns for a table), summed over `itemCount` records. For `records:filled`, the number of fields written. */
+    fieldCount: number;
+    itemCount: number;
+    /** Origin the record says it came from, or `null`. */
+    sourceOrigin: string | null;
+}
+
+/**
+ * Structured copy and paste between web apps: `window.agentlet.records`.
+ *
+ * Clipboard behaviour measured by the spike in `docs/rfcs/0001-records-api.md`:
+ * the record travels in the `data-agentlet-record` attribute of the
+ * `text/html` format, which survived a `paste` event and `clipboard.read()`
+ * in Chromium, Firefox and WebKit. The custom `web application/...` format is
+ * written where the browser accepts it (Chromium, and WebKit in the tested
+ * build), is rejected on write by Firefox, and is only readable through
+ * `read()`, never on a `paste` event. `clipboard.read()` in WebKit was not
+ * verified. Another application may strip the attribute when it re-serializes
+ * the HTML; then there is no record, only a table or text. The clipboard is
+ * readable by any other application: never copy secrets.
+ */
+export interface RecordsAPI {
+    defineType(definition: RecordTypeDefinition): void;
+    getType(name: string): RecordTypeDefinition | null;
+    listTypes(): RecordTypeDefinition[];
+
+    create(type: string, fields: Record<string, RecordValue>, options?: RecordCreateOptions): FieldsRecord;
+    /** Uses `forms.quickExport()`. Password, `one-time-code` and `cc-*` fields are never read. */
+    fromForm(element: Element, options?: RecordFromFormOptions): FieldsRecord;
+    /** Uses `tables.extract()`. */
+    fromTable(table: HTMLTableElement, options?: RecordFromTableOptions): TableRecord;
+    /** A table gives a table record. A form, a `dl` or label and value pairs give a fields record. `null` when nothing fits. */
+    fromElement(element: Element, options?: RecordFromElementOptions): AgentletRecord | null;
+    /** Click-to-select with `ElementSelector`, then `fromElement()`. Resolves `null` on Escape or when nothing fits. */
+    pick(options?: RecordPickOptions): Promise<AgentletRecord | null>;
+
+    /** Writes `text/html`, `text/plain` and, where accepted, the custom format. Throws above 1 MB. */
+    copy(record: AgentletRecord | AgentletRecord[], options?: RecordCopyOptions): Promise<RecordCopyResult>;
+    /** `navigator.clipboard.read()`. Needs a user gesture. `null` when the clipboard holds no record. */
+    read(): Promise<AgentletRecord[] | null>;
+    fromPasteEvent(event: ClipboardEvent): AgentletRecord[] | null;
+    /** Returns an unsubscribe function. */
+    onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options: RecordOnPasteOptions): () => void;
+    /**
+     * Fallback for pages that block paste events: `read()`, then `fill()` with
+     * the first record whose type is allowed. Call it from a click. Resolves
+     * `null` when the clipboard holds no matching record.
+     */
+    pasteFromClipboard(target: Element, options?: RecordPasteFromClipboardOptions): Promise<RecordFillResult | null>;
+
+    match(record: AgentletRecord, target: Element, options?: RecordMatchOptions): RecordFieldMapping;
+    /** Match, then a preview dialog unless `options.preview === false`, then `forms.fill()`. Never submits the form. */
+    fill(record: AgentletRecord, target: Element, options?: RecordFillOptions): Promise<RecordFillResult>;
+
+    validate(value: unknown): RecordValidationResult;
+}
+
+/** The `RecordsManager` class surface, exposed as `window.agentlet.recordsManager`. */
+export interface RecordsManagerAPI extends RecordsAPI {
+    /** Builds the fixed-shape {@link RecordsAPI} object exposed as `window.agentlet.records`. */
+    createProxy(): RecordsAPI;
+    /** Removes every `onPaste` listener. */
+    cleanup(): void;
+}
+
+/* ------------------------------------------------------------------ */
 /* AI (window.agentlet.ai)                                            */
 /* ------------------------------------------------------------------ */
 
@@ -2021,6 +2283,7 @@ export interface AgentletAPI {
     formExtractor: FormExtractorAPI;
     formFiller: FormFillerAPI;
     tableExtractor: TableExtractorAPI;
+    recordsManager: RecordsManagerAPI;
     aiManager: AIManagerAPI;
     /** `null` when no shortcut manager could be created. */
     shortcutManager: ShortcutManagerAPI | null;
@@ -2104,6 +2367,7 @@ export interface AgentletAPI {
     auth: AuthAPI;
     forms: FormsAPI;
     tables: TablesAPI;
+    records: RecordsAPI;
     ai: AIAPI;
     configurePDFWorker(workerUrl: string): void;
     modules: ModulesAPI;
