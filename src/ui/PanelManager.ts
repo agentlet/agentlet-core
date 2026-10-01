@@ -14,14 +14,14 @@ import { logger } from '../utils/system/Logger.js';
  * on the public, agentlet-author-facing `UIManagerInternalAPI`
  * (`window.agentlet.uiManager`) declared there. `uiManager` is typed as a
  * `Pick` from the real `UIManager` class (rather than a hand-written shape)
- * so that any future read of a member `UIManager` doesn't actually have
- * fails `npm run typecheck` instead of silently resolving to `undefined` at
- * runtime, the way `uiManager.isMinimized` used to (minimized state lives
- * only on `AgentletCore.isMinimized`, read below as `this.core.isMinimized`;
- * see `UIManager`'s constructor comment). `envManager` is also narrowed to
+ * so that a read of a member `UIManager` doesn't actually have fails
+ * `npm run typecheck` instead of silently resolving to `undefined` at
+ * runtime (for example `uiManager.isMinimized`: minimized state lives only
+ * on `AgentletCore.isMinimized`, read below as `this.core.isMinimized`; see
+ * `UIManager`'s constructor comment). `envManager` is also narrowed to
  * nullable here (unlike `AgentletAPI`, which declares it non-null) since
- * `initializeEnvManager()` in `src/index.js` can genuinely return `null`,
- * and this class checks for it.
+ * `initializeEnvManager()` in `src/index.ts` can return `null`, and this
+ * class checks for it.
  */
 export interface PanelManagerCore {
     config: Omit<AgentletCoreConfig, 'minimumPanelWidth'> & {
@@ -111,8 +111,7 @@ export class PanelManager {
         document.documentElement.style.setProperty('--agentlet-panel-width', `${width}px`);
 
         // Update toggle button position if it exists
-        // `ui.query()` returns `Element | null`; cast to `HTMLElement` for `.style`, as the
-        // pre-existing runtime code already assumed.
+        // `ui.query()` returns `Element | null`; cast to `HTMLElement` for `.style`.
         const toggleButton = this.core.ui.query('#agentlet-toggle') as HTMLElement | null;
         if (toggleButton && !this.core.isMinimized) {
             toggleButton.style.right = `${width}px`;
@@ -135,8 +134,8 @@ export class PanelManager {
         const container = this.core.uiManager.ui.container;
         if (!container) {
             // `config.theme` is `string | Partial<AgentletTheme> | undefined` at the type level
-            // (see AgentletCoreConfig); this cast mirrors the pre-existing runtime code, which
-            // reads `.panelWidth` straight off whatever was passed in without narrowing first.
+            // (see AgentletCoreConfig); the cast reads `.panelWidth` straight off whatever
+            // was passed in, without narrowing first.
             return parseInt((this.core.config.theme as AgentletTheme).panelWidth) || this.core.config.minimumPanelWidth;
         }
         return container.offsetWidth;

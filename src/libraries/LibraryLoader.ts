@@ -202,11 +202,11 @@ class LibraryLoader {
                 const workerUrl = this.getLibraryUrl('pdfjs-worker') || './pdf.worker.min.mjs';
                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                 // `verbosity` is not part of pdfjs-dist's own `GlobalWorkerOptions`
-                // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`)
-                // but the pre-conversion code has always set it anyway - kept as
-                // a narrow cast rather than widening `PdfjsLibGlobal` itself
-                // (likely a no-op against modern pdfjs-dist, since nothing in the
-                // library reads `GlobalWorkerOptions.verbosity` for logging).
+                // type (its ambient `.d.ts` only declares `workerSrc`/`workerPort`),
+                // so it is set through a narrow cast rather than by widening
+                // `PdfjsLibGlobal` itself. Likely a no-op against modern
+                // pdfjs-dist, since nothing in the library reads
+                // `GlobalWorkerOptions.verbosity` for logging.
                 (pdfjsLib.GlobalWorkerOptions as { workerSrc: string; verbosity: number }).verbosity = 0;
                 logger.log('📄 PDF.js worker configured:', workerUrl);
             }

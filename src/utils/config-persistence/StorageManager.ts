@@ -21,8 +21,7 @@ type StorageChangeListener = (
 /**
  * The three native `Storage` methods this file patches for same-tab change
  * detection. Stored together in one `Map<string, StorageOriginalMethod>`
- * (keyed by `` `${storageType}_setItem` `` etc., exactly as the original
- * code did) since the arities differ; retrieval sites cast back to the
+ * (keyed by `` `${storageType}_setItem` `` etc.) since the arities differ; retrieval sites cast back to the
  * specific member they know they stored, mirroring how `ScriptInjector.ts`
  * uses narrow `as` casts around dynamic/untyped access rather than `any`.
  */

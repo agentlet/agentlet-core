@@ -29,8 +29,8 @@ interface HotkeysHandler {
  * Minimal shape of the `hotkeys-js` library this file actually uses (a
  * global exposed via `window.hotkeys`, or handed to init() once
  * LibrarySetup lazily loads it) - not the whole surface the package's own
- * bundled types describe, mirroring how other converted utilities (e.g.
- * ScreenCapture.ts's `Html2CanvasFn`) type third-party globals locally.
+ * bundled types describe, typed locally the same way other utilities (e.g.
+ * ScreenCapture.ts's `Html2CanvasFn`) type third-party globals.
  */
 interface HotkeysLike {
     (keys: string, scope: string, callback: (event: KeyboardEvent, handler: HotkeysHandler) => void): void;
@@ -100,11 +100,9 @@ function getEventTarget(event: Event): EventTarget | null {
  * Whether a target behaves like a text-editable field for the purposes of
  * `allowInInputs`.
  *
- * SELECT is deliberately excluded, matching the behavior before this
- * refactor: a <select> does not accept typed text, so a bare-letter
- * shortcut has never been blocked while one is focused (browsers already
- * use letter keys to jump to a matching option there). Keep it that way
- * unless a concrete regression shows otherwise.
+ * SELECT is deliberately excluded: a <select> does not accept typed text, so
+ * a bare-letter shortcut is not blocked while one is focused (browsers
+ * already use letter keys to jump to a matching option there).
  * @param target - The candidate target element
  */
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -112,8 +110,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
         return false;
     }
     // EventTarget doesn't expose `tagName`/`isContentEditable` itself - duck
-    // type the two members read below, exactly as the pre-conversion code
-    // accessed them without a static type.
+    // type the two members read below.
     const candidate = target as { tagName?: unknown; isContentEditable?: unknown };
     const tagName = candidate.tagName;
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || !!candidate.isContentEditable;

@@ -422,8 +422,8 @@ class Dialog implements DialogAPI {
                     firstInput.focus();
 
                     // Only <input>/<textarea> have .select(); a <select>'s
-                    // type/tagName never match below, so this mirrors the
-                    // original untyped check without calling .select() on it.
+                    // type/tagName never match below, so .select() is not
+                    // called on it.
                     if (firstInput.tagName !== 'SELECT') {
                         const textLike = firstInput as HTMLInputElement | HTMLTextAreaElement;
                         if (

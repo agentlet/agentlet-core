@@ -48,10 +48,7 @@ export class GlobalAPI {
 
         // Expose utilities
         //
-        // MessageBubble's constructor takes no parameters; passing a theme
-        // here was pre-existing dead code (silently dropped by JS at
-        // runtime even before this conversion), so it is simply dropped
-        // rather than kept as an inert argument.
+        // MessageBubble's constructor takes no parameters, so no theme is passed.
         //
         // `PageHighlighter: null` below is overwritten a few lines down
         // (PageHighlighter is constructed separately, inside a try/catch,
@@ -177,8 +174,6 @@ export class GlobalAPI {
         // Expose PDF worker configuration
         window.agentlet.configurePDFWorker = (workerUrl) => this.core.librarySetup.configurePDFWorker(workerUrl);
 
-        // jQuery removed - using native DOM methods
-
         // Expose initialization status
         window.agentlet.initialized = this.core.initialized;
 
@@ -216,8 +211,6 @@ export class GlobalAPI {
             getPanelWidth: () => this.core.panelManager.getPanelWidth(),
             setPanelWidth: (width: number) => this.core.panelManager.setPanelWidth(width)
         });
-
-        // jQuery removed - no longer needed
 
         // Expose theme for utility classes
         window.agentlet.theme = this.core.themeManager.getTheme();

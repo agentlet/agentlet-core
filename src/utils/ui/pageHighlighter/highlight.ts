@@ -152,8 +152,7 @@ export function highlight(
 /**
  * Recomputes and applies the position of a highlight's border element from
  * the target element's live bounding rect. Arrow, sticker and tooltip
- * decorations are not repositioned (this mirrors the original
- * implementation, which only ever handled the border case).
+ * decorations are not repositioned: only the border case is handled.
  */
 export function repositionHighlight(highlightControl: PageHighlighterHighlightControl): void {
     const rect = highlightControl.element.getBoundingClientRect();
