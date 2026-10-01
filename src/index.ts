@@ -19,6 +19,7 @@ import AuthManager from './utils/system/AuthManager.js';
 import FormExtractor from './utils/data-processing/FormExtractor.js';
 import FormFiller from './utils/data-processing/FormFiller.js';
 import TableExtractor from './utils/data-processing/TableExtractor.js';
+import RecordsManager from './utils/data-processing/RecordsManager.js';
 import AIManager from './utils/ai/AIProvider.js';
 // import PageHighlighter from './utils/ui/PageHighlighter.js';
 // import PDFProcessor from './utils/ai/PDFProcessor.js';
@@ -68,6 +69,7 @@ import type {
     ModuleMountTrigger,
     StorageManagerAPI,
     TableExtractorAPI,
+    RecordsManagerAPI,
     ThemeManagerAPI,
     UIAPI
 } from './types/public-api';
@@ -133,6 +135,7 @@ class AgentletCore {
     formExtractor: FormExtractorAPI;
     formFiller: FormFillerAPI;
     tableExtractor: TableExtractorAPI;
+    recordsManager: RecordsManagerAPI;
     aiManager: AIManagerAPI;
     /**
      * Typed as the concrete class (not the narrower, agentlet-author-facing
@@ -255,6 +258,18 @@ class AgentletCore {
 
         // Initialize table extractor
         this.tableExtractor = new TableExtractor(this.librarySetup);
+
+        // Initialize records manager (structured copy and paste). It reads
+        // `window.agentlet.utils` lazily: GlobalAPI creates Dialog and
+        // ElementSelector later in this constructor.
+        this.recordsManager = new RecordsManager({
+            eventBus: this.eventBus,
+            formExtractor: this.formExtractor,
+            formFiller: this.formFiller,
+            tableExtractor: this.tableExtractor,
+            storageManager: this.storageManager,
+            getUtils: () => this.utils
+        });
 
         // Initialize AI manager
         //
@@ -1247,6 +1262,11 @@ class AgentletCore {
                 this.storageManager.cleanup();
             }
 
+            // Remove every records.onPaste() listener.
+            if (this.recordsManager) {
+                this.recordsManager.cleanup();
+            }
+
             // Undo setupLocalStorageListener(): remove the cross-tab
             // `storage` listener and unsubscribe from the env manager's own
             // change notifications.
@@ -1679,7 +1699,7 @@ class AgentletCore {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-empty-object-type -- intentional, see the comment above; fields are populated by GlobalAPI.setupGlobalAccess(), called synchronously at the end of the constructor. The empty body is required here (as opposed to a `type` alias), since only an `interface` declaration merges with the `class AgentletCore` above.
 interface AgentletCore extends Pick<AgentletAPI,
     | 'Module' | 'ElementSelectorClass' | 'ScriptInjectorClass' | 'utils' | 'env' | 'cookies'
-    | 'storage' | 'auth' | 'forms' | 'tables' | 'ai' | 'configurePDFWorker' | 'modules' | 'ui'
+    | 'storage' | 'auth' | 'forms' | 'tables' | 'records' | 'ai' | 'configurePDFWorker' | 'modules' | 'ui'
     | 'theme' | 'debug'
 > {}
 
@@ -1703,5 +1723,6 @@ export { default as AuthManager } from './utils/system/AuthManager.js';
 export { default as FormExtractor } from './utils/data-processing/FormExtractor.js';
 export { default as FormFiller } from './utils/data-processing/FormFiller.js';
 export { default as TableExtractor } from './utils/data-processing/TableExtractor.js';
+export { default as RecordsManager } from './utils/data-processing/RecordsManager.js';
 export { default as PDFProcessor } from './utils/ai/PDFProcessor.js';
 export { default as ShortcutManager } from './utils/ui/ShortcutManager.js';

@@ -41,6 +41,16 @@ import type {
     FormFillerAPI,
     TableExtractorAPI,
     TablesAPI,
+    RecordsAPI,
+    RecordsManagerAPI,
+    AgentletRecord,
+    FieldsRecord,
+    TableRecord,
+    RecordTypeDefinition,
+    RecordFieldMapping,
+    RecordFillResult,
+    RecordValidationResult,
+    RecordEventPayload,
     PDFProcessorAPI,
     AIManagerAPI,
     MessageBubbleAPI,
@@ -74,6 +84,7 @@ import ScreenCapture from '../../src/utils/ui/ScreenCapture';
 import FormExtractor from '../../src/utils/data-processing/FormExtractor';
 import FormFiller from '../../src/utils/data-processing/FormFiller';
 import TableExtractor from '../../src/utils/data-processing/TableExtractor';
+import RecordsManager from '../../src/utils/data-processing/RecordsManager';
 import PDFProcessor from '../../src/utils/ai/PDFProcessor';
 import { AIManager } from '../../src/utils/ai/AIProvider';
 import MessageBubble from '../../src/utils/ui/MessageBubble';
@@ -359,6 +370,9 @@ const formExtractorCheck: FormExtractorAPI = new FormExtractor();
 const formFillerCheck: FormFillerAPI = new FormFiller();
 const tableExtractorCheck: TableExtractorAPI = new TableExtractor();
 const tablesApiCheck: TablesAPI = new TableExtractor().createProxy();
+declare const recordsManagerDeps: ConstructorParameters<typeof RecordsManager>[0];
+const recordsManagerCheck: RecordsManagerAPI = new RecordsManager(recordsManagerDeps);
+const recordsApiCheck: RecordsAPI = new RecordsManager(recordsManagerDeps).createProxy();
 const pdfProcessorCheck: PDFProcessorAPI = new PDFProcessor();
 declare const envStub: EnvAPI;
 const aiManagerCheck: AIManagerAPI = new AIManager(envStub);
@@ -367,6 +381,8 @@ const shortcutManagerCheck: ShortcutManagerAPI = new ShortcutManager();
 const shortcutsApiCheck: ShortcutsAPI = new ShortcutManager().createProxy();
 const moduleRegistryCheck: ModuleRegistryAPI = new ModuleRegistry();
 const moduleManagerCheck: ModuleManagerAPI = new ModuleManager(new ModuleRegistry());
+void recordsManagerCheck;
+void recordsApiCheck;
 void moduleCtorCheck;
 void moduleInstanceCheck;
 void eventBusCheck;
@@ -536,6 +552,10 @@ declare const declaredTablesApi: TablesAPI;
 const tablesApiBackToReal: Pick<ReturnType<InstanceType<typeof TableExtractor>['createProxy']>, keyof TablesAPI> = declaredTablesApi;
 void tablesApiBackToReal;
 
+declare const declaredRecordsManager: RecordsManagerAPI;
+const recordsManagerBackToReal: Pick<InstanceType<typeof RecordsManager>, keyof RecordsManagerAPI> = declaredRecordsManager;
+void recordsManagerBackToReal;
+
 declare const declaredPdfProcessor: PDFProcessorAPI;
 const pdfProcessorBackToReal: Pick<InstanceType<typeof PDFProcessor>, keyof PDFProcessorAPI> = declaredPdfProcessor;
 void pdfProcessorBackToReal;
@@ -565,6 +585,94 @@ const moduleManagerBackToReal: Pick<InstanceType<typeof ModuleManager>, keyof Mo
 void moduleManagerBackToReal;
 
 /* -------------------------------------------------------------- */
+/* Records                                                         */
+/* -------------------------------------------------------------- */
+
+const recordsDefinition: RecordTypeDefinition = {
+    name: 'invoice',
+    label: 'Invoice',
+    fields: [
+        { key: 'invoice-number', label: 'Invoice number', required: true },
+        { key: 'total', kind: 'number' },
+        { key: 'issue-date', kind: 'date', synonyms: ['date de facture'] }
+    ]
+};
+window.agentlet.records.defineType(recordsDefinition);
+const recordsKnownType: RecordTypeDefinition | null = window.agentlet.records.getType('invoice');
+const recordsAllTypes: RecordTypeDefinition[] = window.agentlet.records.listTypes();
+void recordsKnownType;
+void recordsAllTypes;
+
+const recordsCreated: FieldsRecord = window.agentlet.records.create('organization', { organization: 'Example SAS', vat: null, active: true, employees: 12 });
+const recordsFromForm: FieldsRecord = window.agentlet.records.fromForm(formEl, { type: 'contact', redact: ['tel'] });
+const recordsFromTable: TableRecord = window.agentlet.records.fromTable(document.createElement('table'));
+const recordsFromElement: AgentletRecord | null = window.agentlet.records.fromElement(formEl);
+const recordsPicked: Promise<AgentletRecord | null> = window.agentlet.records.pick({ selector: 'table, dl' });
+void recordsFromForm;
+void recordsFromTable;
+void recordsFromElement;
+void recordsPicked;
+
+// A record is told apart from a table record with `'columns' in record`.
+declare const recordsAny: AgentletRecord;
+if ('columns' in recordsAny) {
+    const columns: string[] = recordsAny.columns;
+    void columns;
+}
+
+const recordsCopied = window.agentlet.records.copy([recordsCreated]);
+void recordsCopied.then(result => {
+    const formats: string[] = result.formats;
+    const customFormat: boolean = result.customFormat;
+    void formats;
+    void customFormat;
+});
+void window.agentlet.records.read().then((records: AgentletRecord[] | null) => records);
+const recordsUnsubscribe: () => void = window.agentlet.records.onPaste((records, event) => {
+    const first: AgentletRecord = records[0];
+    const pasteEvent: ClipboardEvent = event;
+    void first;
+    void pasteEvent;
+}, { types: ['organization'], scope: formEl });
+recordsUnsubscribe();
+document.addEventListener('paste', (event: ClipboardEvent) => {
+    const fromEvent: AgentletRecord[] | null = window.agentlet.records.fromPasteEvent(event);
+    void fromEvent;
+});
+
+const recordsMapping: RecordFieldMapping = window.agentlet.records.match(recordsCreated, formEl, { minConfidence: 0.7 });
+recordsMapping.entries.forEach(entry => {
+    const reason: 'remembered' | 'autocomplete' | 'name' | 'label' | 'type' | 'manual' = entry.reason;
+    void reason;
+    void entry.selector;
+    void entry.confidence;
+});
+const recordsFill: Promise<RecordFillResult> = window.agentlet.records.fill(recordsCreated, formEl, { preview: false, fill: { triggerEvents: true } });
+void recordsFill.then(result => {
+    const confirmed: boolean = result.confirmed;
+    const successful: number = result.successful;
+    void confirmed;
+    void successful;
+});
+const recordsPasted: Promise<RecordFillResult | null> = window.agentlet.records.pasteFromClipboard(formEl, { types: ['organization'], remember: false });
+void recordsPasted;
+
+const recordsValidation: RecordValidationResult = window.agentlet.records.validate(JSON.parse('{}'));
+if (recordsValidation.valid) {
+    const validRecord: AgentletRecord = recordsValidation.record;
+    void validRecord;
+} else {
+    const errors: string[] = recordsValidation.errors;
+    void errors;
+}
+
+window.agentlet.eventBus.on('records:copied', data => {
+    const payload = data as RecordEventPayload;
+    const sourceOrigin: string | null = payload.sourceOrigin;
+    void sourceOrigin;
+});
+
+/* -------------------------------------------------------------- */
 /* Wrong usage is rejected                                          */
 /* -------------------------------------------------------------- */
 
@@ -586,6 +694,15 @@ class BadAgentlet extends window.agentlet.Module {
     }
 }
 void BadAgentlet;
+
+// @ts-expect-error a record field value cannot be an object
+window.agentlet.records.create('contact', { name: { first: 'Ada' } });
+
+// @ts-expect-error a field kind must be one of the listed kinds
+window.agentlet.records.defineType({ name: 'bad', fields: [{ key: 'x', kind: 'color' }] });
+
+// @ts-expect-error fill() needs a target element
+window.agentlet.records.fill(recordsCreated);
 
 // @ts-expect-error sendPrompt resolves to a string, not a number
 const wrongAiReply: Promise<number> = window.agentlet.ai.sendPrompt('hi');

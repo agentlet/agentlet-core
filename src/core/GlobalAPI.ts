@@ -152,6 +152,9 @@ export class GlobalAPI {
         // Expose table extractor with Excel export functions
         window.agentlet.tables = this.core.tableExtractor.createProxy();
 
+        // Expose structured copy and paste between web apps
+        window.agentlet.records = this.core.recordsManager.createProxy();
+
         // Expose AI capabilities
         window.agentlet.ai = {
             // Main AI functions

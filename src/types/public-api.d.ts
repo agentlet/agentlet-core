@@ -2276,6 +2276,7 @@ export interface AgentletAPI {
     formExtractor: FormExtractorAPI;
     formFiller: FormFillerAPI;
     tableExtractor: TableExtractorAPI;
+    recordsManager: RecordsManagerAPI;
     aiManager: AIManagerAPI;
     /** `null` when no shortcut manager could be created. */
     shortcutManager: ShortcutManagerAPI | null;
@@ -2359,6 +2360,7 @@ export interface AgentletAPI {
     auth: AuthAPI;
     forms: FormsAPI;
     tables: TablesAPI;
+    records: RecordsAPI;
     ai: AIAPI;
     configurePDFWorker(workerUrl: string): void;
     modules: ModulesAPI;
