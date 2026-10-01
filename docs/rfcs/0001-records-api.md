@@ -1,6 +1,6 @@
 # RFC 0001: records, structured copy and paste between web apps
 
-- Status: draft
+- Status: accepted for phase 1 (decisions recorded 2026-10-01)
 - Target: agentlet-core 2.3.0 (phase 1), additive, no breaking change
 - API namespace: `window.agentlet.records`
 
@@ -150,7 +150,7 @@ What this means:
 - Not tested: other applications (spreadsheets, rich text editors, mail clients) that may strip `data-agentlet-record` when they re-serialize the HTML. Those still get the table, the `<dl>` and the plain text, which is the point of the fallback.
 - No browser sanitization of the attribute was observed in the paste event. The `read()` path in Chromium and Firefox returned the attribute intact. Sanitization by a different source application remains possible, so reading stays best effort and an absent attribute is treated as "no record".
 
-Outcome for the transport: write the custom format first and fall back to HTML plus plain text on a throw; read the custom format when available (`read()`), then the HTML embedding. Smart paste works on Chromium, Firefox and WebKit through the `paste` event, so open question 4 resolves in favour of "works everywhere through HTML embedding", with the WebKit `read()` caveat above.
+Outcome for the transport: write the custom format first and fall back to HTML plus plain text on a throw; read the custom format when available (`read()`), then the HTML embedding. Smart paste works on Chromium, Firefox and WebKit through the `paste` event, so smart paste works everywhere through HTML embedding, with the WebKit `read()` caveat above. The panel button fallback is described under "Decisions".
 
 ## API
 
@@ -174,6 +174,8 @@ interface RecordsAPI {
   copy(record: AgentletRecord | AgentletRecord[], options?: CopyOptions): Promise<CopyResult>;
   read(): Promise<AgentletRecord[] | null>;            // navigator.clipboard.read(), needs a user gesture
   fromPasteEvent(event: ClipboardEvent): AgentletRecord[] | null;
+  pasteFromClipboard(target: Element, options?: PasteFromClipboardOptions): Promise<RecordFillResult | null>;
+  // pasteFromClipboard: read(), first record matching options.types, then fill(); call it from a click
   onPaste(handler: (records: AgentletRecord[], event: ClipboardEvent) => void, options?: OnPasteOptions): () => void;
   // onPaste: listens on the document (or options.scope); only calls handler, and only calls
   // preventDefault(), when the paste carries a record; returns an unsubscribe function
@@ -267,7 +269,7 @@ Phase 1 ships `clipboard` and keeps the interface internal. Phase 3 opens it:
    - Clipboard spike per browser, results added to this RFC.
    - Envelope, validation, `defineType` and the built-in types.
    - `create`, `fromForm`, `fromTable`, `fromElement`, `pick`.
-   - `copy`, `read`, `fromPasteEvent`, `onPaste`.
+   - `copy`, `read`, `fromPasteEvent`, `onPaste`, `pasteFromClipboard`.
    - Rule-based `match`, mapping memory, preview dialog, `fill`.
    - Sensitive data rules, events, public types, unit tests, one example page.
 2. **Phase 2, AI assisted** (opt-in, uses `ai.sendPrompt()`, bring your own key)
@@ -312,9 +314,14 @@ Pasting the same record into a spreadsheet gives a two-column table, with no age
 - **Only `text/plain` with a marker.** Rejected: it pollutes every paste with machine text.
 - **Carrying selectors in the record.** Rejected: target selectors must be computed on the target, from the target DOM. A record is data only.
 
-## Open questions
+## Decisions
 
-1. Name: `records` (current choice) or `handoff`. `clipboard` was rejected because the clipboard is only the phase 1 transport.
-2. Should `contact`, `address` and `organization` stay in core, or move to an optional types package?
-3. Should `onPaste` intercept pastes inside text inputs too, or only when the focus is outside an editable field? Current choice: inside the target form only, and only when the paste carries a record.
-4. Spike outcome: resolved. `text/html` embedding survives in Chromium, Firefox and WebKit on the `paste` event, so smart paste does not need a panel button. See "Spike results" for the WebKit `read()` caveat.
+Maintainer decisions on the open questions, 2026-10-01.
+
+1. **Name:** `records`. `clipboard` stays rejected because the clipboard is only the phase 1 transport.
+2. **Built-in types:** `contact`, `address` and `organization` stay in core, as specified.
+3. **`onPaste` scope:** smart paste triggers only inside the target form, and only when the paste carries a record. An agentlet passes `scope: form`. A paste without a record is never intercepted and never has `preventDefault()` called on it, including inside text inputs.
+4. **Fallback when a record does not survive a paste on an engine:** a user gesture calls `navigator.clipboard.read()` and runs the same match, preview and fill flow.
+   - The API is `records.pasteFromClipboard(target, options)`. It reads the clipboard, takes the first record that matches `options.types` (if given), then calls `fill()`. It returns `null` when the clipboard holds no record. It must be called from a user gesture such as a click. An agentlet puts a "Paste record" button in its own panel and calls it. `read()` plus `fill()` called by hand is equivalent.
+   - The spike shows no engine needs this today: the `paste` event carries the record in Chromium, Firefox and WebKit. The button is still the documented path for pages that block paste events and for engines where a future release strips the embedding.
+   - If `read()` also loses the record on an engine, that engine only gets the plain HTML table or list and the text fallback. `pasteFromClipboard()` returns `null` there. The WebKit `read()` path is the one not verified by the spike.
