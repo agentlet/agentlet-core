@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires a `scope` element, usually the target form, and throws a
   `TypeError` without it. A paste without a record is never intercepted. `pasteFromClipboard()` reads the clipboard
   from a click, for pages that block paste events.
+- Argument checks: `fromElement()`, `fromForm()`, `fromTable()`, `match()`,
+  `fill()` and `pasteFromClipboard()` throw a clear `TypeError` that names
+  the method (for example `records.fromElement() expects an Element`) when
+  they get something that is not an element, instead of an error from
+  inside the extractor.
 - `copy()` falls back to a `copy` event with `text/html` (record embedded)
   and `text/plain` when `navigator.clipboard.write()` is missing or refused,
   as in webviews, iframes without the `clipboard-write` permissions policy

@@ -58,6 +58,7 @@ import { MappingMemory } from './records/mappingMemory.js';
 import { showPreview } from './records/previewDialog.js';
 import { analyzeMatch, collectTargetFields, formSignature, toMapping } from './records/RecordMatcher.js';
 import { resolveElement } from './records/domFields.js';
+import { assertElement, assertTable } from './records/guards.js';
 import { isSensitiveElement, isSensitiveKey } from './records/sensitive.js';
 import { slugify, utf8ByteLength } from './records/text.js';
 import { RecordTypeRegistry } from './records/typeRegistry.js';
@@ -141,14 +142,17 @@ class RecordsManager implements RecordsManagerAPI {
     }
 
     fromForm(element: Element, options: RecordFromFormOptions = {}): FieldsRecord {
+        assertElement(element, 'fromForm', 'an Element, usually a form or a container of fields');
         return recordFromForm(this.extractorDeps(), element, options);
     }
 
     fromTable(table: HTMLTableElement, options: RecordFromTableOptions = {}): TableRecord {
+        assertTable(table, 'fromTable');
         return recordFromTable(this.extractorDeps(), table, options);
     }
 
     fromElement(element: Element, options: RecordFromElementOptions = {}): AgentletRecord | null {
+        assertElement(element, 'fromElement');
         return recordFromElement(this.extractorDeps(), element, options);
     }
 
@@ -269,6 +273,8 @@ class RecordsManager implements RecordsManagerAPI {
     }
 
     async pasteFromClipboard(target: Element, options: RecordPasteFromClipboardOptions = {}): Promise<RecordFillResult | null> {
+        // Checked before the clipboard is read, so a bad target fails early.
+        assertElement(target, 'pasteFromClipboard', 'an Element as the target, usually the form to fill');
         const records = await this.read();
         if (!records) return null;
         const { types, ...fillOptions } = options;
@@ -280,11 +286,13 @@ class RecordsManager implements RecordsManagerAPI {
     /* ---- Mapping and fill ---- */
 
     match(record: AgentletRecord, target: Element, options: RecordMatchOptions = {}): RecordFieldMapping {
+        assertElement(target, 'match', 'an Element as the target, usually the form to match');
         const { analysis } = this.analyze(record, target, options.remember !== false);
         return toMapping(analysis, target, options.minConfidence ?? DEFAULT_MIN_CONFIDENCE);
     }
 
     async fill(record: AgentletRecord, target: Element, options: RecordFillOptions = {}): Promise<RecordFillResult> {
+        assertElement(target, 'fill', 'an Element as the target, usually the form to fill');
         if (isTableRecord(record)) {
             throw new Error('A table record cannot fill a form: use a fields record');
         }
