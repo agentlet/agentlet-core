@@ -273,6 +273,43 @@ describe('AuthManager', () => {
     });
 
     describe('message listener / handleAuthMessage', () => {
+        // Stands in for the WindowProxy returned by window.open().
+        const popup = { closed: false, close: jest.fn() } as unknown as Window;
+
+        test('ignores messages that do not come from the login popup', () => {
+            const manager = new TypedAuthManager();
+            const authSpy = jest.spyOn(manager, 'handleAuthMessage');
+            manager.authPopup = popup;
+            manager.setupMessageListener();
+
+            manager.messageListener?.({ source: {} as Window, origin: 'https://evil.example.com', data: { type: 'auth_result', success: true, token: 'forged' } } as unknown as MessageEvent);
+            manager.messageListener?.({ source: null, origin: 'https://evil.example.com', data: 'forged-token' } as unknown as MessageEvent);
+
+            expect(authSpy).not.toHaveBeenCalled();
+        });
+
+        test('ignores every message when no login popup is open', () => {
+            const manager = new TypedAuthManager();
+            const authSpy = jest.spyOn(manager, 'handleAuthMessage');
+            manager.setupMessageListener();
+
+            manager.messageListener?.({ source: popup, origin: 'https://any.example.com', data: 'forged-token' } as unknown as MessageEvent);
+
+            expect(authSpy).not.toHaveBeenCalled();
+        });
+
+        test('never logs the message payload, which carries the token', () => {
+            const manager = new TypedAuthManager({ allowedOrigins: ['https://good.example.com'] });
+            const logSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);
+            manager.authPopup = popup;
+            manager.setupMessageListener();
+
+            manager.messageListener?.({ source: popup, origin: 'https://good.example.com', data: { type: 'auth_result', success: true, token: 'secret-token' } } as unknown as MessageEvent);
+
+            expect(logSpy).toHaveBeenCalled();
+            expect(JSON.stringify(logSpy.mock.calls)).not.toContain('secret-token');
+        });
+
         test('setupMessageListener registers a "message" listener on window', () => {
             const manager = new TypedAuthManager();
             const addSpy = jest.spyOn(window, 'addEventListener');
@@ -286,9 +323,10 @@ describe('AuthManager', () => {
         test('ignores messages from origins not in allowedOrigins', () => {
             const manager = new TypedAuthManager({ allowedOrigins: ['https://good.example.com'] });
             const authSpy = jest.spyOn(manager, 'handleAuthMessage');
+            manager.authPopup = popup;
             manager.setupMessageListener();
 
-            manager.messageListener?.({ origin: 'https://evil.example.com', data: { type: 'auth_cancel' } } as MessageEvent);
+            manager.messageListener?.({ source: popup, origin: 'https://evil.example.com', data: { type: 'auth_cancel' } } as unknown as MessageEvent);
 
             expect(authSpy).not.toHaveBeenCalled();
         });
@@ -296,9 +334,10 @@ describe('AuthManager', () => {
         test('handles a message from an allowed origin', () => {
             const manager = new TypedAuthManager({ allowedOrigins: ['https://good.example.com'] });
             const cancelSpy = jest.spyOn(manager, 'handleCancel');
+            manager.authPopup = popup;
             manager.setupMessageListener();
 
-            manager.messageListener?.({ origin: 'https://good.example.com', data: { type: 'auth_cancel' } } as MessageEvent);
+            manager.messageListener?.({ source: popup, origin: 'https://good.example.com', data: { type: 'auth_cancel' } } as unknown as MessageEvent);
 
             expect(cancelSpy).toHaveBeenCalledTimes(1);
         });
@@ -365,8 +404,9 @@ describe('AuthManager', () => {
             const manager = new TypedAuthManager({ messageHandler });
             const successSpy = jest.spyOn(manager, 'handleSuccess');
 
+            manager.authPopup = popup;
             manager.setupMessageListener();
-            manager.messageListener?.({ origin: 'https://any.example.com', data: 'ignored' } as MessageEvent);
+            manager.messageListener?.({ source: popup, origin: 'https://any.example.com', data: 'ignored' } as unknown as MessageEvent);
 
             expect(successSpy).toHaveBeenCalledWith('abc', { success: true, accessToken: 'abc' });
         });
@@ -376,8 +416,9 @@ describe('AuthManager', () => {
             const manager = new TypedAuthManager({ messageHandler });
             const authSpy = jest.spyOn(manager, 'handleAuthMessage');
 
+            manager.authPopup = popup;
             manager.setupMessageListener();
-            manager.messageListener?.({ origin: 'https://any.example.com', data: { type: 'auth_cancel' } } as MessageEvent);
+            manager.messageListener?.({ source: popup, origin: 'https://any.example.com', data: { type: 'auth_cancel' } } as unknown as MessageEvent);
 
             expect(authSpy).toHaveBeenCalledWith({ type: 'auth_cancel' });
         });

@@ -122,12 +122,6 @@ class AgentletBackground {
             });
 
             chrome.contextMenus.create({
-                id: 'agentlet-analyze',
-                title: 'Analyze with AI',
-                contexts: ['page', 'selection']
-            });
-
-            chrome.contextMenus.create({
                 type: 'separator',
                 id: 'agentlet-separator',
                 contexts: ['page']
@@ -368,31 +362,11 @@ class AgentletBackground {
             case 'agentlet-toggle':
                 await this.toggleAgentletCore(tab);
                 break;
-            case 'agentlet-analyze':
-                await this.analyzeSelection(info, tab);
-                break;
             case 'agentlet-settings':
                 await chrome.tabs.create({
                     url: chrome.runtime.getURL('options.html')
                 });
                 break;
-        }
-    }
-
-    /**
-     * Analyze selected content with AI
-     */
-    async analyzeSelection(info, tab) {
-        try {
-            await chrome.tabs.sendMessage(tab.id, {
-                type: 'ANALYZE_SELECTION',
-                data: {
-                    selectionText: info.selectionText,
-                    pageUrl: info.pageUrl
-                }
-            });
-        } catch (error) {
-            console.error('Failed to analyze selection:', error);
         }
     }
 

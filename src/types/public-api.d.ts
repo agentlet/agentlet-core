@@ -1088,6 +1088,12 @@ export interface FormExtractionOptions {
     /** Default `true`. */
     includeReadOnly?: boolean;
     includeBoundingBoxes?: boolean;
+    /**
+     * Default `false`: the value of `type="password"` fields is reported as `null`
+     * and their `value` attribute is dropped. Set `true` only when the extraction
+     * stays on the page.
+     */
+    includePasswordValues?: boolean;
     /** Additional keys are forwarded as-is to the internal element-info extraction. */
     [key: string]: unknown;
 }

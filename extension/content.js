@@ -253,11 +253,6 @@ class AgentletContentScript {
                     sendResponse({ success: true });
                     break;
 
-                case 'ANALYZE_SELECTION':
-                    await this.analyzeSelection(message.data);
-                    sendResponse({ success: true });
-                    break;
-
                 case 'LOAD_MODULE':
                     await this.loadModule(message.moduleCode, message.moduleUrl);
                     sendResponse({ success: true });
@@ -375,102 +370,27 @@ class AgentletContentScript {
     }
 
     /**
-     * Process AI request
+     * Process AI request with the core's AI module. Requires OPENAI_API_KEY
+     * (or a proxy through OPENAI_BASE_URL), see SECURITY.md.
      */
     async processAIRequest(prompt) {
-        if (window.agentlet?.utils?.WaitDialog) {
-            const WaitDialog = window.agentlet.utils.WaitDialog;
-            const InfoDialog = window.agentlet.utils.InfoDialog;
-
-            WaitDialog.showAIProcessing('Processing your request...', true, () => {
-                console.log('AI request cancelled');
-            });
-
-            // Simulate AI processing (replace with actual AI service call)
-            setTimeout(() => {
-                WaitDialog.hide();
-                InfoDialog.success(
-                    `I'd be happy to help with: "${prompt}"\n\nThis is a demonstration. In a real implementation, this would connect to an AI service to process your request.`,
-                    'AI Assistant Response'
-                );
-            }, 3000);
-        }
-    }
-
-    /**
-     * Analyze selected text
-     */
-    async analyzeSelection(data) {
-        if (!this.agentletLoaded) {
-            this.queueMessage({ type: 'ANALYZE_SELECTION', data });
+        const ai = window.agentlet?.ai;
+        const Dialog = window.agentlet?.utils?.Dialog;
+        if (!ai || !Dialog) {
             return;
         }
 
-        if (window.agentlet?.utils?.WaitDialog && window.agentlet?.utils?.InfoDialog) {
-            const WaitDialog = window.agentlet.utils.WaitDialog;
-            const InfoDialog = window.agentlet.utils.InfoDialog;
-
-            WaitDialog.showAnalyzing('Analyzing selected content...', false);
-
-            // Simulate analysis (replace with actual AI analysis)
-            setTimeout(() => {
-                WaitDialog.hide();
-                
-                const analysis = this.performTextAnalysis(data.selectionText);
-                
-                InfoDialog.show({
-                    title: 'Content Analysis',
-                    message: `
-                        <h4>Analysis Results</h4>
-                        <p><strong>Selected Text:</strong> "${data.selectionText.substring(0, 100)}${data.selectionText.length > 100 ? '...' : ''}"</p>
-                        <p><strong>Word Count:</strong> ${analysis.wordCount}</p>
-                        <p><strong>Character Count:</strong> ${analysis.charCount}</p>
-                        <p><strong>Estimated Reading Time:</strong> ${analysis.readingTime} minutes</p>
-                        <p><strong>Detected Language:</strong> ${analysis.language}</p>
-                        <p><strong>Sentiment:</strong> ${analysis.sentiment}</p>
-                    `,
-                    allowHtml: true,
-                    icon: '🔍',
-                    buttons: [
-                        { text: 'Close', value: 'close', primary: true }
-                    ]
-                });
-            }, 2000);
+        if (!ai.isAvailable()) {
+            Dialog.info('No AI provider is configured. Set OPENAI_API_KEY in the environment variables of the agentlet panel.', 'AI assistant');
+            return;
         }
-    }
 
-    /**
-     * Perform basic text analysis
-     */
-    performTextAnalysis(text) {
-        const words = text.split(/\s+/).length;
-        const chars = text.length;
-        const readingTime = Math.ceil(words / 200); // Average reading speed
-        
-        // Simple language detection (very basic)
-        const language = /[а-яё]/i.test(text) ? 'Russian' : 
-                        /[àâäéèêëîïôöùûüÿç]/i.test(text) ? 'French' :
-                        /[äöüß]/i.test(text) ? 'German' : 'English';
-        
-        // Simple sentiment analysis (very basic)
-        const positiveWords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic'];
-        const negativeWords = ['bad', 'terrible', 'awful', 'horrible', 'disappointing'];
-        
-        const lowerText = text.toLowerCase();
-        const positiveCount = positiveWords.filter(word => lowerText.includes(word)).length;
-        const negativeCount = negativeWords.filter(word => lowerText.includes(word)).length;
-        
-        let sentiment = 'Neutral';
-        if (positiveCount > negativeCount) sentiment = 'Positive';
-        if (negativeCount > positiveCount) sentiment = 'Negative';
-        
-        return {
-            wordCount: words,
-            charCount: chars,
-            readingTime: readingTime,
-            language: language,
-            sentiment: sentiment
-        };
+        try {
+            const response = await ai.sendPrompt(prompt);
+            Dialog.info(response, 'AI assistant');
+        } catch (error) {
+            Dialog.info(`The AI request failed: ${error.message}`, 'AI assistant');
+        }
     }
 
     /**

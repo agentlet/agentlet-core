@@ -43,6 +43,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public types for all of the above, and the
   `data-processing/records-copy-paste` example.
 
+### Removed
+
+- The experimental extension's "Analyze with AI" context menu, which
+  showed a canned word count and keyword sentiment instead of an AI
+  answer, and inserted the selected text into the dialog as HTML. Its AI
+  assistant now calls `window.agentlet.ai`, and its welcome page no
+  longer claims features it does not have.
+
+### Security
+
+- Form extraction (`forms.extract()`, `exportForAI()`, `quickExport()`)
+  reports `type="password"` fields with a `null` value and without their
+  `value` attribute, so a password no longer reaches an AI prompt by
+  accident. Pass `includePasswordValues: true` to get them back.
+- `AuthManager` only accepts messages from the login popup it opened.
+  Before, any window or frame on the page could post a forged token, and
+  with an empty `allowedOrigins` any origin was accepted. A warning is now
+  logged when `allowedOrigins` is empty.
+- `AuthManager` no longer logs the popup's message, which carries the
+  token, in debug mode, and `FormFiller` no longer logs filled values.
+- SECURITY.md describes the threat model: what the host page can see,
+  where API keys live, how to proxy the provider key, and what data leaves
+  the page. Vulnerabilities are reported through GitHub security
+  advisories, as the previous email address did not receive mail.
+
 ## [2.2.0] - 2026-10-01
 
 ### Added

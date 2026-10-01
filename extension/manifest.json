@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Agentlet Core",
-  "version": "1.0.0",
-  "description": "AI-powered bookmarklet system with extensible plugin architecture for enhanced web productivity",
+  "version": "2.2.0",
+  "description": "Experimental, unpublished: injects agentlet core and your modules into the pages you choose.",
   "author": "Agentlet Core Team",
   "homepage_url": "https://github.com/agentlet/agentlet-core",
   

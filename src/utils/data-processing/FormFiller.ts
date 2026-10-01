@@ -231,7 +231,8 @@ class FormFiller implements FormFillerAPI {
         const { selector, value, type } = item;
 
         if (this.debugMode) {
-            console.log(`🎯 Attempting to fill: ${selector} = ${value}`);
+            // The value is not logged: it can be a password or other personal data.
+            console.log(`🎯 Attempting to fill: ${selector}`);
         }
 
         // Find element within parent context
