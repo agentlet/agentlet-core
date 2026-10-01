@@ -59,14 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement by contacting the
-owners of the [agentlet GitHub organization](https://github.com/agentlet)
-through GitHub, for example by using GitHub's "Report content" option on the
-offending issue, pull request or comment, or by asking one of the organization
-owners for a private channel. Reports about a security vulnerability are a
-separate matter: use the
-[security advisory form](https://github.com/agentlet/agentlet-core/security/advisories/new)
-described in [SECURITY.md](SECURITY.md).
+reported to the community leaders responsible for enforcement at
+[contact@agentlet.io](mailto:contact@agentlet.io). Reports about a security
+vulnerability are a separate matter: follow [SECURITY.md](SECURITY.md).
 
 All complaints will be reviewed and investigated promptly and fairly.
 
