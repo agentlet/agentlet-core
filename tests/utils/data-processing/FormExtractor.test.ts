@@ -558,6 +558,61 @@ describe('FormExtractor', () => {
         });
     });
 
+    describe('password redaction', () => {
+        function setUpLogin(): HTMLElement {
+            document.body.innerHTML = `
+                <div id="root">
+                    <form id="login">
+                        <input id="user" name="user" type="text" value="alice">
+                        <input id="pass" name="pass" type="password" value="from-attribute">
+                    </form>
+                </div>
+            `;
+            (document.getElementById('pass') as HTMLInputElement).value = 'typed-secret';
+            const root = document.getElementById('root') as HTMLElement;
+            markAllVisible(root);
+            return root;
+        }
+
+        it('reports password values as null and drops their value attribute by default', () => {
+            const root = setUpLogin();
+            const pass = extractor.extractFormStructure(root).forms[0].elements.find((el) => el.id === 'pass');
+            expect(pass?.value).toBeNull();
+            expect(pass?.attributes).not.toHaveProperty('value');
+            expect(pass?.attributes).toHaveProperty('type', 'password');
+        });
+
+        it('keeps other field values', () => {
+            const root = setUpLogin();
+            const user = extractor.extractFormStructure(root).forms[0].elements.find((el) => el.id === 'user');
+            expect(user?.value).toBe('alice');
+        });
+
+        it('never puts a password in exportForAI or quickExport output', () => {
+            const root = setUpLogin();
+            const serialized = JSON.stringify([extractor.exportForAI(root), extractor.quickExport(root)]);
+            expect(serialized).not.toContain('typed-secret');
+            expect(serialized).not.toContain('from-attribute');
+        });
+
+        it('includes password values only with includePasswordValues: true', () => {
+            const root = setUpLogin();
+            const pass = extractor
+                .extractFormStructure(root, { includePasswordValues: true })
+                .forms[0].elements.find((el) => el.id === 'pass');
+            expect(pass?.value).toBe('typed-secret');
+            expect(pass?.attributes).toHaveProperty('value', 'from-attribute');
+        });
+
+        it('does not treat a truthy non-boolean as an opt-in', () => {
+            const root = setUpLogin();
+            const pass = extractor
+                .extractFormStructure(root, { includePasswordValues: 'yes' })
+                .forms[0].elements.find((el) => el.id === 'pass');
+            expect(pass?.value).toBeNull();
+        });
+    });
+
     describe('quickExport', () => {
         it('flattens form fields and standalone fields into one array of simplified entries', () => {
             document.body.innerHTML = `

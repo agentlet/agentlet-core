@@ -73,7 +73,8 @@ class FormExtractor implements FormExtractorAPI {
             includeDisabled: options.includeDisabled || false,
             includeReadOnly: options.includeReadOnly !== false,
             includeBoundingBoxes: options.includeBoundingBoxes || false,
-            ...options
+            ...options,
+            includePasswordValues: options.includePasswordValues === true
         };
 
         const result: FormExtractionResult = {
@@ -171,6 +172,14 @@ class FormExtractor implements FormExtractorAPI {
      * Extract essential element information
      */
     extractElementInfo(element: FormControlElement, rootElement: Element, config: FormExtractionOptions): FormElementInfo {
+        // Password values never leave the page unless the caller opts in: an
+        // extraction is typically sent to an AI provider or logged.
+        const redactValue = this.getElementType(element) === 'password' && config.includePasswordValues !== true;
+        const attributes = this.getBasicAttributes(element);
+        if (redactValue) {
+            delete attributes.value;
+        }
+
         const info: FormElementInfo = {
             tagName: element.tagName.toLowerCase(),
             type: this.getElementType(element),
@@ -182,10 +191,10 @@ class FormExtractor implements FormExtractorAPI {
             selector: this.getSelector(element),
 
             // Basic attributes
-            attributes: this.getBasicAttributes(element),
+            attributes,
 
             // Values
-            value: this.getElementValue(element),
+            value: redactValue ? null : this.getElementValue(element),
             placeholder: element.placeholder || null,
 
             // Basic constraints
