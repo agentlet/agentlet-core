@@ -17,12 +17,18 @@ Two jobs run in parallel, with no dependency between them:
 
 **Trigger**: pull requests to `main`, pushes to `main`, a nightly schedule (03:17 UTC) and manual dispatch.
 
-The `scan` job installs dependencies, installs a pinned `osv-scanner` release (checksum-verified against the release's `SHA256SUMS`), builds the project, generates an SBOM of what the published bundles ship (`npm run security:sbom`) and scans it (`npm run security:scan`). It uploads the results to the GitHub Security tab as SARIF (skipped for pull requests from forks, whose token is read-only) and as the `security-scan-reports` artifact, and fails the job if the gate failed.
+The `scan` job installs dependencies, builds the project, generates an SBOM of what the published bundles ship (the shared `sbom-from-esbuild` action) and scans it (the shared `dependency-scan` action, which installs a pinned `osv-scanner` release checksum-verified against the release's `SHA256SUMS`). It uploads the results to the GitHub Security tab as SARIF (skipped for pull requests from forks, whose token is read-only) and as the `security-scan-reports` artifact, and fails the job if the gate failed. On the nightly run, it also opens or updates a `security`-labeled issue when the scan of `main` fails the gate (the action's `issue-on-failure`).
 
-Two nightly-only jobs also run:
+The nightly-only `nightly-release-scan` job downloads the SBOM attached to the latest GitHub release and rescans it, opening or updating a separate `security`-labeled issue if that fails. The issue is deduplicated by its exact title, which includes the release tag.
 
-- `nightly-main-issue` opens or updates a `security`-labeled issue when the nightly scan of `main` fails the gate.
-- `nightly-release-scan` downloads the SBOM attached to the latest GitHub release and rescans it, opening or updating a separate `security`-labeled issue if that fails.
+### Shared actions
+
+The scanner is not part of this repository. `security.yml` and `release.yml` call two composite actions from the organization repository [agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan), pinned by commit SHA (the trailing comment names the tag):
+
+- `agentlet/.github/actions/sbom-from-esbuild` builds the SBOM from the metafiles. `metafiles` takes an explicit newline or comma separated list (no glob), so the five files written by `tools/build.js` are listed in the workflows. Add a new build target there when `tools/build.js` gains one.
+- `agentlet/.github/actions/dependency-scan` installs the pinned `osv-scanner`, applies the gate, uploads the SARIF (skipped on fork pull requests), uploads the reports and optionally opens a tracking issue. Its README documents every input. It only supports Linux x64 runners.
+
+Bump the pin deliberately when a new action tag is released. The `osv-scanner-version` input controls the scanner version.
 
 ### Why the SBOM is built from esbuild metafiles
 
@@ -30,19 +36,26 @@ esbuild inlines every bundled dependency into one file, so a scanner pointed at 
 
 So the scan has two scopes:
 
-- **bundle (blocking)**: a CycloneDX SBOM built from the esbuild metafiles that `tools/build.js` writes to `reports/security/meta/*.meta.json` (gitignored, never published). `tools/security/sbom.mjs` maps every bundled `node_modules` input to its package and writes `reports/security/sbom-bundle.cdx.json`. This is what a consumer of agentlet-core actually runs.
+- **bundle (blocking)**: a CycloneDX SBOM built from the esbuild metafiles that `tools/build.js` writes to `reports/security/meta/*.meta.json` (gitignored, never published). The shared `sbom-from-esbuild` action maps every bundled `node_modules` input to its package and writes `reports/security/sbom-bundle.cdx.json`. This is what a consumer of agentlet-core actually runs.
 - **lockfile (reporting only)**: `package-lock.json` scanned directly. It never blocks a pull request.
 
 ### Running the scan locally
 
 ```bash
 brew install osv-scanner
+git clone https://github.com/agentlet/.github.git ~/dev/agentlet-shared   # once
+SHARED=~/dev/agentlet-shared/actions/dependency-scan
+
 npm run build           # writes reports/security/meta/*.meta.json
-npm run security:sbom   # writes reports/security/sbom-bundle.cdx.json
-npm run security:scan   # runs osv-scanner on both scopes and applies the gate
+node $SHARED/bin/sbom-from-esbuild-metafile.mjs \
+  --out=reports/security/sbom-bundle.cdx.json \
+  reports/security/meta/*.meta.json
+node $SHARED/bin/scan.mjs \
+  --blocking-sbom=reports/security/sbom-bundle.cdx.json \
+  --lockfile=package-lock.json
 ```
 
-`npm run security:scan` accepts `--min-severity=<low|medium|high|critical>` (default `high`), `--skip-lockfile` and `--offline` (skips the EPSS and KEV lookups). The header comment of `tools/security/scan.mjs` lists every flag. Reports land in `reports/security/`: `results.sarif`, `scan-report.json` and `scan-summary.md`.
+`scan.mjs` accepts `--min-severity=<low|medium|high|critical>` (default `high`), `--lockfile=` (empty, to skip the lockfile), `--exceptions=<path>`, `--out-dir=<path>` and `--offline` (skips the EPSS and KEV lookups). The [action README](https://github.com/agentlet/.github/tree/main/actions/dependency-scan) lists every flag. Reports land in `reports/security/` (gitignored): `results.sarif`, `scan-report.json` and `scan-summary.md`.
 
 ### Gate rule
 
@@ -68,7 +81,7 @@ A finding in the bundle scope fails the gate when it is high or critical severit
 - `package`: optional. When present, the exception applies only to that package.
 - `reason`: required.
 - `expires`: required, `YYYY-MM-DD`.
-- `owner`: optional.
+- `owner`: required by policy, for review follow-up.
 
 An exception is a time-boxed decision to accept a known risk. Give it a real owner and a realistic expiry. An exception that matched nothing in a run produces a warning, so stale entries get noticed.
 
@@ -84,7 +97,7 @@ Steps, in order:
 
 1. Check that the tag (without the leading `v`) equals the `version` in `package.json`, and fail early if not. npm versions are immutable, so a mismatch is not recoverable after publishing.
 2. `npm ci`, `npm test`, `npm run build`.
-3. Generate the SBOM (`npm run security:sbom`) before publishing, so a failure stops before anything is published.
+3. Generate the SBOM (the shared `sbom-from-esbuild` action) and scan it (the shared `dependency-scan` action) before publishing, so a blocking vulnerability or a failure stops the job before anything is published.
 4. `npm publish --provenance --access public`.
 5. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
 

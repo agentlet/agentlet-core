@@ -62,7 +62,28 @@ jobs:
       # Generated before publish so a failure here stops before anything is
       # published - see "Attach SBOM to the GitHub release" for why the
       # upload itself happens after publish instead.
-      run: npm run security:sbom
+      id: sbom
+      uses: agentlet/.github/actions/sbom-from-esbuild@13f8b012ab7b0e07229389ac7538bdab38cdb4e6 # dependency-scan-v1
+      with:
+        metafiles: |
+          reports/security/meta/agentlet-core.meta.json
+          reports/security/meta/agentlet-core.min.meta.json
+          reports/security/meta/agentlet-core.esm.meta.json
+          reports/security/meta/bookmarklet.meta.json
+          reports/security/meta/extension.meta.json
+        output: reports/security/sbom-bundle.cdx.json
+
+    - name: Scan the SBOM before publishing
+      # A release must not ship a blocking vulnerability: the gate fails the
+      # job here, before npm publish. No SARIF upload (this job has no
+      # security-events permission and main's scan already owns the alerts).
+      uses: agentlet/.github/actions/dependency-scan@13f8b012ab7b0e07229389ac7538bdab38cdb4e6 # dependency-scan-v1
+      with:
+        blocking-sbom: ${{ steps.sbom.outputs.sbom-path }}
+        lockfile: ''
+        upload-sarif: 'false'
+        artifact-name: release-scan-reports
+        fail-on-gate: 'true'
 
     - name: Publish to npm
       run: npm publish --provenance --access public

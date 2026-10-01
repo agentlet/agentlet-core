@@ -133,8 +133,9 @@ class AgentletCoreBuilder {
      * Write an esbuild metafile to a gitignored reports directory (never
      * under dist/, and never listed in package.json's "files", so it is
      * never published to npm). This is the shipped-inventory input for the
-     * dependency vulnerability scanner in tools/security/sbom.mjs, which
-     * maps every bundled `node_modules` input back to its npm package.
+     * shared dependency-scan tooling (the sbom-from-esbuild action in
+     * agentlet/.github), which maps every bundled `node_modules` input back
+     * to its npm package.
      */
     writeMetafile(name, metafile) {
         if (!metafile) {
