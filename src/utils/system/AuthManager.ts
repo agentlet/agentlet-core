@@ -165,7 +165,17 @@ class AuthManager implements AuthManagerAPI {
      * Set up message listener for popup communication
      */
     setupMessageListener(): void {
+        if (this.config.allowedOrigins.length === 0) {
+            console.warn('AuthManager: no allowedOrigins configured. Only messages from the login popup are accepted, but set allowedOrigins to the origin of your callback page to also check where they come from.');
+        }
+
         this.messageListener = (event: MessageEvent): void => {
+            // Only the login popup this manager opened may answer. Any other window
+            // or frame on the page could otherwise post a forged token.
+            if (!this.authPopup || event.source !== this.authPopup) {
+                return;
+            }
+
             // Security check: verify origin if configured
             if (this.config.allowedOrigins.length > 0) {
                 if (!this.config.allowedOrigins.includes(event.origin)) {
@@ -174,7 +184,8 @@ class AuthManager implements AuthManagerAPI {
                 }
             }
 
-            logger.log('AuthManager: Received message from popup:', event.data);
+            // Never log event.data: it carries the token.
+            logger.log('AuthManager: Received message from the login popup, origin:', event.origin);
 
             try {
                 // Use custom message handler if provided
