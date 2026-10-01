@@ -1,6 +1,6 @@
 {
   "name": "agentlet-core",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Core framework for AI-powered bookmarklet system with extensible plugin architecture",
   "main": "dist/agentlet-core.js",
   "types": "./dist/agentlet-core.d.ts",

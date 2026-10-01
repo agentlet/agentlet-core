@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.0] - 2026-10-01
 
 ### Added
 
@@ -252,6 +252,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.2.0]: https://github.com/agentlet/agentlet-core/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/agentlet/agentlet-core/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/agentlet/agentlet-core/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/agentlet/agentlet-core/compare/v2.0.0...v2.0.1
