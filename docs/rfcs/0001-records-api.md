@@ -126,9 +126,31 @@ records.defineType({
 | `text/html` | a `<table>` for tables and lists, a `<dl>` for a single record, with the envelope embedded (see below) | spreadsheets, rich text editors, and agentlet targets on Firefox and Safari |
 | `text/plain` | TSV for tables and lists, `Label: value` lines for a single record | everything else |
 
-Embedding in `text/html`: the root element carries `data-agentlet-record` with the base64url-encoded envelope. Browsers sanitize HTML read through `navigator.clipboard.read()`, and some editors strip unknown attributes, so this path is best effort. Phase 1 starts with a short spike that records, per browser, which of these survive a copy then a `paste` event and a `clipboard.read()`. The results go into this RFC before the API is frozen.
+Embedding in `text/html`: the root element carries `data-agentlet-record` with the base64url-encoded envelope. Browsers sanitize HTML read through `navigator.clipboard.read()`, and some editors strip unknown attributes, so this path is best effort. Phase 1 started with a short spike that recorded, per browser, which of these survive a copy then a `paste` event and a `clipboard.read()`. The results are in the "Spike results" section below.
 
 Reading order on the target: custom format, then HTML embedding, then nothing. The API never guesses a record from plain text in phase 1; `fromText()` with AI is phase 2.
+
+## Spike results
+
+Run on 2026-10-01 with a throwaway Playwright script (Playwright 1.54.1 builds: Chromium 1181, Firefox 1489, WebKit 2140, all headless, on macOS). Each engine writes one `ClipboardItem` on a click, then a real keyboard paste (`Meta+V`) lands in a page listening to `paste`, then the page calls `navigator.clipboard.read()` on a click. The paste was tried in a `contenteditable` element and in an `input`, with the same result.
+
+| Engine | Write with custom format | Types on the `paste` event | `data-agentlet-record` in pasted HTML (`paste` event) | `clipboard.read()` |
+|---|---|---|---|---|
+| Chromium | succeeds | `text/plain`, `text/html` only | survives, decodes | exposes the custom type and `text/html`; attribute survives, custom JSON parses |
+| Firefox | throws `NotAllowedError`, a write without it succeeds | `text/html`, `text/plain` | survives, decodes | exposes `text/html` and `text/plain`; attribute survives |
+| WebKit | succeeds | custom type is listed, but `getData()` returns an empty string for it; `text/html` and `text/plain` present | survives, decodes | not testable: permission denied in headless WebKit, Playwright cannot grant it |
+
+What this means:
+
+- The HTML embedding is the one path that works on every engine, on the `paste` event and on `read()`. It is the reliable transport. The custom format is an extra, not a dependency.
+- The `paste` event never gives usable data for the custom format, even in Chromium, where the type is not listed at all. The custom format is only readable through `clipboard.read()`.
+- `fromPasteEvent()` still tries `getData()` on the custom format first, because it costs nothing and a browser may allow it later. In practice it resolves from the HTML embedding.
+- Firefox rejects the custom format on write, so `copy()` must catch that and retry with HTML and plain text.
+- WebKit accepted the custom write here. Safari releases may differ from this Playwright build, and the `clipboard.read()` path in WebKit was not exercised. Treat WebKit `read()` as unverified until it is run in a headed Safari.
+- Not tested: other applications (spreadsheets, rich text editors, mail clients) that may strip `data-agentlet-record` when they re-serialize the HTML. Those still get the table, the `<dl>` and the plain text, which is the point of the fallback.
+- No browser sanitization of the attribute was observed in the paste event. The `read()` path in Chromium and Firefox returned the attribute intact. Sanitization by a different source application remains possible, so reading stays best effort and an absent attribute is treated as "no record".
+
+Outcome for the transport: write the custom format first and fall back to HTML plus plain text on a throw; read the custom format when available (`read()`), then the HTML embedding. Smart paste works on Chromium, Firefox and WebKit through the `paste` event, so open question 4 resolves in favour of "works everywhere through HTML embedding", with the WebKit `read()` caveat above.
 
 ## API
 
@@ -295,4 +317,4 @@ Pasting the same record into a spreadsheet gives a two-column table, with no age
 1. Name: `records` (current choice) or `handoff`. `clipboard` was rejected because the clipboard is only the phase 1 transport.
 2. Should `contact`, `address` and `organization` stay in core, or move to an optional types package?
 3. Should `onPaste` intercept pastes inside text inputs too, or only when the focus is outside an editable field? Current choice: inside the target form only, and only when the paste carries a record.
-4. Spike outcome: if `text/html` embedding does not survive in Firefox or Safari, smart paste there needs a panel button and `clipboard.read()`, or stays Chromium only in phase 1.
+4. Spike outcome: resolved. `text/html` embedding survives in Chromium, Firefox and WebKit on the `paste` event, so smart paste does not need a panel button. See "Spike results" for the WebKit `read()` caveat.
