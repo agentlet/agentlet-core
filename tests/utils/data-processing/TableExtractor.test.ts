@@ -675,6 +675,43 @@ describe('TableExtractor', () => {
             expect(result.success).toBe(true);
         });
 
+        it('uses the default date-stamped filename when no filename is given', async () => {
+            const xlsx = makeXLSXMock();
+            (window as unknown as { XLSX: unknown }).XLSX = xlsx;
+            document.body.innerHTML = '<table id="t"><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>';
+            const table = document.getElementById('t') as unknown as Element;
+
+            const result = await extractor.extractAndDownload(table);
+            expect(result.success).toBe(true);
+            expect(result.filename).toMatch(/^table-data-\d{4}-\d{2}-\d{2}\.xlsx$/);
+            expect(xlsx.writeFile.mock.calls[0][1]).toBe(result.filename);
+        });
+
+        it('keeps the defaults when filename, sheetName and includeMetadata are passed as undefined', async () => {
+            const xlsx = makeXLSXMock();
+            (window as unknown as { XLSX: unknown }).XLSX = xlsx;
+            document.body.innerHTML = '<table id="t"><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>';
+            const table = document.getElementById('t') as unknown as Element;
+
+            const result = await extractor.extractAndDownload(table, { filename: undefined, sheetName: undefined, includeMetadata: undefined });
+            expect(result.success).toBe(true);
+            expect(xlsx.writeFile.mock.calls[0][1]).toMatch(/^table-data-\d{4}-\d{2}-\d{2}\.xlsx$/);
+            expect(xlsx.utils.book_append_sheet).toHaveBeenCalledTimes(1);
+            expect(xlsx.utils.book_append_sheet.mock.calls[0][2]).toBe('Table Data');
+        });
+
+        it('passes a given filename and sheetName through unchanged', async () => {
+            const xlsx = makeXLSXMock();
+            (window as unknown as { XLSX: unknown }).XLSX = xlsx;
+            document.body.innerHTML = '<table id="t"><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>';
+            const table = document.getElementById('t') as unknown as Element;
+
+            const result = await extractor.extractAndDownload(table, { filename: 'report.xlsx', sheetName: 'Report' });
+            expect(result.filename).toBe('report.xlsx');
+            expect(xlsx.writeFile.mock.calls[0][1]).toBe('report.xlsx');
+            expect(xlsx.utils.book_append_sheet.mock.calls[0][2]).toBe('Report');
+        });
+
         it('returns success:false and logs when extraction itself throws (invalid table element)', async () => {
             const result = await extractor.extractAndDownload(document.createElement('div') as unknown as Element);
             expect(result).toEqual({ success: false, error: 'Invalid table element provided' });

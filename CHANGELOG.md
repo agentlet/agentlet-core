@@ -74,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assistant now calls `window.agentlet.ai`, and its welcome page no
   longer claims features it does not have.
 
+### Fixed
+
+- `tables.extractAndDownload()` without a `filename` option no longer throws
+  "Cannot read properties of undefined (reading 'slice')". It uses the
+  default `table-data-YYYY-MM-DD.xlsx` name again. In `tables.download()`
+  too, `filename`, `sheetName` and `includeMetadata` passed as `undefined`
+  now keep their defaults.
+
 ### Security
 
 - Form extraction (`forms.extract()`, `exportForAI()`, `quickExport()`)
