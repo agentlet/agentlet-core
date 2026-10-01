@@ -380,10 +380,11 @@ class TableExtractor implements TableExtractorAPI {
      * @returns Excel workbook object
      */
     createExcelWorkbook(tableData: TableData | TableAllPagesData, options: TableDownloadOptions = {}): XLSXWorkbook {
+        // Merge per key with ?? so an option passed as undefined keeps its default.
         const config: TableDownloadOptions = {
-            sheetName: 'Table Data',
-            includeMetadata: false,
-            ...options
+            ...options,
+            sheetName: options.sheetName ?? 'Table Data',
+            includeMetadata: options.includeMetadata ?? false
         };
 
         if (!this.isExcelExportAvailable()) {
@@ -432,11 +433,12 @@ class TableExtractor implements TableExtractorAPI {
      * @param options - Download options
      */
     async downloadAsExcel(tableData: TableData | TableAllPagesData, options: TableDownloadOptions = {}): Promise<TableDownloadResult> {
+        // Merge per key with ?? so an option passed as undefined keeps its default.
         const config: TableDownloadOptions = {
-            filename: `table-data-${new Date().toISOString().split('T')[0]}.xlsx`,
-            sheetName: 'Table Data',
-            includeMetadata: false,
-            ...options
+            ...options,
+            filename: options.filename ?? `table-data-${new Date().toISOString().split('T')[0]}.xlsx`,
+            sheetName: options.sheetName ?? 'Table Data',
+            includeMetadata: options.includeMetadata ?? false
         };
 
         try {
@@ -486,7 +488,11 @@ class TableExtractor implements TableExtractorAPI {
                 tableData = this.extractTableData(tableElement, extractOptions);
             }
 
-            const downloadOptions: TableDownloadOptions = { filename, ...options };
+            const downloadOptions: TableDownloadOptions = {
+                filename,
+                sheetName: options.sheetName,
+                includeMetadata: options.includeMetadata
+            };
             return await this.downloadAsExcel(tableData, downloadOptions);
 
         } catch (error) {
