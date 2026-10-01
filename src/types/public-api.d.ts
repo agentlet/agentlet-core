@@ -766,7 +766,7 @@ export interface AgentletUtils {
  * of the method names below (`get`, `set`, `has`, ...) is shadowed by the
  * real method instead of being treated as a variable, and TypeScript has
  * no sound way to express "index signature except for these literal
- * keys" — so this type only models the method API. Use `get`/`set`
+ * keys", so this type only models the method API. Use `get`/`set`
  * rather than bracket/dot access on arbitrary keys from TypeScript code.
  */
 export interface EnvAPI {
@@ -2384,7 +2384,7 @@ declare global {
          * Conventional global consumers set before constructing
          * `AgentletCore` in bookmarklet-style loading (see examples/), and
          * which `eslint.config.js` whitelists as a known global. Not read
-         * automatically by `src/index.js` itself — pass it explicitly to
+         * automatically by `src/index.js` itself: pass it explicitly to
          * the constructor, e.g. `new AgentletCore(window.agentletConfig)`.
          */
         agentletConfig?: AgentletCoreConfig;
