@@ -104,18 +104,122 @@ function apiBlockedUpFront(): string | null {
     return null;
 }
 
+interface SavedSelection {
+    ranges: Range[];
+    active: HTMLElement | null;
+    start: number | null;
+    end: number | null;
+    direction: 'forward' | 'backward' | 'none' | null;
+}
+
+function isTextControl(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
+    return !!element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA');
+}
+
+function saveSelection(): SavedSelection {
+    const selection = document.getSelection();
+    const ranges: Range[] = [];
+    for (let i = 0; selection && i < selection.rangeCount; i += 1) ranges.push(selection.getRangeAt(i));
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const control = isTextControl(active) ? active : null;
+    let start: number | null = null;
+    let end: number | null = null;
+    let direction: SavedSelection['direction'] = null;
+    try {
+        if (control) {
+            start = control.selectionStart;
+            end = control.selectionEnd;
+            direction = control.selectionDirection;
+        }
+    } catch {
+        // Some input types (email, number) throw on selectionStart.
+    }
+    return { ranges, active, start, end, direction };
+}
+
+function restoreSelection(saved: SavedSelection): void {
+    try {
+        if (saved.active && document.activeElement !== saved.active) saved.active.focus({ preventScroll: true });
+        if (isTextControl(saved.active) && saved.start !== null && saved.end !== null) {
+            saved.active.setSelectionRange(saved.start, saved.end, saved.direction ?? undefined);
+        }
+        const selection = document.getSelection();
+        if (selection && !isTextControl(saved.active)) {
+            selection.removeAllRanges();
+            saved.ranges.forEach(range => selection.addRange(range));
+        }
+    } catch (error) {
+        logger.log('Could not restore the selection after copying:', reasonOf(error));
+    }
+}
+
+/**
+ * Puts a temporary off-screen element in the page and selects its content, so
+ * `execCommand('copy')` has a selection. WebKit only enables the copy command
+ * for a range selection (or a cancelled `beforecopy`). The element is
+ * `aria-hidden`, fixed off screen and not focusable by users, so it neither
+ * scrolls the page nor shifts layout. Returns a cleanup that removes it and
+ * restores the previous selection and focus. Returns `null` when the page has
+ * no body to host it.
+ */
+function selectTemporaryContent(text: string): (() => void) | null {
+    const host = document.body ?? document.documentElement;
+    if (!host || typeof document.createRange !== 'function') return null;
+    const saved = saveSelection();
+    const element = document.createElement('span');
+    element.setAttribute('aria-hidden', 'true');
+    element.textContent = text.slice(0, 200) || ' ';
+    element.style.cssText = 'position:fixed;top:0;left:-9999px;width:1px;height:1px;overflow:hidden;'
+        + 'white-space:pre;opacity:0;pointer-events:none;user-select:text;-webkit-user-select:text';
+    const cleanup = () => {
+        element.remove();
+        restoreSelection(saved);
+    };
+    try {
+        host.appendChild(element);
+        // A focused text control keeps its own selection and would win: move the focus off it.
+        if (isTextControl(saved.active) || saved.active?.isContentEditable) {
+            element.tabIndex = -1;
+            element.focus({ preventScroll: true });
+        }
+        const selection = document.getSelection();
+        if (!selection) {
+            cleanup();
+            return null;
+        }
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    } catch (error) {
+        logger.log('Could not select a temporary element for the copy:', reasonOf(error));
+        cleanup();
+        return null;
+    }
+    return cleanup;
+}
+
 /**
  * The classic copy path: a one-shot capture-phase `copy` listener sets the
  * formats on `event.clipboardData`, then `document.execCommand('copy')` fires
  * the event. It needs no clipboard permission, only a user gesture. It is
  * synchronous, so a caller that has not awaited yet still holds the gesture.
- * The listener is always removed. Returns `null` on success, else the reason.
+ *
+ * WebKit returns false without firing `copy` unless the command is enabled:
+ * there must be a range selection, or a `beforecopy` event must be cancelled.
+ * So a one-shot `beforecopy` listener cancels the event, and a temporary
+ * off-screen selection is made for engines that ignore `beforecopy`. Selection
+ * and focus are restored. Every listener and the element are removed in a
+ * `finally`. Returns `null` on success, else the reason.
  */
 function writeWithCopyEvent(html: string, text: string): string | null {
     if (typeof document === 'undefined' || typeof document.execCommand !== 'function') {
         return 'document.execCommand is not available';
     }
     let handled = false;
+    const onBeforeCopy = (event: Event) => {
+        event.preventDefault();
+    };
     const onCopy = (event: ClipboardEvent) => {
         const data = event.clipboardData;
         if (!data) return;
@@ -125,8 +229,11 @@ function writeWithCopyEvent(html: string, text: string): string | null {
         event.preventDefault();
         handled = true;
     };
+    document.addEventListener('beforecopy', onBeforeCopy, true);
     document.addEventListener('copy', onCopy, true);
+    let cleanup: (() => void) | null = null;
     try {
+        cleanup = selectTemporaryContent(text);
         const ok = document.execCommand('copy');
         if (!ok) {
             const inactive = typeof navigator !== 'undefined' && navigator.userActivation?.isActive === false;
@@ -138,7 +245,9 @@ function writeWithCopyEvent(html: string, text: string): string | null {
     } catch (error) {
         return reasonOf(error);
     } finally {
+        document.removeEventListener('beforecopy', onBeforeCopy, true);
         document.removeEventListener('copy', onCopy, true);
+        cleanup?.();
     }
 }
 

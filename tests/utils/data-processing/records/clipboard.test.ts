@@ -317,6 +317,101 @@ describe('records.copy()', () => {
             await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*copy event failed.*navigator\.clipboard is not available/);
         });
 
+        describe('beforecopy and the temporary selection', () => {
+            beforeEach(() => { document.body.innerHTML = '<p id="para">Some page text</p><input id="field" value="hello world"><textarea id="area">abc def</textarea>'; });
+            afterEach(() => { document.body.innerHTML = ''; });
+            const aria = () => document.querySelectorAll('span[aria-hidden="true"]').length;
+
+            it('cancels beforecopy and has a selection while the command runs', async () => {
+                execCommand = installExecCommand();
+                await makeManager().manager.copy(organization());
+                expect(execCommand.events.beforeCopyPrevented).toBe(true);
+                expect(execCommand.events.selectedText).not.toBe('');
+                expect(execCommand.events.temporaryElements).toBe(1);
+            });
+
+            it('removes the temporary element and restores the page selection', async () => {
+                execCommand = installExecCommand();
+                const para = document.getElementById('para') as HTMLElement;
+                const range = document.createRange();
+                range.setStart(para.firstChild as Node, 5);
+                range.setEnd(para.firstChild as Node, 9);
+                const selection = document.getSelection() as Selection;
+                selection.removeAllRanges();
+                selection.addRange(range);
+
+                await makeManager().manager.copy(organization());
+                expect(aria()).toBe(0);
+                expect(selection.rangeCount).toBe(1);
+                expect(selection.toString()).toBe('page');
+            });
+
+            it('restores focus and the selection of a focused input', async () => {
+                execCommand = installExecCommand();
+                const field = document.getElementById('field') as HTMLInputElement;
+                field.focus();
+                field.setSelectionRange(2, 7);
+
+                await makeManager().manager.copy(organization());
+                expect(document.activeElement).toBe(field);
+                expect(field.selectionStart).toBe(2);
+                expect(field.selectionEnd).toBe(7);
+                expect(field.value).toBe('hello world');
+                expect(aria()).toBe(0);
+            });
+
+            it('restores a focused textarea too', async () => {
+                execCommand = installExecCommand();
+                const area = document.getElementById('area') as HTMLTextAreaElement;
+                area.focus();
+                area.setSelectionRange(1, 3);
+                await makeManager().manager.copy(organization());
+                expect(document.activeElement).toBe(area);
+                expect([area.selectionStart, area.selectionEnd]).toEqual([1, 3]);
+            });
+
+            it('removes the temporary element and the listeners when the copy fails or throws', async () => {
+                const addSpy = jest.spyOn(document, 'addEventListener');
+                const removeSpy = jest.spyOn(document, 'removeEventListener');
+                try {
+                    for (const setup of [
+                        () => installExecCommand({ result: false }),
+                        () => installExecCommand({ fireEvent: false }),
+                        () => { const fake = installExecCommand(); fake.exec.mockImplementation(() => { throw new Error('boom'); }); return fake; }
+                    ]) {
+                        addSpy.mockClear();
+                        removeSpy.mockClear();
+                        execCommand = setup();
+                        clipboard.write.mockRejectedValue(denied());
+                        await makeManager().manager.copy(organization()).catch(() => undefined);
+                        for (const type of ['beforecopy', 'copy']) {
+                            const added = addSpy.mock.calls.filter(call => call[0] === type);
+                            const removed = removeSpy.mock.calls.filter(call => call[0] === type);
+                            expect(added).toHaveLength(1);
+                            expect(added[0][2]).toBe(true);
+                            expect(removed).toHaveLength(1);
+                            expect(removed[0][1]).toBe(added[0][1]);
+                        }
+                        expect(aria()).toBe(0);
+                        execCommand.restore();
+                    }
+                } finally {
+                    addSpy.mockRestore();
+                    removeSpy.mockRestore();
+                }
+            });
+
+            it('does not add a temporary element when execCommand is unavailable', async () => {
+                const added = jest.spyOn(document.body, 'appendChild');
+                try {
+                    await makeManager().manager.copy(organization());
+                    expect(added).not.toHaveBeenCalled();
+                } finally {
+                    added.mockRestore();
+                }
+            });
+        });
+
         it('removes the copy listener in every case', async () => {
             const addSpy = jest.spyOn(document, 'addEventListener');
             const removeSpy = jest.spyOn(document, 'removeEventListener');

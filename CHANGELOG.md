@@ -44,7 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RecordCopyResult.method` reports `'clipboard-api'` or `'copy-event'`. If
   both paths fail, `copy()` rejects with an error that says copying was
   blocked by the browser and names both attempts. A successful `copy()` now
-  fires a `copy` event on the document.
+  fires a `copy` event on the document, and briefly selects an off-screen
+  element (the previous selection and focus are restored), because WebKit
+  only enables the copy command with a selection.
 - Filling: `match()` maps record fields to a target form by remembered
   mapping, `autocomplete`, `name` or `id`, label and input type, with a veto
   for a value a field cannot take. `fill()` shows a preview dialog, then

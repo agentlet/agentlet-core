@@ -158,7 +158,7 @@ Outcome for the transport: write the custom format first and fall back to HTML p
 
 Order of attempts in the clipboard transport, both started in the same synchronous run, inside the user gesture:
 
-1. **The copy event, first.** A one-shot `copy` listener on `document`, in the capture phase, calls `event.clipboardData.setData('text/html', html)` (the record embedded in `data-agentlet-record`) and `setData('text/plain', text)`, then `preventDefault()`. `document.execCommand('copy')` fires it, and the listener is removed in a `finally`. It needs no clipboard permission, only a user gesture, and it works on Chromium, Firefox and WebKit.
+1. **The copy event, first.** A one-shot `copy` listener on `document`, in the capture phase, calls `event.clipboardData.setData('text/html', html)` (the record embedded in `data-agentlet-record`) and `setData('text/plain', text)`, then `preventDefault()`. `document.execCommand('copy')` fires it. WebKit returns false without firing `copy` unless the command is enabled, which needs a range selection or a cancelled `beforecopy` event. So a one-shot capture-phase `beforecopy` listener calls `preventDefault()`, and a temporary `aria-hidden` element, fixed off screen, is selected for the duration of the call. Both listeners and the element are removed in a `finally`, and the previous selection (the ranges, and `selectionStart` and `selectionEnd` of a focused input or textarea) and focus are restored. It needs no clipboard permission, only a user gesture, and it works on Chromium, Firefox and WebKit.
 2. **`navigator.clipboard.write()`, as an enhancement.** The custom format, `text/html` and `text/plain`, with one retry without the custom format when the first call throws. When it succeeds it replaces the clipboard with a superset of the same data, and `RecordCopyResult.method` is `'clipboard-api'`. When it throws, or is missing, or is blocked up front (no `ClipboardItem`, or `document.permissionsPolicy.allowsFeature('clipboard-write')` is false), the error is logged at debug level and the copy event content stays. `method` is `'copy-event'`, `customFormat` is `false`, and `formats` is `['text/html', 'text/plain']`.
 3. **`copy()` rejects only when both paths failed.** The message starts with `Copying was blocked by the browser` and names both attempts and their reasons. If `execCommand` is unavailable, returns false, throws, or the listener never receives a `clipboardData`, only the API path is left.
 
@@ -170,13 +170,15 @@ Smart paste works with either result, because it reads the HTML embedding. The c
 
 `execCommand('copy')` needs a live user gesture. An earlier version tried the API first and ran the copy event after a rejection. That fails on WebKit. Measured on 2026-10-01 with Playwright 1.54.1 builds (Chromium 1181 headless shell, Firefox 1489, WebKit 2140), clicking a button whose handler awaits a clipboard call and then runs `execCommand('copy')` with a capture-phase `copy` listener:
 
-| Engine | After a rejected or accepted `clipboard.write()` | After 3 s | After 6 s | Without a selection |
+| Engine | After a rejected or accepted `clipboard.write()` | After 3 s | After 6 s | Without a selection (Playwright 1.54 builds) |
 |---|---|---|---|---|
 | Chromium (write denied) | copy event fires, data set | works | fails, activation expired | works |
 | Firefox | copy event fires, data set | works | fails, activation expired | works |
 | WebKit | `execCommand` returns false, no event | false, same cause | false | works before any async clipboard call |
 
 Chromium and Firefox keep a transient activation for about five seconds. WebKit loses the gesture after any async clipboard call (`write()`, even a rejected `writeText()`), although `navigator.userActivation.isActive` stays true. A promise that is already resolved does not lose it. CI on the release PR reproduced it with newer WebKit builds: the write was denied, the fallback ran after the rejection, and `execCommand` returned false. Running the copy event before any `await` removes the problem on every engine.
+
+The "without a selection" column comes from the 1.54 builds on macOS. A newer WebKit on Linux (Playwright 1.63, in CI) returned false from the first `execCommand('copy')` of a click with no selection, so the transport no longer relies on it: it cancels `beforecopy` and selects a temporary element. That path could not be run against WebKit 1.63 locally.
 
 Other options that were not used:
 

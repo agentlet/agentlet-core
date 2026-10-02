@@ -131,7 +131,7 @@ export interface FakeExecCommand {
     /** What the `copy` event listeners set through `clipboardData.setData`. */
     data: Record<string, string>;
     /** Number of `copy` events dispatched. */
-    events: { count: number; defaultPrevented: boolean };
+    events: { count: number; defaultPrevented: boolean; beforeCopyPrevented: boolean; selectedText: string; temporaryElements: number };
     restore(): void;
 }
 
@@ -144,9 +144,16 @@ export interface FakeExecCommand {
 export function installExecCommand(options: { result?: boolean; fireEvent?: boolean; noClipboardData?: boolean } = {}): FakeExecCommand {
     const { result = true, fireEvent = true, noClipboardData = false } = options;
     const data: Record<string, string> = {};
-    const events = { count: 0, defaultPrevented: false };
+    const events = { count: 0, defaultPrevented: false, beforeCopyPrevented: false, selectedText: '', temporaryElements: 0 };
     const original = (document as unknown as { execCommand?: unknown }).execCommand;
     const exec = jest.fn<boolean, [string]>((command: string) => {
+        if (command === 'copy') {
+            const before = new Event('beforecopy', { bubbles: true, cancelable: true });
+            document.body.dispatchEvent(before);
+            events.beforeCopyPrevented = before.defaultPrevented;
+            events.selectedText = document.getSelection()?.toString() ?? '';
+            events.temporaryElements = document.querySelectorAll('span[aria-hidden="true"]').length;
+        }
         if (command === 'copy' && fireEvent) {
             const event = new Event('copy', { bubbles: true, cancelable: true });
             if (!noClipboardData) {
