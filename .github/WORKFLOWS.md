@@ -9,7 +9,7 @@ This repository has three workflows in `.github/workflows/`: `test.yml`, `securi
 Two jobs run in parallel, with no dependency between them:
 
 - `checks`: `npm ci`, Jest unit tests, `npm run lint`, `npm run typecheck` and `npm run build`. Timeout: 10 minutes.
-- `e2e`: a matrix over `chromium`, `firefox` and `webkit` (`fail-fast: false`). Each job installs only its own browser with `npx playwright install --with-deps <project>` and runs `npm run test:examples -- --project=<project>`. On failure it uploads `tests/examples/test-results/` as `test-artifacts-<project>` (3 days retention). Timeout: 25 minutes.
+- `e2e`: a matrix over `chromium`, `firefox` and `webkit` (`fail-fast: false`). Each job installs only its own browser with `npx playwright install --with-deps <project>`, cached in `~/.cache/ms-playwright` under a key made of the runner OS, the installed `@playwright/test` version and the project. On a cache hit it only installs the browser's system libraries with `npx playwright install-deps <project>`. It then runs `npm run test:examples -- --project=<project>`. On failure it uploads `tests/examples/test-results/` as `test-artifacts-<project>` (3 days retention). Timeout: 25 minutes.
 
 `tests/examples/playwright.config.js` sets 4 workers on CI (override with `E2E_WORKERS`) and a `globalTimeout` of 20 minutes on CI, 45 minutes locally. Each job runs the build again through Playwright's `globalSetup`, because each job has its own checkout.
 
