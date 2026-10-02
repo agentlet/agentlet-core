@@ -1,12 +1,14 @@
 /**
  * The phase 1 transport: the system clipboard.
  *
- * Write: one `ClipboardItem` with the custom format, `text/html` (record
- * embedded) and `text/plain`. When the browser rejects the custom format
- * (Firefox does), retry with HTML and plain text only. When the async
- * clipboard API is missing or refuses the write (webviews, iframes without
- * the `clipboard-write` permission policy, locked-down browsers), fall back
- * to a `copy` event with HTML and plain text.
+ * Write: first a `copy` event with `text/html` (record embedded) and
+ * `text/plain`, synchronously inside the user gesture, which needs no
+ * permission and works on every engine. Then one `ClipboardItem` with the
+ * custom format, `text/html` and `text/plain` as an enhancement. When the
+ * browser rejects the custom format (Firefox does), retry with HTML and plain
+ * text only. When the async clipboard API is missing or refuses the write
+ * (webviews, iframes without the `clipboard-write` permissions policy,
+ * locked-down browsers), the copy event content stays.
  *
  * Read: the custom format first (only reachable through
  * `navigator.clipboard.read()`), then the HTML embedding. Plain text is
@@ -64,7 +66,7 @@ export type WriteMethod = 'clipboard-api' | 'copy-event';
 function blockedError(apiFailure: string, eventFailure: string): Error {
     return new Error(
         'Copying was blocked by the browser. '
-        + `navigator.clipboard.write() failed (${apiFailure}) and the copy event fallback failed (${eventFailure}). `
+        + `The copy event failed (${eventFailure}) and navigator.clipboard.write() failed (${apiFailure}). `
         + 'Copy from a click or a key press, and check that the page may write to the clipboard.'
     );
 }
@@ -144,46 +146,54 @@ export class ClipboardTransport implements RecordTransport {
     readonly name = 'clipboard';
 
     /**
-     * Writes `navigator.clipboard.write()` first (custom format, then HTML and
-     * plain text only). When the API is missing or rejects the write, for
-     * example "Write permission denied" in a webview, an iframe without the
-     * `clipboard-write` permissions policy or a locked-down browser, it falls
-     * back to a `copy` event, which writes HTML and plain text.
+     * Copies in two steps, the first one before any `await`:
      *
-     * `execCommand('copy')` needs a live user activation, and the fallback
-     * after a rejection runs after an `await`. Measured on 2026-10-01 (see
-     * "Copy fallback" in docs/rfcs/0001-records-api.md): Chromium and Firefox
-     * keep the activation for about five seconds, so the fallback after a
-     * rejection works there. WebKit loses the gesture after any async
-     * clipboard call, so the fallback after a rejection does not work there.
-     * When the API is known to be unusable up front (missing, or blocked by
-     * the permissions policy), the copy event therefore runs first, before any
-     * `await`, which holds on every engine.
+     * 1. The copy event, synchronously, inside the user gesture: a one-shot
+     *    capture-phase `copy` listener sets `text/html` (record embedded) and
+     *    `text/plain`, then `document.execCommand('copy')` fires it. It needs
+     *    no clipboard permission and works on every engine.
+     * 2. Then `navigator.clipboard.write()` as an enhancement: the custom
+     *    format plus HTML and plain text, with one retry without the custom
+     *    format. When it succeeds it replaces the clipboard with a superset of
+     *    the same data. When it fails or is unavailable (webviews, iframes
+     *    without the `clipboard-write` permissions policy, locked-down
+     *    browsers) the error is only logged and the copy event content stays.
+     *
+     * The order matters: WebKit refuses `execCommand('copy')` after any async
+     * clipboard call, even a rejected one, so a fallback that runs after the
+     * API fails cannot work there. See "Copy fallback" in
+     * docs/rfcs/0001-records-api.md.
+     *
+     * Rejects only when both paths failed. Callers must not `await` anything
+     * before calling this from a click handler.
      */
     async write(payload: RecordPayload): Promise<WriteOutcome> {
         const json = JSON.stringify(toEnvelope(payload));
         const bytes = utf8ByteLength(json);
         const html = buildHtml(payload);
         const text = buildPlainText(payload);
-        const copyEvent: WriteOutcome = { formats: ['text/html', 'text/plain'], customFormat: false, bytes, method: 'copy-event' };
 
-        let apiFailure = apiBlockedUpFront();
-        if (apiFailure) {
-            const eventFailure = writeWithCopyEvent(html, text);
-            if (!eventFailure) return copyEvent;
-            throw blockedError(apiFailure, eventFailure);
-        }
-
-        try {
-            return { ...(await this.writeWithClipboardApi(json, html, text)), bytes };
-        } catch (error) {
-            apiFailure = reasonOf(error);
-            logger.log('navigator.clipboard.write() failed, falling back to a copy event:', apiFailure);
-        }
-
+        // Step 1: synchronous, still inside the gesture.
         const eventFailure = writeWithCopyEvent(html, text);
+
+        // Step 2: the async API, only when it may work.
+        let apiFailure = apiBlockedUpFront();
+        if (!apiFailure) {
+            try {
+                return { ...(await this.writeWithClipboardApi(json, html, text)), bytes };
+            } catch (error) {
+                apiFailure = reasonOf(error);
+                logger.log(
+                    eventFailure
+                        ? 'navigator.clipboard.write() failed:'
+                        : 'navigator.clipboard.write() failed, keeping the copy event content:',
+                    apiFailure
+                );
+            }
+        }
+
         if (eventFailure) throw blockedError(apiFailure, eventFailure);
-        return copyEvent;
+        return { formats: ['text/html', 'text/plain'], customFormat: false, bytes, method: 'copy-event' };
     }
 
     /** `navigator.clipboard.write()` with one retry without the custom format. Throws when the browser refuses. */

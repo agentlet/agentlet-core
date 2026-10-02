@@ -107,14 +107,21 @@ test.describe('Records Copy and Paste Example', () => {
 
   test('should copy and paste without clipboard-write permission (copy event fallback)', async ({ page, browserName }) => {
     // Chromium: the permission is neither granted here nor given by default, so
-    // navigator.clipboard.write() rejects with "Write permission denied".
-    // Firefox and WebKit allow the API write from a click, so there the test
-    // blocks it to force the fallback and checks the same flow.
+    // navigator.clipboard.write() really rejects with "Write permission denied".
+    // Firefox and WebKit allow the API write from a click, so there an init
+    // script makes it reject after a real async clipboard round trip, as a
+    // denial does. In WebKit that round trip ends the user gesture, so a copy
+    // event that ran after it would fail: the copy event must run first.
     if (browserName !== 'chromium') {
       await page.addInitScript(() => {
+        const original = navigator.clipboard.write.bind(navigator.clipboard);
         Object.defineProperty(navigator.clipboard, 'write', {
           configurable: true,
-          value: () => Promise.reject(new DOMException('Write permission denied.', 'NotAllowedError'))
+          value: async (items) => {
+            // The round trip writes what it is given, then the call is refused.
+            try { await original(items); } catch { /* denied too */ }
+            throw new DOMException('Write permission denied.', 'NotAllowedError');
+          }
         });
       });
       await page.reload();

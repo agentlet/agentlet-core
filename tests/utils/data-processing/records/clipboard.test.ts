@@ -1,8 +1,8 @@
 /**
  * Tests for the clipboard transport through `records.copy()`, `read()` and
  * `fromPasteEvent()`, with a mocked clipboard: the formats written, the
- * fallback when the custom format is rejected, the copy event fallback when
- * the clipboard API refuses or is missing, the size limit and the
+ * fallback when the custom format is rejected, the copy event first and the
+ * clipboard API second, including when the API refuses or is missing, the size limit and the
  * sensitive-data rule on copy.
  */
 import type { AgentletRecord } from '../../../../src/types/public-api';
@@ -156,17 +156,39 @@ describe('records.copy()', () => {
         });
     });
 
-    describe('when the clipboard API refuses or is missing', () => {
+    describe('copy event first, then the clipboard API', () => {
         const denied = () => new DOMException('Write permission denied.', 'NotAllowedError');
 
-        it('falls back to a copy event when clipboard.write rejects, even without the custom format', async () => {
+        it('runs the copy event before any await, inside the gesture', async () => {
+            execCommand = installExecCommand();
+            const { manager } = makeManager();
+            const pending = manager.copy(organization());
+            // Synchronous: nothing was awaited yet, so the gesture is still held.
+            expect(execCommand.exec).toHaveBeenCalledTimes(1);
+            expect(execCommand.events.count).toBe(1);
+            await pending;
+        });
+
+        it('calls the API after the copy event and reports clipboard-api when it succeeds', async () => {
+            const order: string[] = [];
+            execCommand = installExecCommand();
+            execCommand.exec.mockImplementation(() => { order.push('copy-event'); return true; });
+            clipboard.write.mockImplementation(() => { order.push('api'); return Promise.resolve(); });
+            const { manager } = makeManager();
+            const result = await manager.copy(organization());
+            expect(order).toEqual(['copy-event', 'api']);
+            expect(result.method).toBe('clipboard-api');
+            expect(result.formats).toEqual([CUSTOM, 'text/html', 'text/plain']);
+            expect(result.customFormat).toBe(true);
+        });
+
+        it('keeps the copy event content when clipboard.write rejects, even without the custom format', async () => {
             execCommand = installExecCommand();
             clipboard.write.mockRejectedValue(denied());
             const { manager, emit } = makeManager();
             const result = await manager.copy(organization());
 
             expect(clipboard.write).toHaveBeenCalledTimes(2);
-            expect(execCommand.exec).toHaveBeenCalledWith('copy');
             expect(execCommand.events.count).toBe(1);
             expect(execCommand.events.defaultPrevented).toBe(true);
             expect(result.method).toBe('copy-event');
@@ -177,49 +199,58 @@ describe('records.copy()', () => {
             expect(emit).toHaveBeenCalledWith('records:copied', expect.objectContaining({ type: 'organization' }));
         });
 
-        it('falls back when only the custom format attempt and the retry both reject', async () => {
+        it('resolves with copy-event when the custom format attempt and the retry both reject', async () => {
             execCommand = installExecCommand();
             clipboard.write
                 .mockRejectedValueOnce(new DOMException('type not supported', 'NotAllowedError'))
                 .mockRejectedValueOnce(denied());
-            const { manager } = makeManager();
-            const result = await manager.copy(organization());
+            const result = await makeManager().manager.copy(organization());
             expect(clipboard.write).toHaveBeenCalledTimes(2);
             expect(result.method).toBe('copy-event');
         });
 
-        it('uses the copy event without touching the API when navigator.clipboard is missing', async () => {
+        it('uses the copy event alone when navigator.clipboard is missing', async () => {
             removeClipboard();
             execCommand = installExecCommand();
-            const { manager } = makeManager();
-            const result = await manager.copy(organization());
+            const result = await makeManager().manager.copy(organization());
             expect(result.method).toBe('copy-event');
             expect(execCommand.events.count).toBe(1);
         });
 
-        it('uses the copy event first when there is no ClipboardItem', async () => {
+        it('uses the copy event alone when there is no ClipboardItem', async () => {
             installClipboard({ withItem: false });
             execCommand = installExecCommand();
-            const { manager } = makeManager();
-            const result = await manager.copy(organization());
+            const result = await makeManager().manager.copy(organization());
             expect(result.method).toBe('copy-event');
             expect(clipboard.write).not.toHaveBeenCalled();
         });
 
-        it('runs the copy event before any await when the permissions policy blocks the frame', async () => {
+        it('skips the API when the permissions policy blocks the frame', async () => {
             execCommand = installExecCommand();
             Object.defineProperty(document, 'permissionsPolicy', { value: { allowsFeature: (feature: string) => feature !== 'clipboard-write' }, configurable: true });
             try {
-                const { manager } = makeManager();
-                const pending = manager.copy(organization());
-                // Synchronous: the gesture is still held, nothing was awaited.
-                expect(execCommand.exec).toHaveBeenCalledTimes(1);
-                const result = await pending;
+                const result = await makeManager().manager.copy(organization());
                 expect(result.method).toBe('copy-event');
                 expect(clipboard.write).not.toHaveBeenCalled();
             } finally {
                 delete (document as unknown as { permissionsPolicy?: unknown }).permissionsPolicy;
             }
+        });
+
+        it('goes straight to the API when execCommand is unavailable', async () => {
+            const result = await makeManager().manager.copy(organization());
+            expect(result.method).toBe('clipboard-api');
+            expect(clipboard.write).toHaveBeenCalledTimes(1);
+        });
+
+        it.each([
+            ['returns false', { result: false }],
+            ['never fires the copy event', { fireEvent: false }],
+            ['fires it without clipboardData', { noClipboardData: true }]
+        ])('goes to the API when execCommand %s', async (_label, options) => {
+            execCommand = installExecCommand(options);
+            const result = await makeManager().manager.copy(organization());
+            expect(result.method).toBe('clipboard-api');
         });
 
         it('sets text/html with the record embedded and text/plain, and the record round-trips through fromPasteEvent', async () => {
@@ -248,7 +279,7 @@ describe('records.copy()', () => {
             expect(manager.fromPasteEvent(pasteEvent(execCommand.data) as ClipboardEvent)).toHaveLength(2);
         });
 
-        it('rejects with a clear error naming both attempts when execCommand returns false', async () => {
+        it('rejects with a clear error naming both attempts when both fail', async () => {
             execCommand = installExecCommand({ result: false });
             clipboard.write.mockRejectedValue(denied());
             const { manager, emit } = makeManager();
@@ -256,12 +287,12 @@ describe('records.copy()', () => {
             expect(error).toBeInstanceOf(Error);
             const message = (error as Error).message;
             expect(message).toMatch(/blocked by the browser/);
+            expect(message).toContain('The copy event failed (execCommand("copy") returned false)');
             expect(message).toContain('navigator.clipboard.write() failed (Write permission denied.)');
-            expect(message).toContain('copy event fallback failed (execCommand("copy") returned false)');
             expect(emit).not.toHaveBeenCalled();
         });
 
-        it('rejects when the copy event never fires or has no clipboardData', async () => {
+        it('rejects when the copy event never fires or has no clipboardData, and the API fails', async () => {
             clipboard.write.mockRejectedValue(denied());
             execCommand = installExecCommand({ fireEvent: false });
             await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*did not fire/);
@@ -270,7 +301,7 @@ describe('records.copy()', () => {
             await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*no clipboardData/);
         });
 
-        it('rejects when execCommand throws, and when it does not exist', async () => {
+        it('rejects when execCommand throws or does not exist, and the API fails', async () => {
             clipboard.write.mockRejectedValue(denied());
             execCommand = installExecCommand();
             execCommand.exec.mockImplementation(() => { throw new Error('SecurityError'); });
@@ -281,10 +312,9 @@ describe('records.copy()', () => {
             await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*execCommand is not available/);
         });
 
-        it('names the missing clipboard and the failed fallback when neither path works', async () => {
+        it('names both failures when neither the clipboard nor the copy event exist', async () => {
             removeClipboard();
-            const { manager } = makeManager();
-            await expect(manager.copy(organization())).rejects.toThrow(/blocked by the browser.*navigator\.clipboard is not available.*copy event fallback failed/);
+            await expect(makeManager().manager.copy(organization())).rejects.toThrow(/blocked by the browser.*copy event failed.*navigator\.clipboard is not available/);
         });
 
         it('removes the copy listener in every case', async () => {
@@ -304,6 +334,7 @@ describe('records.copy()', () => {
                     expect(copyCalls(removeSpy)[0][2]).toBe(true);
                     execCommand?.restore();
                 };
+                await attempt(() => { execCommand = installExecCommand(); });
                 clipboard.write.mockRejectedValue(denied());
                 await attempt(() => { execCommand = installExecCommand(); });
                 await attempt(() => { execCommand = installExecCommand({ result: false }); });
@@ -317,14 +348,6 @@ describe('records.copy()', () => {
                 addSpy.mockRestore();
                 removeSpy.mockRestore();
             }
-        });
-
-        it('does not use the fallback when the API write succeeds', async () => {
-            execCommand = installExecCommand();
-            const { manager } = makeManager();
-            const result = await manager.copy(organization());
-            expect(result.method).toBe('clipboard-api');
-            expect(execCommand.exec).not.toHaveBeenCalled();
         });
     });
 

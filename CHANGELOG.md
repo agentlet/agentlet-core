@@ -34,14 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the method (for example `records.fromElement() expects an Element`) when
   they get something that is not an element, instead of an error from
   inside the extractor.
-- `copy()` falls back to a `copy` event with `text/html` (record embedded)
-  and `text/plain` when `navigator.clipboard.write()` is missing or refused,
-  as in webviews, iframes without the `clipboard-write` permissions policy
-  and locked-down browsers. It needs no clipboard permission, only a user
-  gesture, and smart paste keeps working. `RecordCopyResult.method` reports
-  `'clipboard-api'` or `'copy-event'`. If both paths fail, `copy()` rejects
-  with an error that says copying was blocked by the browser and names both
-  attempts.
+- `copy()` copies in two steps, both inside the user gesture. First a `copy`
+  event with `text/html` (record embedded) and `text/plain`, which needs no
+  clipboard permission and works in Chromium, Firefox and WebKit. Then
+  `navigator.clipboard.write()` with the custom format, as an enhancement. If
+  the API is missing or refused, as in webviews, iframes without the
+  `clipboard-write` permissions policy and locked-down browsers, the copy
+  event content stays and smart paste keeps working.
+  `RecordCopyResult.method` reports `'clipboard-api'` or `'copy-event'`. If
+  both paths fail, `copy()` rejects with an error that says copying was
+  blocked by the browser and names both attempts. A successful `copy()` now
+  fires a `copy` event on the document.
 - Filling: `match()` maps record fields to a target form by remembered
   mapping, `autocomplete`, `name` or `id`, label and input type, with a veto
   for a value a field cannot take. `fill()` shows a preview dialog, then

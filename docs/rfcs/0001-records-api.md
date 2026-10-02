@@ -154,20 +154,21 @@ Outcome for the transport: write the custom format first and fall back to HTML p
 
 ## Copy fallback
 
-`navigator.clipboard.write()` can be refused even from a click. Chromium throws `NotAllowedError: Write permission denied` in an embedded pane, a webview, a cross-origin iframe without `allow="clipboard-write"`, or a locked-down enterprise browser. Those are hosts agentlet targets, so `copy()` does not stop there.
+`navigator.clipboard.write()` can be refused even from a click. Chromium throws `NotAllowedError: Write permission denied` in an embedded pane, a webview, a cross-origin iframe without `allow="clipboard-write"`, or a locked-down enterprise browser. Safari and WebKit refuse it too in some hosts. Those are hosts agentlet targets, so `copy()` must not depend on the API.
 
-Order of attempts in the clipboard transport:
+Order of attempts in the clipboard transport, both started in the same synchronous run, inside the user gesture:
 
-1. `navigator.clipboard.write()` with the custom format, `text/html` and `text/plain`.
-2. The same without the custom format, when the first call throws.
-3. The classic copy path, when the API is missing or both calls throw: a one-shot `copy` listener on `document`, in the capture phase, calls `event.clipboardData.setData('text/html', html)` and `setData('text/plain', text)` with the same content as step 1, then `preventDefault()`. `document.execCommand('copy')` fires it, and the listener is removed in a `finally`.
-4. If `execCommand` returns false, throws, or the listener never fires with a `clipboardData`, `copy()` rejects with `Copying was blocked by the browser`, and the message names both attempts and their reasons.
+1. **The copy event, first.** A one-shot `copy` listener on `document`, in the capture phase, calls `event.clipboardData.setData('text/html', html)` (the record embedded in `data-agentlet-record`) and `setData('text/plain', text)`, then `preventDefault()`. `document.execCommand('copy')` fires it, and the listener is removed in a `finally`. It needs no clipboard permission, only a user gesture, and it works on Chromium, Firefox and WebKit.
+2. **`navigator.clipboard.write()`, as an enhancement.** The custom format, `text/html` and `text/plain`, with one retry without the custom format when the first call throws. When it succeeds it replaces the clipboard with a superset of the same data, and `RecordCopyResult.method` is `'clipboard-api'`. When it throws, or is missing, or is blocked up front (no `ClipboardItem`, or `document.permissionsPolicy.allowsFeature('clipboard-write')` is false), the error is logged at debug level and the copy event content stays. `method` is `'copy-event'`, `customFormat` is `false`, and `formats` is `['text/html', 'text/plain']`.
+3. **`copy()` rejects only when both paths failed.** The message starts with `Copying was blocked by the browser` and names both attempts and their reasons. If `execCommand` is unavailable, returns false, throws, or the listener never receives a `clipboardData`, only the API path is left.
 
-The copy event needs no clipboard permission, only a user gesture. It cannot carry the custom format, so `customFormat` is `false`. Smart paste still works, because it reads the HTML embedding. `RecordCopyResult.method` reports the path used: `'clipboard-api'` or `'copy-event'`.
+Smart paste works with either result, because it reads the HTML embedding. The custom format is an extra.
 
-### User activation after an awaited rejection
+`copy()` must be called from a click or a key press handler with no `await` before it. `RecordsManager.copy()` validates synchronously and calls the transport in the same run.
 
-`execCommand('copy')` needs a live user activation, and step 3 runs after an `await`. Measured on 2026-10-01 with Playwright 1.54.1 builds (Chromium 1181 headless shell, Firefox 1489, WebKit 2140), clicking a button whose handler awaits the call and then runs `execCommand('copy')` with a capture-phase `copy` listener:
+### Why the copy event goes first
+
+`execCommand('copy')` needs a live user gesture. An earlier version tried the API first and ran the copy event after a rejection. That fails on WebKit. Measured on 2026-10-01 with Playwright 1.54.1 builds (Chromium 1181 headless shell, Firefox 1489, WebKit 2140), clicking a button whose handler awaits a clipboard call and then runs `execCommand('copy')` with a capture-phase `copy` listener:
 
 | Engine | After a rejected or accepted `clipboard.write()` | After 3 s | After 6 s | Without a selection |
 |---|---|---|---|---|
@@ -175,14 +176,14 @@ The copy event needs no clipboard permission, only a user gesture. It cannot car
 | Firefox | copy event fires, data set | works | fails, activation expired | works |
 | WebKit | `execCommand` returns false, no event | false, same cause | false | works before any async clipboard call |
 
-Chromium and Firefox keep a transient activation for about five seconds, so the fallback after a rejection works there. WebKit loses the gesture after any async clipboard call (`write()`, even a rejected `writeText()`), although `navigator.userActivation.isActive` stays true, so a fallback after an awaited call fails there. A promise already resolved does not lose it. In this WebKit build `write()` accepted the write in a click handler, so the rejection case could not be forced there.
+Chromium and Firefox keep a transient activation for about five seconds. WebKit loses the gesture after any async clipboard call (`write()`, even a rejected `writeText()`), although `navigator.userActivation.isActive` stays true. A promise that is already resolved does not lose it. CI on the release PR reproduced it with newer WebKit builds: the write was denied, the fallback ran after the rejection, and `execCommand` returned false. Running the copy event before any `await` removes the problem on every engine.
 
-Decision: the order depends on what is known without awaiting.
+Other options that were not used:
 
-- API missing (insecure context, no `ClipboardItem`) or blocked by the permissions policy (`document.permissionsPolicy.allowsFeature('clipboard-write')` is false, as in an iframe without the `allow` attribute): the copy event runs first, synchronously, before any `await`. This holds on every engine.
-- Otherwise the API runs first, and the copy event follows a rejection. This works on Chromium and Firefox within the activation window. On WebKit it is best effort, which is acceptable because WebKit accepts the API write from a gesture.
-- `navigator.permissions.query({ name: 'clipboard-write' })` was not used: Chromium answers `prompt` even when the write is then denied, Firefox and WebKit throw on the name, and the query itself is async.
-- A `write()` that never settles (an unanswered permission prompt) never reaches the fallback. The agentlet cannot tell it from a slow write.
+- `navigator.permissions.query({ name: 'clipboard-write' })` up front: Chromium answers `prompt` even when the write is then denied, Firefox and WebKit throw on the name, and the query is async.
+- A `write()` that never settles (an unanswered permission prompt) is not handled. The copy event content is already on the clipboard by then, so the user still has a copy.
+
+Side effect: a successful `copy()` now fires a `copy` event on the document in every browser, so page-level `copy` listeners run. The listener does not stop propagation.
 
 ## API
 
