@@ -1461,6 +1461,15 @@ export interface RecordCopyResult {
     records: number;
     /** Size of the serialized envelope, in bytes. */
     bytes: number;
+    /**
+     * How the record reached the clipboard. `'clipboard-api'`:
+     * `navigator.clipboard.write()`. `'copy-event'`: the fallback for hosts
+     * that refuse the API (webviews, iframes without the `clipboard-write`
+     * permissions policy, locked-down browsers): a `copy` event with
+     * `text/html` and `text/plain`. `customFormat` is `false` then, and
+     * smart paste keeps working through the HTML embedding.
+     */
+    method: 'clipboard-api' | 'copy-event';
 }
 
 export interface RecordOnPasteOptions {

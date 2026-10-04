@@ -23,7 +23,7 @@ test.describe('Records Copy and Paste Example', () => {
     agentletTest = new AgentletTestBase(page);
     agentletTest.setupConsoleLogging();
 
-    if (browserName === 'chromium') {
+    if (browserName === 'chromium' && !test.info().title.includes('without clipboard-write')) {
       await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     }
 
@@ -99,6 +99,48 @@ test.describe('Records Copy and Paste Example', () => {
     await page.locator('.agentlet-info-buttons button:has-text("Fill")').click();
     await expectTargetFilled(page);
     await expect(page.locator('#status')).toContainText('fields filled');
+  });
+
+  test('should state which records the target form accepts', async ({ page }) => {
+    await expect(page.locator('#target-note')).toContainText('accepts organization records');
+  });
+
+  test('should copy and paste without clipboard-write permission (copy event fallback)', async ({ page, browserName }) => {
+    // Chromium: the permission is neither granted here nor given by default, so
+    // navigator.clipboard.write() really rejects with "Write permission denied".
+    // Firefox and WebKit allow the API write from a click, so there an init
+    // script makes it reject after a real async clipboard round trip, as a
+    // denial does. In WebKit that round trip ends the user gesture, so a copy
+    // event that ran after it would fail: the copy event must run first.
+    if (browserName !== 'chromium') {
+      await page.addInitScript(() => {
+        const original = navigator.clipboard.write.bind(navigator.clipboard);
+        Object.defineProperty(navigator.clipboard, 'write', {
+          configurable: true,
+          value: async (items) => {
+            // The round trip writes what it is given, then the call is refused.
+            try { await original(items); } catch { /* denied too */ }
+            throw new DOMException('Write permission denied.', 'NotAllowedError');
+          }
+        });
+      });
+      await page.reload();
+    }
+    await initialize(page);
+    await copyCompany(page);
+    await expect(page.locator('#status')).toContainText('with the copy event');
+    await expect(page.locator('#console')).toContainText('Copy method: copy-event');
+
+    await page.locator('#sup_nm').click();
+    await page.keyboard.press(PASTE_SHORTCUT);
+
+    const preview = page.locator('.agentlet-records-preview');
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('Example SAS');
+    await expectTargetEmpty(page);
+
+    await page.locator('.agentlet-info-buttons button:has-text("Fill")').click();
+    await expectTargetFilled(page);
   });
 
   test('should leave the form untouched when the preview is cancelled', async ({ page }) => {

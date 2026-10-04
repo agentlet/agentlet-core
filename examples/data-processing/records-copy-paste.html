@@ -26,6 +26,12 @@
             margin-top: 0;
         }
 
+        #target-note {
+            margin: 0 0 12px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+
         .card {
             background: white;
             border: 1px solid #dee2e6;
@@ -141,6 +147,7 @@
                     <!-- Target pane -->
                     <div class="pane" id="target-pane">
                         <h3>Target</h3>
+                        <p id="target-note">Smart paste on this form accepts organization records, so pasting a generic record does nothing here.</p>
                         <form id="supplier-form" action="/suppliers/new" onsubmit="event.preventDefault(); log('Form submitted', 'warning');">
                             <label for="sup_nm">Supplier name</label>
                             <input type="text" id="sup_nm" name="sup_nm">
@@ -256,10 +263,14 @@ await window.agentlet.records.pasteFromClipboard(form, { types: ['organization']
             const result = await window.agentlet.records.copy(record);
             log(`Copied ${describe(record)}`, 'success');
             log(`Clipboard formats: ${result.formats.join(', ')}`);
-            if (!result.customFormat) {
+            log(`Copy method: ${result.method}`);
+            if (result.method === 'copy-event') {
+                log('The browser refused navigator.clipboard.write(). The record was copied with a copy event instead.', 'info');
+            } else if (!result.customFormat) {
                 log('The browser rejected the custom format. The record travels inside the HTML.', 'info');
             }
-            updateStatus(`Copied ${describe(record)}. Paste it into the form.`, 'success');
+            const how = result.method === 'copy-event' ? 'copy event' : 'clipboard API';
+            updateStatus(`Copied ${describe(record)} with the ${how}. Paste it into the form.`, 'success');
         }
 
         async function copyCompany() {

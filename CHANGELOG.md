@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.3.0] - 2026-10-01
 
 ### Added
 
@@ -29,6 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires a `scope` element, usually the target form, and throws a
   `TypeError` without it. A paste without a record is never intercepted. `pasteFromClipboard()` reads the clipboard
   from a click, for pages that block paste events.
+- Argument checks: `fromElement()`, `fromForm()`, `fromTable()`, `match()`,
+  `fill()` and `pasteFromClipboard()` throw a clear `TypeError` that names
+  the method (for example `records.fromElement() expects an Element`) when
+  they get something that is not an element, instead of an error from
+  inside the extractor.
+- `copy()` copies in two steps, both inside the user gesture. First a `copy`
+  event with `text/html` (record embedded) and `text/plain`, which needs no
+  clipboard permission and works in Chromium, Firefox and WebKit. Then
+  `navigator.clipboard.write()` with the custom format, as an enhancement. If
+  the API is missing or refused, as in webviews, iframes without the
+  `clipboard-write` permissions policy and locked-down browsers, the copy
+  event content stays and smart paste keeps working.
+  `RecordCopyResult.method` reports `'clipboard-api'` or `'copy-event'`. If
+  both paths fail, `copy()` rejects with an error that says copying was
+  blocked by the browser and names both attempts. A successful `copy()` now
+  fires a `copy` event on the document, and briefly selects an off-screen
+  element (the previous selection and focus are restored), because WebKit
+  only enables the copy command with a selection.
 - Filling: `match()` maps record fields to a target form by remembered
   mapping, `autocomplete`, `name` or `id`, label and input type, with a veto
   for a value a field cannot take. `fill()` shows a preview dialog, then
@@ -346,6 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.3.0]: https://github.com/agentlet/agentlet-core/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/agentlet/agentlet-core/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/agentlet/agentlet-core/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/agentlet/agentlet-core/compare/v2.0.1...v2.1.0
