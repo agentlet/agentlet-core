@@ -39,7 +39,7 @@ Do not put a long-lived provider key in the browser on any page that loads third
 
 Agentlet sends no page data on its own and has no telemetry. A module sends what it passes to `window.agentlet.ai`: prompts, form structures, table data or screenshots of page elements. Review what your module captures before pointing it at pages with personal or customer data.
 
-The only third-party request the core makes by itself is during PDF conversion, which downloads pdf.js character maps and standard fonts from cdnjs.cloudflare.com. The PDF content is not sent.
+The core makes no third-party request by itself. SheetJS, html2canvas and pdf.js are loaded on demand from the folder the core script was served from, and during PDF conversion pdf.js reads its worker, character maps and standard fonts from that same folder (`pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/` in `dist/`). Earlier releases fetched the character maps and fonts from cdnjs.cloudflare.com. Set `libraryBaseUrl` (or `pdfWorkerUrl`, `pdfCMapUrl` and `pdfStandardFontsUrl`) to serve these files from your own origin; with a `script-src` or `connect-src` that allows only that origin, allow the folder the core is loaded from.
 
 Form extraction reports `type="password"` fields with a `null` value and without their `value` attribute, so a password does not reach a prompt by accident. Pass `includePasswordValues: true` to override this when the extraction stays on the page. Other fields, including hidden ones when `includeHidden` is set, are reported as they are.
 

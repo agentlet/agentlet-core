@@ -68,6 +68,8 @@ jobs:
         metafiles: |
           reports/security/meta/agentlet-core.meta.json
           reports/security/meta/agentlet-core.min.meta.json
+          reports/security/meta/agentlet-core.full.min.meta.json
+          reports/security/meta/chunks.meta.json
           reports/security/meta/agentlet-core.esm.meta.json
           reports/security/meta/bookmarklet.meta.json
           reports/security/meta/extension.meta.json

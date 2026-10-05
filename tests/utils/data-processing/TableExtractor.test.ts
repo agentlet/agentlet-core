@@ -554,6 +554,49 @@ describe('TableExtractor', () => {
             await expect(ext.ensureXLSX()).resolves.toBe(false);
         });
 
+        it('isExcelExportAvailable is true while SheetJS is not loaded yet but librarySetup can load it on demand', () => {
+            const canLoadLibrary = jest.fn().mockReturnValue(true);
+            const ext = makeExtractor({ ensureLibrary: jest.fn(), canLoadLibrary } as LibrarySetupMock);
+            expect(ext.isExcelExportAvailable()).toBe(true);
+            expect(canLoadLibrary).toHaveBeenCalledWith('xlsx');
+        });
+
+        it('isExcelExportAvailable is false when librarySetup cannot load SheetJS', () => {
+            const ext = makeExtractor({ ensureLibrary: jest.fn(), canLoadLibrary: jest.fn().mockReturnValue(false) } as LibrarySetupMock);
+            expect(ext.isExcelExportAvailable()).toBe(false);
+        });
+
+        it('downloadAsExcel loads SheetJS on demand and then writes the file', async () => {
+            const xlsx = makeXLSXMock();
+            const librarySetup: LibrarySetupMock = {
+                ensureLibrary: jest.fn(async (_name: string) => {
+                    (window as unknown as { XLSX: unknown }).XLSX = xlsx;
+                    return true;
+                })
+            };
+            const ext = makeExtractor(librarySetup);
+            const tableData: TableData = { headers: ['A'], rows: [['1']], metadata: { totalRows: 1, totalColumns: 1, extractedAt: 'ts', tableId: null } };
+
+            const result = await ext.downloadAsExcel(tableData, { filename: 'out.xlsx' });
+
+            expect(result.success).toBe(true);
+            expect(librarySetup.ensureLibrary).toHaveBeenCalledWith('xlsx');
+            expect(xlsx.writeFile.mock.calls[0][1]).toBe('out.xlsx');
+        });
+
+        it('downloadAsExcel reports why SheetJS could not be loaded', async () => {
+            const librarySetup: LibrarySetupMock = {
+                ensureLibrary: jest.fn().mockRejectedValue(new Error("Failed to load library 'xlsx' from https://cdn.example.com/agentlet-xlsx.min.js."))
+            };
+            const ext = makeExtractor(librarySetup);
+            const tableData: TableData = { headers: [], rows: [], metadata: { totalRows: 0, totalColumns: 0, extractedAt: 'ts', tableId: null } };
+
+            const result = await ext.downloadAsExcel(tableData);
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe("Excel export not available. XLSX library could not be loaded. Failed to load library 'xlsx' from https://cdn.example.com/agentlet-xlsx.min.js.");
+        });
+
         it('ensureXLSX returns false when there is no librarySetup and XLSX is unavailable', async () => {
             const ext = makeExtractor(null);
             await expect(ext.ensureXLSX()).resolves.toBe(false);
@@ -563,7 +606,7 @@ describe('TableExtractor', () => {
     describe('createExcelWorkbook', () => {
         it('throws when XLSX is not loaded', () => {
             const tableData: TableData = { headers: ['A'], rows: [['1']], metadata: { totalRows: 1, totalColumns: 1, extractedAt: 'now', tableId: null } };
-            expect(() => extractor.createExcelWorkbook(tableData)).toThrow('XLSX library not loaded. Please include SheetJS in your page.');
+            expect(() => extractor.createExcelWorkbook(tableData)).toThrow(/XLSX library not loaded\. SheetJS is loaded on demand: await ensureXLSX\(\)/);
         });
 
         it('builds a sheet from headers+rows and appends it with the default sheet name', () => {

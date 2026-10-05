@@ -1321,7 +1321,14 @@ export interface TableExtractAndDownloadOptions extends TableExtractAllOptions, 
 }
 
 export interface TableExtractorAPI {
+    /** True when SheetJS is loaded or can be loaded on demand by the first Excel export. */
     isExcelExportAvailable(): boolean;
+    /**
+     * Loads SheetJS if it is not loaded yet. Resolves false when it cannot be
+     * loaded. Call it before a synchronous API that needs SheetJS, or list
+     * `'xlsx'` in the `preloadLibraries` config.
+     */
+    ensureXLSX(): Promise<boolean>;
     extractTableData(tableElement: HTMLTableElement, options?: TableExtractionOptions): TableData;
     extractAllPages(tableElement: HTMLTableElement, options?: TableExtractAllOptions): Promise<TableAllPagesData>;
     downloadAsExcel(tableData: TableData | TableAllPagesData, options?: TableDownloadOptions): Promise<TableDownloadResult>;
@@ -1967,11 +1974,37 @@ export interface EventBusAPI {
 /* Library setup (window.agentlet.librarySetup)                        */
 /* ------------------------------------------------------------------ */
 
+/** Libraries the core loads on first use instead of inlining them in the core bundle. */
+export type OnDemandLibraryName = 'xlsx' | 'html2canvas' | 'pdfjs';
+
+/** URLs of the PDF.js asset folders (each ends in `/`), as passed to `getDocument()`. A value is undefined when no location is known. */
+export interface PDFAssetUrls {
+    /** Folder with the character maps (`cmaps/`). */
+    cMapUrl: string | undefined;
+    /** Folder with the standard fonts (`standard_fonts/`). */
+    standardFontDataUrl: string | undefined;
+}
+
 /** Minimal surface of `LibrarySetup` relevant to agentlet authors. */
 export interface LibrarySetupAPI {
     configurePDFWorker(workerUrl: string): void;
+    /** True once the library's global exists (`window.XLSX`, `window.html2canvas`, `window.pdfjsLib`, `window.hotkeys`). */
     isLibraryAvailable(name: string): boolean;
+    /** True when the library is already available or can be loaded on demand from a known location. */
+    canLoadLibrary(name: string): boolean;
+    /**
+     * Resolves true once the library is available, loading it first when
+     * needed. Rejects with the URL and the config option to change when an
+     * on-demand library cannot be loaded.
+     */
     ensureLibrary(name: string): Promise<boolean>;
+    /**
+     * Loads libraries now instead of on first use (default: the
+     * `preloadLibraries` config). Never rejects; a failure is logged.
+     */
+    preloadLibraries(names?: string[]): Promise<void>;
+    /** Where PDF.js reads its character maps and standard fonts from. */
+    getPDFAssetUrls(): PDFAssetUrls;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2190,19 +2223,42 @@ export interface AgentletCoreConfig {
     skipRegistryModuleRegistration?: boolean;
     /**
      * URL of the `pdf.worker.min.mjs` file matching the bundled `pdfjs-dist`
-     * version, forwarded to `LibrarySetup`. Always applied when set,
-     * including in a normal bundled build (`pdfjs-dist` assigns
-     * `window.pdfjsLib` itself before this is read, so this is not gated on
-     * whether `window.pdfjsLib` looks "already set up"). Without it, the
-     * worker resolves to `'./pdf.worker.min.mjs'` relative to the *page's*
-     * URL, not to wherever the core script itself is served from - set this
-     * whenever the two differ. The npm package ships the matching worker at
-     * `dist/pdf.worker.min.mjs`; copy it next to wherever you serve the core
-     * bundle. There is no automatic third-party (CDN) fallback: if no worker
-     * is reachable, PDF conversion fails with an error naming this option and
-     * `configurePDFWorker()`.
+     * version, forwarded to `LibrarySetup`. Always applied when set. Without
+     * it the worker is looked up in the library folder: `libraryBaseUrl`, else
+     * the folder the core script was loaded from, else the folder of
+     * `registryUrl`. The npm package ships the matching worker at
+     * `dist/pdf.worker.min.mjs`, so a host that serves the files of `dist/`
+     * together needs no setting. There is no automatic third-party (CDN)
+     * fallback: if no worker is reachable, PDF conversion fails with an error
+     * naming this option and `configurePDFWorker()`.
      */
     pdfWorkerUrl?: string;
+    /**
+     * Folder URL (absolute, or relative to the page) that serves the files
+     * the core loads on demand: `agentlet-xlsx.min.js`,
+     * `agentlet-html2canvas.min.js`, `agentlet-pdfjs.min.js` (script builds
+     * only), `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/`. Defaults to
+     * the folder the core script was loaded from. Set it when the core is
+     * evaluated without a script URL (a `fetch()` plus `eval()` loader), is
+     * bundled into the host's own script, or the files are served elsewhere.
+     * Not used by the ES module build or `agentlet-core.full.min.js` for the
+     * three libraries, which are part of those builds.
+     */
+    libraryBaseUrl?: string;
+    /** URL of a single chunk file, overriding `libraryBaseUrl` for that library (script builds only). */
+    libraryUrls?: Partial<Record<OnDemandLibraryName, string>>;
+    /** URL of the folder with the PDF.js character maps. Default: `cmaps/` in the library folder. */
+    pdfCMapUrl?: string;
+    /** URL of the folder with the PDF.js standard fonts. Default: `standard_fonts/` in the library folder. */
+    pdfStandardFontsUrl?: string;
+    /**
+     * Libraries to load while `init()` runs rather than on first use, so that
+     * `window.XLSX`, `window.html2canvas` and `window.pdfjsLib` (and the
+     * synchronous `createExcelWorkbook()`) are ready once `init()` resolves.
+     * Default: none in the script and ES module builds (they load on first
+     * use), all three in `agentlet-core.full.min.js`.
+     */
+    preloadLibraries?: OnDemandLibraryName[];
     /** Consumers may pass additional keys; the constructor spreads the raw config object over its defaults. */
     [key: string]: unknown;
 }

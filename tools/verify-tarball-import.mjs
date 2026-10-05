@@ -15,9 +15,12 @@
  * same import/require/package.json shape directly against dist/ and runs
  * on every build): packing and installing the tarball is slow and needs
  * network/registry access. The package has no runtime "dependencies" since
- * 2.1.1 (hotkeys-js, html2canvas, pdfjs-dist and xlsx are inlined by the
- * dist/ bundles and live in devDependencies), so this also proves the
- * bundles need nothing installed next to them. Run it explicitly instead:
+ * 2.1.1 (hotkeys-js, html2canvas, pdfjs-dist and xlsx are bundled into
+ * dist/ and live in devDependencies), so this also proves the bundles need
+ * nothing installed next to them. It also checks that every file the core
+ * loads on demand (the library chunks, dist/chunks/, the PDF.js worker,
+ * cmaps/ and standard_fonts/) made it into the tarball. Run it explicitly
+ * instead:
  *
  *   npm run verify:tarball-import
  *
@@ -65,12 +68,45 @@ const projectDir = mkdtempSync(path.join(tmpdir(), 'agentlet-core-tarball-consum
 try {
     console.log('📦 Packing agentlet-core with npm pack...');
     const packResult = run('npm', ['pack', '--pack-destination', packDestination, '--json'], { cwd: rootDir });
-    const [{ filename, size }] = JSON.parse(packResult.stdout);
+    const [{ filename, size, files: packedFiles }] = JSON.parse(packResult.stdout);
     const tarballPath = path.join(packDestination, filename);
     if (!existsSync(tarballPath)) {
         fail(`npm pack reported "${filename}" but it was not found at ${tarballPath}`);
     }
     console.log(`✅ Packed tarball: ${tarballPath} (${(size / 1024).toFixed(2)} KB)`);
+
+    // Everything the core fetches at runtime (see src/libraries/LibraryUrls.ts
+    // and tools/verify-dist-chunks.mjs) must be in the tarball.
+    const packedPaths = packedFiles.map(file => file.path);
+    const expectedPacked = [
+        'dist/agentlet-core.js',
+        'dist/agentlet-core.min.js',
+        'dist/agentlet-core.full.min.js',
+        'dist/agentlet-core.esm.js',
+        'dist/agentlet-xlsx.min.js',
+        'dist/agentlet-html2canvas.min.js',
+        'dist/agentlet-pdfjs.min.js',
+        'dist/pdf.worker.min.mjs'
+    ];
+    const missingPacked = expectedPacked.filter(file => !packedPaths.includes(file));
+    if (missingPacked.length > 0) {
+        fail(`The tarball is missing: ${missingPacked.join(', ')}.`);
+    }
+    const expectedFolders = [
+        ['dist/chunks/', 3],
+        ['dist/cmaps/', 1],
+        ['dist/standard_fonts/', 1]
+    ];
+    for (const [folder, minimum] of expectedFolders) {
+        const count = packedPaths.filter(file => file.startsWith(folder)).length;
+        if (count < minimum) {
+            fail(`The tarball has ${count} file(s) under ${folder}, expected at least ${minimum}.`);
+        }
+    }
+    if (packedPaths.some(file => file.endsWith('.map'))) {
+        fail('The tarball contains source maps; "files" in package.json should only list runtime files.');
+    }
+    console.log(`✅ The tarball carries the core, its on-demand chunks, the worker, cmaps/ and standard_fonts/ (${packedPaths.length} files).`);
 
     console.log(`\n📁 Creating empty consumer project at ${projectDir}...`);
     run('npm', ['init', '-y'], { cwd: projectDir });

@@ -32,23 +32,13 @@ import { UIManager } from './ui/UIManager.js';
 import { PanelManager } from './ui/PanelManager.js';
 import { GlobalAPI } from './core/GlobalAPI.js';
 
-// External libraries
-import * as XLSX from 'xlsx';
-import html2canvas from 'html2canvas';
+// External libraries. Only hotkeys-js is inlined: SheetJS, html2canvas and
+// pdfjs-dist are loaded on demand by LibrarySetup (see
+// src/libraries/embeddedLibraries.ts for how each build obtains them), so
+// none of them is imported here. Evaluating pdfjs-dist touches browser globals
+// (`DOMMatrix`, ...), so it must never be statically imported: a plain
+// `require('agentlet-core')` under Node (SSR, tooling, tests) would crash.
 import hotkeys from 'hotkeys-js';
-// `pdfjs-dist` is intentionally NOT statically imported here (unlike the
-// libraries above): evaluating it touches browser globals (`DOMMatrix`, ...)
-// as a side effect of the module body itself, before any of its exports are
-// even used. A static `import * as pdfjsLib from 'pdfjs-dist'` therefore
-// crashes a plain `require('agentlet-core')`/`import('agentlet-core')` under
-// Node (SSR, tooling, tests) with `ReferenceError: DOMMatrix is not defined`,
-// even though nothing browser-specific has happened yet - only
-// `new AgentletCore().init()` (which requires a browser) actually needs
-// PDF.js. It's loaded lazily via `await import('pdfjs-dist')` inside init()
-// instead, right before `librarySetup.initializeAll(...)`. In the single-file
-// esbuild bundles (no code splitting - see tools/build.js) this compiles to a
-// lazily-evaluated module inlined in the same output file: pdf.js is part of
-// dist/, its code just isn't executed until init() runs.
 
 import type {
     AgentletAPI,
@@ -146,22 +136,16 @@ class AgentletCore {
      */
     shortcutManager: ShortcutManager | null;
     /**
-     * Definite assignment assertion (`!`). `librarySetup` is assigned further
-     * down the constructor than `tableExtractor`/`aiManager`/`shortcutManager`,
-     * all three of which receive it as a constructor argument - so at that
-     * point `this.librarySetup` is still `undefined`, and each of those
-     * constructors' own `= null` default parameter kicks in instead (passing
-     * `undefined` explicitly triggers a default parameter the same as
-     * omitting the argument). TypeScript's "used before being assigned"
-     * check flags this ordering; the assertion keeps the statement order as
-     * it is.
+     * Created before `tableExtractor`, `aiManager` and `shortcutManager`, which
+     * receive it as a constructor argument and use it to load SheetJS, PDF.js
+     * and hotkeys-js on demand.
      *
      * Typed as the concrete class (not the narrower, agentlet-author-facing
      * `LibrarySetupAPI` from public-api.d.ts) because `init()` calls
      * `initializeAll()`, framework-internal wiring `LibrarySetupAPI`
      * intentionally omits.
      */
-    librarySetup!: LibrarySetup;
+    librarySetup: LibrarySetup;
     isMinimized: boolean;
     themeManager: ThemeManagerAPI;
     /**
@@ -255,6 +239,9 @@ class AgentletCore {
         this.formExtractor = new FormExtractor();
         this.formFiller = new FormFiller(); // Uses native DOM methods
 
+        // Initialize library setup (before the managers that load libraries on demand)
+        this.librarySetup = new LibrarySetup(this.config);
+
         // Initialize table extractor
         this.tableExtractor = new TableExtractor(this.librarySetup);
 
@@ -283,9 +270,6 @@ class AgentletCore {
 
         // Initialize shortcut manager
         this.shortcutManager = new ShortcutManager(this.librarySetup);
-
-        // Initialize library setup
-        this.librarySetup = new LibrarySetup(this.config);
 
         // UI references (must be initialized before UIManager)
         this.ui = {
@@ -404,20 +388,11 @@ class AgentletCore {
         try {
             logger.log('🚀 Initializing Agentlet Core 📎...');
 
-            // Load PDF.js lazily (see the comment on the removed static
-            // import above) right before it's handed to librarySetup - this
-            // is the earliest point evaluating pdf.js's module body is safe,
-            // and the latest point at which window.pdfjsLib must be set for
-            // existing consumers (PDFProcessor, ai.convertPDFToImages,
-            // ai.sendPromptWithPDF, the scaffold template) to see it in the
-            // same place they always have: available once init() resolves.
-            const pdfjsLib = await import('pdfjs-dist');
-
-            // Set up all libraries
-            this.librarySetup.initializeAll(
-                { XLSX, html2canvas, pdfjsLib, hotkeys },
-                this.shortcutManager
-            );
+            // Set up the inlined libraries. SheetJS, html2canvas and PDF.js are
+            // loaded on demand; `preloadLibraries` (or a single-file build)
+            // loads them here, so they are on `window` once init() resolves.
+            this.librarySetup.initializeAll({ hotkeys }, this.shortcutManager);
+            await this.librarySetup.preloadLibraries();
 
             // Set up event listeners
             this.setupEventListeners();

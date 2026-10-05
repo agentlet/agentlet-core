@@ -15,9 +15,11 @@ import { logger } from '../system/Logger.js';
 
 /**
  * Minimal shape of `LibrarySetup` this file actually uses - deliberately
- * not the whole class, just the one method `ensureHTML2Canvas()` calls.
+ * not the whole class, just the methods `ensureHTML2Canvas()` and
+ * `isScreenCaptureAvailable()` call (`canLoadLibrary` is optional so a bare
+ * `{ ensureLibrary }` duck-typed object keeps working).
  */
-type LibrarySetupLike = Pick<LibrarySetup, 'ensureLibrary'>;
+type LibrarySetupLike = Pick<LibrarySetup, 'ensureLibrary'> & Partial<Pick<LibrarySetup, 'canLoadLibrary'>>;
 
 /** Signature of the global `html2canvas` function once the library is loaded. */
 type Html2CanvasFn = (element: Element, options: Html2CanvasOptions) => Promise<HTMLCanvasElement>;
@@ -40,11 +42,14 @@ function extractMessage(error: unknown): unknown {
 
 class ScreenCapture implements ScreenCaptureAPI {
     librarySetup: LibrarySetupLike | null;
+    /** Why the last `ensureHTML2Canvas()` could not load html2canvas, for error messages. */
+    lastLoadError: string | null;
     isCapturing: boolean;
     defaultOptions: Html2CanvasOptions;
 
     constructor(librarySetup: LibrarySetupLike | null = null) {
         this.librarySetup = librarySetup;
+        this.lastLoadError = null;
         this.isCapturing = false;
         this.defaultOptions = {
             allowTaint: false,
@@ -59,26 +64,42 @@ class ScreenCapture implements ScreenCaptureAPI {
     }
 
     /**
-     * Check if screenshot capture is available
+     * Check if html2canvas is loaded right now (`window.html2canvas` exists)
      */
-    isScreenCaptureAvailable(): boolean {
+    isHTML2CanvasLoaded(): boolean {
         return typeof getHtml2Canvas() !== 'undefined';
     }
 
     /**
-     * Ensure html2canvas library is loaded
+     * Check if screenshot capture is available: html2canvas is already loaded,
+     * or can be loaded on demand by the first capture.
+     */
+    isScreenCaptureAvailable(): boolean {
+        if (this.isHTML2CanvasLoaded()) {
+            return true;
+        }
+        const librarySetup = this.librarySetup;
+        return !!librarySetup && typeof librarySetup.canLoadLibrary === 'function' && librarySetup.canLoadLibrary('html2canvas');
+    }
+
+    /**
+     * Ensure html2canvas library is loaded. Resolves false when it cannot be
+     * loaded; the reason is then in `lastLoadError`.
      */
     async ensureHTML2Canvas(): Promise<boolean> {
-        if (this.isScreenCaptureAvailable()) {
+        if (this.isHTML2CanvasLoaded()) {
             return true;
         }
 
         if (this.librarySetup) {
             try {
                 logger.log('📸 Loading html2canvas library for screenshot functionality...');
+                this.lastLoadError = null;
                 return await this.librarySetup.ensureLibrary('html2canvas');
             } catch (error) {
-                console.warn('📸 Failed to load html2canvas library:', extractMessage(error));
+                const message = extractMessage(error);
+                this.lastLoadError = typeof message === 'string' ? message : null;
+                console.warn('📸 Failed to load html2canvas library:', message);
                 return false;
             }
         }
@@ -101,7 +122,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
             if (!html2canvasAvailable) {
-                throw new Error('html2canvas library not available. Screenshots are disabled.');
+                throw new Error(`html2canvas library not available. Screenshots are disabled.${this.lastLoadError ? ` ${this.lastLoadError}` : ''}`);
             }
 
             const canvas = await getHtml2Canvas()!(document.body, mergedOptions);
@@ -136,7 +157,7 @@ class ScreenCapture implements ScreenCaptureAPI {
             // Ensure html2canvas is available
             const html2canvasAvailable = await this.ensureHTML2Canvas();
             if (!html2canvasAvailable) {
-                throw new Error('html2canvas library not available. Screenshots are disabled.');
+                throw new Error(`html2canvas library not available. Screenshots are disabled.${this.lastLoadError ? ` ${this.lastLoadError}` : ''}`);
             }
 
             const canvas = await getHtml2Canvas()!(element, mergedOptions);

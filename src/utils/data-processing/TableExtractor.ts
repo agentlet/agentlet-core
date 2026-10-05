@@ -100,32 +100,51 @@ function blockTextLines(root: Node): string[] {
 
 class TableExtractor implements TableExtractorAPI {
     librarySetup: LibrarySetupAPI | null;
+    /** Why the last `ensureXLSX()` could not load SheetJS, for error messages. */
+    lastLoadError: string | null = null;
 
     constructor(librarySetup: LibrarySetupAPI | null = null) {
         this.librarySetup = librarySetup;
     }
 
     /**
-     * Check if Excel export is available
+     * Check if SheetJS is loaded right now (`window.XLSX` exists)
      */
-    isExcelExportAvailable(): boolean {
+    isXLSXLoaded(): boolean {
         return typeof getXLSXGlobal() !== 'undefined';
     }
 
     /**
-     * Ensure XLSX library is loaded
+     * Check if Excel export is available: SheetJS is already loaded, or can be
+     * loaded on demand the first time it is needed. A synchronous API such as
+     * `createExcelWorkbook()` still needs it loaded; call `await ensureXLSX()`
+     * first (or list `'xlsx'` in the `preloadLibraries` config).
+     */
+    isExcelExportAvailable(): boolean {
+        if (this.isXLSXLoaded()) {
+            return true;
+        }
+        const librarySetup = this.librarySetup;
+        return !!librarySetup && typeof librarySetup.canLoadLibrary === 'function' && librarySetup.canLoadLibrary('xlsx');
+    }
+
+    /**
+     * Ensure XLSX library is loaded. Resolves false when it cannot be loaded;
+     * the reason is then in `lastLoadError`.
      */
     async ensureXLSX(): Promise<boolean> {
-        if (this.isExcelExportAvailable()) {
+        if (this.isXLSXLoaded()) {
             return true;
         }
 
         if (this.librarySetup) {
             try {
                 logger.log('📊 Loading XLSX library for Excel export...');
+                this.lastLoadError = null;
                 return await this.librarySetup.ensureLibrary('xlsx');
             } catch (error) {
-                console.warn('📊 Failed to load XLSX library:', (error as Error).message);
+                this.lastLoadError = (error as Error).message;
+                console.warn('📊 Failed to load XLSX library:', this.lastLoadError);
                 return false;
             }
         }
@@ -387,8 +406,11 @@ class TableExtractor implements TableExtractorAPI {
             includeMetadata: options.includeMetadata ?? false
         };
 
-        if (!this.isExcelExportAvailable()) {
-            throw new Error('XLSX library not loaded. Please include SheetJS in your page.');
+        if (!this.isXLSXLoaded()) {
+            throw new Error(
+                'XLSX library not loaded. SheetJS is loaded on demand: await ensureXLSX() (or downloadAsExcel()) first, ' +
+                'list \'xlsx\' in the preloadLibraries config, or include SheetJS in your page.'
+            );
         }
 
         const xlsx = getXLSXGlobal() as XLSXLibrary;
@@ -445,7 +467,8 @@ class TableExtractor implements TableExtractorAPI {
             // Ensure XLSX library is available
             const xlsxAvailable = await this.ensureXLSX();
             if (!xlsxAvailable) {
-                throw new Error('Excel export not available. XLSX library could not be loaded.');
+                const reason = this.lastLoadError ? ` ${this.lastLoadError}` : '';
+                throw new Error(`Excel export not available. XLSX library could not be loaded.${reason}`);
             }
 
             const workbook = this.createExcelWorkbook(tableData, config);
