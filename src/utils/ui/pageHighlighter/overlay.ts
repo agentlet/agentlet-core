@@ -55,7 +55,7 @@ export function showOverlay(context: PageHighlighterContext, options: PageHighli
     if (config.closeable) {
         const closeButton = document.createElement('button');
         closeButton.className = 'agentlet-message-close';
-        closeButton.innerHTML = '×';
+        closeButton.textContent = '×';
         closeButton.title = 'Close';
         closeButton.onclick = (event: MouseEvent): void => {
             event.stopPropagation();

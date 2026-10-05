@@ -207,6 +207,7 @@ class MessageBubble implements MessageBubbleAPI {
                 flex-shrink: 0;
                 margin-top: 1px;
             `;
+            // `icon` is an emoji or an HTML snippet by documented contract: the caller owns this markup.
             iconEl.innerHTML = displayIcon;
             content.appendChild(iconEl);
         }
@@ -232,6 +233,7 @@ class MessageBubble implements MessageBubbleAPI {
 
         // Add message
         const messageEl = document.createElement('div');
+        // HTML by documented contract (`allowHtml: true`): the caller owns this markup.
         if (allowHtml) {
             messageEl.innerHTML = message;
         } else {
@@ -244,7 +246,7 @@ class MessageBubble implements MessageBubbleAPI {
         // Add close button if closable
         if (closable) {
             const closeBtn = document.createElement('button');
-            closeBtn.innerHTML = '×';
+            closeBtn.textContent = '×';
             closeBtn.style.cssText = `
                 position: absolute;
                 top: 8px;
@@ -587,6 +589,7 @@ class MessageBubble implements MessageBubbleAPI {
 
         const messageEl = bubbleData.element.querySelector('div > div:last-child');
         if (messageEl) {
+            // HTML by documented contract (`allowHtml: true`): the caller owns this markup.
             if (allowHtml) {
                 messageEl.innerHTML = newMessage;
             } else {

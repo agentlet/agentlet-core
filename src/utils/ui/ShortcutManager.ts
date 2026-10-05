@@ -5,6 +5,7 @@
 import type { ShortcutInfo, ShortcutManagerAPI, ShortcutRegisterOptions, ShortcutsAPI } from '../../types/public-api';
 import type { LibrarySetup } from '../../libraries/LibrarySetup.js';
 import { logger } from '../system/Logger.js';
+import { escapeHtml } from './safeHtml.js';
 
 // Modifiers whose combinations never produce ordinary typed text. Shift is
 // deliberately excluded: shift+s is how a user types an uppercase S.
@@ -410,10 +411,10 @@ class ShortcutManager implements ShortcutManagerAPI {
             `<tr>
                 <td style="padding: 8px; border: 1px solid #ddd; font-family: monospace; background: #f8f9fa;">
                     <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 12px;">
-                        ${shortcut.keys.replace(/,/g, '</kbd> or <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 12px;">')}
+                        ${shortcut.keys.split(',').map(escapeHtml).join('</kbd> or <kbd style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 12px;">')}
                     </kbd>
                 </td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${shortcut.description}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(shortcut.description)}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; font-size: 12px; color: #666;">
                     ${shortcut.allowInInputs ? 'Everywhere' : 'Outside inputs'}
                 </td>
