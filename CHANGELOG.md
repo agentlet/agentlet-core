@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `ScriptInjector.inject()` with a `tabId` in an extension no longer passes a
+  non-existent `function` key (built with `new Function()`, which MV3 service
+  workers block) to `chrome.scripting.executeScript`. `chrome.scripting` cannot
+  run a code string, so a `code`-only injection (and `injectModule()`) with a
+  `tabId` now rejects with an error that says so and asks for a `file` or a
+  `func`. The `func`, `args` and `file` paths are unchanged, as is the DOM
+  injection used on regular pages.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added
