@@ -6,10 +6,49 @@ on:
       - 'v*'
 
 jobs:
-  release:
+  verify-tag:
+    name: verify tag
     runs-on: ubuntu-latest
-    # Same order of magnitude as test.yml (npm ci, jest, build), without the
-    # Playwright e2e suite, plus headroom for the npm publish step itself.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Check the tag matches the package version
+      # An npm version is immutable once published. Pushing tag v2.0.1 while
+      # package.json still says 2.0.0 would silently publish 2.0.0, or fail
+      # with a confusing error if that version already exists. Fail early and
+      # say which is which instead.
+      run: |
+        tag_version="${GITHUB_REF_NAME#v}"
+        pkg_version="$(node -p 'require("./package.json").version')"
+        if [ "$tag_version" != "$pkg_version" ]; then
+          echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg_version}." >&2
+          echo "Bump the version in package.json and retag, or push the matching tag." >&2
+          exit 1
+        fi
+        echo "Tag ${GITHUB_REF_NAME} matches package.json version ${pkg_version}."
+
+  # The same jobs as test.yml (Jest, lint, type check, build, and the e2e
+  # suite on chromium, firefox and webkit), run on the tagged commit. The
+  # release job below needs them, so a tag on a bad commit cannot publish.
+  # Starts only once the tag is known to match package.json, so a mistyped
+  # tag fails in seconds instead of after the e2e suite.
+  checks:
+    name: checks
+    needs: verify-tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: [verify-tag, checks]
+    runs-on: ubuntu-latest
+    # npm ci, jest and build again for the publish itself (the checks job
+    # above is a separate runner), plus the SBOM, the scan and the npm
+    # publish. The e2e suite runs in the checks job, not here.
     timeout-minutes: 20
 
     # npm publish --provenance needs to mint an OIDC token to attest where
@@ -33,21 +72,6 @@ jobs:
         cache: 'npm'
         # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
         registry-url: 'https://registry.npmjs.org'
-
-    - name: Check the tag matches the package version
-      # An npm version is immutable once published. Pushing tag v2.0.1 while
-      # package.json still says 2.0.0 would silently publish 2.0.0, or fail
-      # with a confusing error if that version already exists. Fail early and
-      # say which is which instead.
-      run: |
-        tag_version="${GITHUB_REF_NAME#v}"
-        pkg_version="$(node -p 'require("./package.json").version')"
-        if [ "$tag_version" != "$pkg_version" ]; then
-          echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg_version}." >&2
-          echo "Bump the version in package.json and retag, or push the matching tag." >&2
-          exit 1
-        fi
-        echo "Tag ${GITHUB_REF_NAME} matches package.json version ${pkg_version}."
 
     - name: Install dependencies
       run: npm ci
