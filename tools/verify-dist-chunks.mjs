@@ -179,7 +179,9 @@ const downloaded = [
 ];
 for (const file of downloaded) {
     const content = readFileSync(path.join(distDir, file), 'utf8');
-    if (content.includes('cdnjs.cloudflare.com')) {
+    // A regular expression, not a substring test: this is a search for a leftover
+    // reference in bundled code, not a check of where a URL points.
+    if (/cdnjs\.cloudflare\.com/.test(content)) {
         fail(`dist/${file} still references cdnjs.cloudflare.com.`);
     }
 }
