@@ -62,8 +62,8 @@ test.describe('Panel Basics Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for state to update
-    await page.waitForTimeout(2000);
+    // Wait for the example to refresh its panel state display
+    await expect(page.locator('#panelInitialized')).toHaveText('Yes');
 
     // Check that panel is now initialized
     const panelStateSection = page.locator('.panel-state-section, #panelState');
@@ -85,19 +85,19 @@ test.describe('Panel Basics Example', () => {
 
     // Test minimize button
     await page.locator('button:has-text("Minimize panel")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#panelMinimized')).toHaveText('Yes');
 
     // Test maximize button
     await page.locator('button:has-text("Maximize panel")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#panelMinimized')).toHaveText('No');
 
     // Test toggle button
     await page.locator('button:has-text("Toggle panel")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#panelMinimized')).toHaveText('Yes');
 
     // Test check panel state button
     await page.locator('button:has-text("Check panel state")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Panel State:');
 
     // Should update console output or stats
     const consoleOutput = await page.locator('#console').textContent();
@@ -111,21 +111,21 @@ test.describe('Panel Basics Example', () => {
 
     // Test different size buttons
     await page.locator('button:has-text("Small (320px)")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Panel resized to small');
 
     await page.locator('button:has-text("Medium (480px)")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Panel resized to medium');
 
     await page.locator('button:has-text("Large (640px)")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Panel resized to large');
 
     // Test custom width (might show a prompt)
+    // (Playwright dismisses the prompt synchronously, nothing is logged)
     await page.locator('button:has-text("Custom width")').click();
-    await page.waitForTimeout(500);
 
     // Test check width
     await page.locator('button:has-text("Check width")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Current panel width:');
 
     // Should update console output
     const consoleOutput = await page.locator('#console').textContent();
@@ -137,13 +137,14 @@ test.describe('Panel Basics Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Setup event listeners
+    // Setup event listeners (the example also sets them up on its own shortly
+    // after init, so wait for the end state rather than for the click effect)
     await page.locator('button:has-text("Setup event listeners")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#eventListeners')).toHaveText('Active');
 
     // Trigger custom event
     await page.locator('button:has-text("Trigger custom event")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Event received: demo:custom');
 
     // Should update console output or event statistics
     const consoleOutput = await page.locator('#console').textContent();
@@ -182,10 +183,10 @@ test.describe('Panel Basics Example', () => {
 
     // Click a few buttons to generate activity
     await page.locator('button:has-text("Check panel state")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#console')).toContainText('Panel State:');
 
     await page.locator('button:has-text("Setup event listeners")').click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#eventListeners')).toHaveText('Active');
 
     // Statistics should update
     const statisticsSection = await page.locator('#stats').textContent();
@@ -203,7 +204,7 @@ test.describe('Panel Basics Example', () => {
 
     // Clear console - force click since it might be overlapped by agentlet panel
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000); // Give more time for clear action
+    // clearConsole() is synchronous, no wait needed
 
     // Console should be cleared or contain different content
     const consoleOutputAfterClear = await page.locator('#console').textContent();
