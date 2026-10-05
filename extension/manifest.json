@@ -1,44 +1,23 @@
 {
   "manifest_version": 3,
   "name": "Agentlet Core",
-  "version": "2.2.0",
-  "description": "Experimental, unpublished: injects agentlet core and your modules into the pages you choose.",
+  "version": "2.3.0",
+  "description": "Experimental, unpublished. Runs agentlet core on the current tab, only when you ask, with no access to other sites.",
   "author": "Agentlet Core Team",
   "homepage_url": "https://github.com/agentlet/agentlet-core",
-  
+  "minimum_chrome_version": "102",
+
   "permissions": [
     "activeTab",
-    "storage",
     "scripting",
-    "tabs",
-    "contextMenus"
+    "storage"
   ],
-  
-  "optional_permissions": [
-    "history",
-    "bookmarks",
-    "downloads"
-  ],
-  
-  "host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
-  
+
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-  
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_end",
-      "all_frames": false
-    }
-  ],
-  
+
   "action": {
     "default_popup": "popup.html",
     "default_title": "Agentlet Core",
@@ -49,45 +28,27 @@
       "128": "icons/icon-128.png"
     }
   },
-  
+
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "agentlet-core.js",
-        "modules/*.js",
-        "assets/*"
-      ],
-      "matches": ["<all_urls>"]
-    }
-  ],
-  
+
   "options_page": "options.html",
-  
+
   "commands": {
     "toggle-agentlet": {
       "suggested_key": {
         "default": "Ctrl+Shift+A",
         "mac": "Command+Shift+A"
       },
-      "description": "Toggle Agentlet Core interface"
-    },
-    "activate-ai-assistant": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+I",
-        "mac": "Command+Shift+I"
-      },
-      "description": "Activate AI assistant"
+      "description": "Activate agentlet core on the current tab, or show or hide its panel"
     }
   },
-  
+
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-ancestors 'none';"
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }

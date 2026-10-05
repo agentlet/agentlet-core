@@ -54,7 +54,7 @@ describe('AIProvider', () => {
         test('should initialize with default options', () => {
             const provider = new OpenAIProvider('test-key');
             expect(provider.apiKey).toBe('test-key');
-            expect(provider.model).toBe('gpt-4o-mini');
+            expect(provider.model).toBe('gpt-6-luna');
             expect(provider.baseUrl).toBe('https://api.openai.com/v1');
             expect(provider.maxTokens).toBe(4000);
             expect(provider.temperature).toBe(0.7);

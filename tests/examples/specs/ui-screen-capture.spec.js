@@ -78,16 +78,12 @@ test.describe('Screen Capture Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for initialization to complete
-    await page.waitForTimeout(2000);
-
     // Check status shows success with screen capture ready
     const status = page.locator('#status');
     await expect(status).toContainText(/Ready.*screen.*capture.*buttons|capture.*buttons.*above/i);
 
     // Console should show ScreenCapture utilities loaded
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/ScreenCapture.*utilities|Agentlet.*Core.*loaded/i);
+    await agentletTest.expectTextToMatch(/ScreenCapture.*utilities|Agentlet.*Core.*loaded/i);
   });
 
   test('should show initialization success message', async ({ page }) => {
@@ -103,7 +99,6 @@ test.describe('Screen Capture Example', () => {
   test('should handle trying to capture without initialization', async ({ page }) => {
     // Try to capture without initializing first
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(1000);
 
     // Status should show error about initialization
     const status = page.locator('#status');
@@ -117,15 +112,14 @@ test.describe('Screen Capture Example', () => {
 
     // Click capture table button
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000); // Allow time for capture
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Status should show success
     const status = page.locator('#status');
     await expect(status).toContainText(/Table.*screenshot.*ready|ready/i);
 
     // Console should show capture activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Capturing.*sample.*table|Table.*screenshot.*captured/i);
+    await agentletTest.expectTextToMatch(/Capturing.*sample.*table|Table.*screenshot.*captured/i);
 
     // Screenshot dialog should appear. Match the real, specific class the
     // screenshot preview always uses (Dialog.fullscreen(), see
@@ -151,7 +145,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should capture full page screenshot', async ({ page }) => {
@@ -161,15 +155,14 @@ test.describe('Screen Capture Example', () => {
 
     // Click capture full page button
     await page.locator('button:has-text("Capture full page")').click();
-    await page.waitForTimeout(5000); // Allow time for full page capture
+    await expect(page.locator('#status')).toContainText('Full page screenshot ready', { timeout: 20000 });
 
     // Status should show success
     const status = page.locator('#status');
     await expect(status).toContainText(/Full.*page.*screenshot.*ready|ready/i);
 
     // Console should show capture activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Capturing.*full.*page|Full.*page.*screenshot.*captured/i);
+    await agentletTest.expectTextToMatch(/Capturing.*full.*page|Full.*page.*screenshot.*captured/i);
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -182,7 +175,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should start element selection for capture', async ({ page }) => {
@@ -192,15 +185,14 @@ test.describe('Screen Capture Example', () => {
 
     // Click capture selected element button
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
 
     // Status should show selection instructions
     const status = page.locator('#status');
     await expect(status).toContainText(/Click.*element.*capture/i);
 
     // Console should show element selection started
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Starting.*element.*selection.*capture/i);
+    await agentletTest.expectTextToMatch(/Starting.*element.*selection.*capture/i);
   });
 
   test('should capture selected element screenshot', async ({ page }) => {
@@ -210,20 +202,19 @@ test.describe('Screen Capture Example', () => {
 
     // Start element selection for capture
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
 
     // Click on the sample table to select it
     await page.locator('#sampleTable').click();
-    await page.waitForTimeout(4000); // Allow time for capture
+    await expect(page.locator('#status')).toContainText('Element screenshot ready', { timeout: 15000 });
 
     // Status should show element capture success
     const status = page.locator('#status');
     await expect(status).toContainText(/Element.*screenshot.*ready|ready/i);
 
     // Console should show selection and capture
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Element.*selected.*td/i);
-    expect(consoleOutput).toMatch(/Element.*screenshot.*captured/i);
+    await agentletTest.expectTextToMatch(/Element.*selected.*td/i);
+    await agentletTest.expectTextToMatch(/Element.*screenshot.*captured/i);
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -232,7 +223,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should display screenshot in fullscreen dialog with title', async ({ page }) => {
@@ -242,7 +233,7 @@ test.describe('Screen Capture Example', () => {
 
     // Capture sample table
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Screenshot dialog should appear with title
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -258,7 +249,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should test download functionality in screenshot dialog', async ({ page }) => {
@@ -268,7 +259,7 @@ test.describe('Screen Capture Example', () => {
 
     // Capture sample table
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -287,9 +278,7 @@ test.describe('Screen Capture Example', () => {
       expect(download.suggestedFilename()).toMatch(/screenshot.*\.png/i);
 
       // Console should show download activity
-      await page.waitForTimeout(1000);
-      const consoleOutput = await page.locator('#console').textContent();
-      expect(consoleOutput).toMatch(/Screenshot.*downloaded/i);
+      await agentletTest.expectTextToMatch(/Screenshot.*downloaded/i);
     } catch (error) {
       // If download doesn't work in test environment, just check for download button presence
       await expect(downloadButton.first()).toBeVisible();
@@ -299,7 +288,7 @@ test.describe('Screen Capture Example', () => {
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     if (await closeButton.first().isVisible()) {
       await closeButton.first().click();
-      await page.waitForTimeout(1000);
+      await agentletTest.waitForDialogClosed();
     }
   });
 
@@ -310,19 +299,18 @@ test.describe('Screen Capture Example', () => {
 
     // Start element selection for capture
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
 
     // Click on a different element (heading instead of table)
     await page.locator('h1').click();
-    await page.waitForTimeout(4000);
+    await expect(page.locator('#status')).toContainText('Element screenshot ready', { timeout: 15000 });
 
     // Status should show element capture success
     const status = page.locator('#status');
     await expect(status).toContainText(/Element.*screenshot.*ready|ready/i);
 
     // Console should show selection of heading element
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Element.*selected.*h1/i);
+    await agentletTest.expectTextToMatch(/Element.*selected.*h1/i);
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -331,7 +319,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should display screenshot selector information in dialog', async ({ page }) => {
@@ -341,11 +329,11 @@ test.describe('Screen Capture Example', () => {
 
     // Start element selection for capture
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
 
     // Click on the sample table to select it
     await page.locator('#sampleTable').click();
-    await page.waitForTimeout(4000);
+    await expect(page.locator('#status')).toContainText('Element screenshot ready', { timeout: 15000 });
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -358,7 +346,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should handle screenshot capture errors gracefully', async ({ page }) => {
@@ -377,19 +365,17 @@ test.describe('Screen Capture Example', () => {
 
     // Start element selection for capture
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
 
     // Click on an element
     await page.locator('h1').click();
-    await page.waitForTimeout(2000);
 
     // Should handle error gracefully
     const status = page.locator('#status');
     await expect(status).toContainText(/capture.*failed|error/i);
 
     // Console should show error
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Error.*capturing.*element/i);
+    await agentletTest.expectTextToMatch(/Error.*capturing.*element/i);
   });
 
   test('should handle clear console functionality', async ({ page }) => {
@@ -399,14 +385,14 @@ test.describe('Screen Capture Example', () => {
 
     // Create capture activity to generate output
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Close screenshot dialog if it appears
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
     if (await screenshotDialog.first().isVisible()) {
       const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
       await closeButton.first().click();
-      await page.waitForTimeout(1000);
+      await agentletTest.waitForDialogClosed();
     }
 
     // Verify there is output
@@ -415,17 +401,16 @@ test.describe('Screen Capture Example', () => {
 
     // Clear console
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000);
 
-    // Console should be cleared or contain different content
-    const consoleOutputAfterClear = await page.locator('#console').textContent();
-
-    // Check that either console is cleared OR content has changed
-    const isCleared = consoleOutputAfterClear.trim() === '' ||
-                     consoleOutputAfterClear !== consoleOutput ||
-                     consoleOutputAfterClear.includes('cleared') ||
-                     consoleOutputAfterClear.includes('Console cleared');
-    expect(isCleared).toBe(true);
+    // Console should be cleared or contain different content: check that
+    // either console is cleared OR content has changed
+    await expect.poll(async () => {
+      const consoleOutputAfterClear = await page.locator('#console').textContent();
+      return consoleOutputAfterClear.trim() === '' ||
+             consoleOutputAfterClear !== consoleOutput ||
+             consoleOutputAfterClear.includes('cleared') ||
+             consoleOutputAfterClear.includes('Console cleared');
+    }).toBe(true);
   });
 
   test('should verify screenshot image quality and format', async ({ page }) => {
@@ -435,7 +420,7 @@ test.describe('Screen Capture Example', () => {
 
     // Capture sample table
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -462,7 +447,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should verify HTML2Canvas integration', async ({ page }) => {
@@ -480,7 +465,7 @@ test.describe('Screen Capture Example', () => {
 
     // Test basic capture functionality
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Should successfully create screenshot without HTML2Canvas errors
     const status = page.locator('#status');
@@ -494,35 +479,34 @@ test.describe('Screen Capture Example', () => {
 
     // Take first screenshot
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Close first dialog
     const screenshotDialog1 = page.locator('.agentlet-fullscreen-dialog');
     if (await screenshotDialog1.first().isVisible()) {
       const closeButton1 = screenshotDialog1.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
       await closeButton1.first().click();
-      await page.waitForTimeout(1000);
+      await agentletTest.waitForDialogClosed();
     }
 
     // Take second screenshot
     await page.locator('button:has-text("Capture selected element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click any element to capture it');
     await page.locator('h1').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Element screenshot ready', { timeout: 15000 });
 
     // Second dialog should appear
     const screenshotDialog2 = page.locator('.agentlet-fullscreen-dialog');
     await expect(screenshotDialog2.first()).toBeVisible({ timeout: 10000 });
 
     // Console should show both capture activities
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Table.*screenshot.*captured/i);
-    expect(consoleOutput).toMatch(/Element.*screenshot.*captured/i);
+    await agentletTest.expectTextToMatch(/Table.*screenshot.*captured/i);
+    await agentletTest.expectTextToMatch(/Element.*screenshot.*captured/i);
 
     // Close second dialog
     const closeButton2 = screenshotDialog2.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton2.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should verify screenshot dialog HTML structure', async ({ page }) => {
@@ -532,7 +516,7 @@ test.describe('Screen Capture Example', () => {
 
     // Capture sample table
     await page.locator('button:has-text("Capture sample table")').click();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('#status')).toContainText('Table screenshot ready', { timeout: 15000 });
 
     // Screenshot dialog should appear
     const screenshotDialog = page.locator('.agentlet-fullscreen-dialog');
@@ -554,7 +538,7 @@ test.describe('Screen Capture Example', () => {
     // Close dialog
     const closeButton = screenshotDialog.first().locator('button:has-text("Close"), [role="button"]:has-text("Close")');
     await closeButton.first().click();
-    await page.waitForTimeout(1000);
+    await agentletTest.waitForDialogClosed();
   });
 
 });

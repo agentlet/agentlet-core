@@ -26,8 +26,8 @@ test.describe('OAuth Popup Authentication Example', () => {
     await expect(page.locator('#agentlet-container')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('button:has-text("🔐 Login")')).toBeVisible({ timeout: 5000 });
 
-    // Small additional wait to ensure everything is ready
-    await page.waitForTimeout(1000);
+    // Core fully initialized (the auth manager is wired up before this flag flips)
+    await agentletTest.waitForAgentletCore();
   }
 
   test('should load the OAuth popup page correctly', async ({ page }) => {
@@ -89,9 +89,6 @@ test.describe('OAuth Popup Authentication Example', () => {
         window.agentlet.authManager.handleSuccess(mockAuthResult.token, mockAuthResult);
       }
     });
-
-    // Wait a bit for the UI to update
-    await page.waitForTimeout(1000);
 
     // Verify authentication success on main page
     await expect(page.locator('#console')).toContainText('Authentication successful', { timeout: 5000 });
@@ -206,14 +203,11 @@ test.describe('OAuth Popup Authentication Example', () => {
       }
     });
 
-    // Wait a bit for UI to update
-    await page.waitForTimeout(500);
+    // Wait for the cancellation to be processed (logged by the example)
+    await expect(page.locator('#console')).toContainText('Authentication cancelled by user', { timeout: 2000 });
 
     // Verify still showing login button (no authentication occurred)
     await expect(page.locator('button:has-text("🔐 Login")')).toBeVisible();
     await expect(page.locator('button:has-text("👤")')).not.toBeVisible();
-
-    // Verify cancellation message in console
-    await expect(page.locator('#console')).toContainText('Authentication cancelled by user', { timeout: 2000 });
   });
 });

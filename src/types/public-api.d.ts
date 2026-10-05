@@ -603,9 +603,15 @@ export interface ZIndexAPI {
 /* ------------------------------------------------------------------ */
 
 export interface ScriptInjectOptions {
+    /**
+     * JavaScript source to run. With `tabId` in a Chrome extension it is
+     * rejected (`chrome.scripting` cannot run a code string): pass `file` or
+     * `func` instead.
+     */
     code?: string;
+    /** Path of a script file. With `tabId`, an extension-relative path for `chrome.scripting`. */
     file?: string;
-    /** Chrome-extension environments only. */
+    /** Chrome-extension environments only. Requires `file` or `func`, not `code`. */
     tabId?: number;
     target?: 'main' | 'isolated';
     allFrames?: boolean;
@@ -616,6 +622,7 @@ export interface ScriptInjectOptions {
 export interface ScriptInjectorAPI {
     /** Requires one of `code`, `file`, or `func`. */
     inject(options: ScriptInjectOptions): Promise<unknown>;
+    /** Injects a code string, so it rejects when `tabId` is set in an extension (see {@link ScriptInjectOptions.code}). */
     injectModule(options: { moduleCode?: string; moduleUrl?: string; tabId?: number }): Promise<unknown>;
     /** Rejects any pending injections and clears internal state. */
     cleanup(): void;
@@ -1621,8 +1628,11 @@ export type AIImageInput = string;
 export type PDFInputData = File | ArrayBuffer | Uint8Array | string;
 
 export interface AIPromptOptions {
+    /** Defaults to the `OPENAI_MODEL` env value, then to `gpt-6-luna`. */
     model?: string;
+    /** Sent as `max_tokens`, or as `max_completion_tokens` to gpt-5, gpt-6 and o-series models. */
     maxTokens?: number;
+    /** Not sent to gpt-5, gpt-6 and o-series models that reject it (`gpt-6-luna` and `gpt-6-sol` accept it). */
     temperature?: number;
     [key: string]: unknown;
 }

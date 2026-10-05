@@ -117,7 +117,7 @@ console.log(status.pdfSupport.capabilities.maxRecommendedPages); // 10
 
 // Set environment variables for AI
 window.agentlet.env.OPENAI_API_KEY = 'sk-...';
-window.agentlet.env.OPENAI_MODEL = 'gpt-4o-mini';
+window.agentlet.env.OPENAI_MODEL = 'gpt-6-luna';
 window.agentlet.ai.refresh(); // Refresh after env changes
 ```
 

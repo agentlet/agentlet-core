@@ -250,7 +250,7 @@ Full documentation lives at **[agentlet.io/docs](https://agentlet.io/docs/)**, i
 
 An agentlet runs inside the host page, with the page's privileges, and is not sandboxed. Any other script on that page can read `window.agentlet` and the environment variables it keeps in `localStorage`, including `OPENAI_API_KEY`. For anything beyond local experiments, point `OPENAI_BASE_URL` at a proxy on your backend so the real provider key never reaches the browser. [SECURITY.md](SECURITY.md) describes the threat model, what data leaves the page, and how to report a vulnerability.
 
-The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package.
+The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package. It is built to need little trust: it asks for `activeTab`, `scripting` and `storage` only, has no host permissions and no content script, injects the bundled core into a tab only when you click or press its shortcut, and runs only modules shipped inside the package, never code fetched from a URL.
 
 ## Size
 

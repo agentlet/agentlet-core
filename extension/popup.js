@@ -1,34 +1,36 @@
-// Popup script for Agentlet Core extension
+// Popup script for the Agentlet Core extension
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Activate button handler
-    document.getElementById('activate').addEventListener('click', () => {
-        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-            if (tabs[0]) {
-                // Send message to background script to toggle Agentlet Core
-                chrome.runtime.sendMessage({
-                    type: 'TOGGLE_AGENTLET',
-                    tabId: tabs[0].id
-                }, (response) => {
-                    if (response && response.success) {
-                        console.log('Agentlet Core activation requested');
-                        window.close(); // Close popup after activation
-                    } else {
-                        console.error('Failed to activate Agentlet Core:', response?.error);
-                    }
-                });
+document.addEventListener('DOMContentLoaded', function () {
+    const status = document.getElementById('status');
+
+    function setStatus(text) {
+        status.textContent = text;
+    }
+
+    document.getElementById('activate').addEventListener('click', async () => {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab || tab.id === undefined) {
+            setStatus('No active tab found.');
+            return;
+        }
+        try {
+            const response = await chrome.runtime.sendMessage({ type: 'ACTIVATE_TAB', tabId: tab.id });
+            if (response && response.success) {
+                window.close();
+            } else {
+                setStatus('Could not run on this page: ' + ((response && response.error) || 'unknown error'));
             }
-        });
+        } catch (error) {
+            setStatus('Could not run on this page: ' + error.message);
+        }
     });
-    
-    // Options button handler
+
     document.getElementById('options').addEventListener('click', () => {
         chrome.runtime.openOptionsPage();
     });
 
-    // Handle logo loading error gracefully
-    document.getElementById('logo').addEventListener('error', function() {
-        // If logo-48.png doesn't exist, fall back to existing icon
+    // Fall back to the existing icon if the logo is missing
+    document.getElementById('logo').addEventListener('error', function () {
         this.src = 'icons/icon-48.png';
     });
 });
