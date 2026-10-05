@@ -5,6 +5,7 @@
 
 import type { AgentletCoreConfig, EventBusAPI, EnvAPI, AgentletModule, UIManagerInternalAPI } from '../types/public-api';
 import { logger } from '../utils/system/Logger.js';
+import { sanitizeUrl } from '../utils/ui/safeHtml.js';
 
 /**
  * The DOM/query references shared between `AgentletCore` and `UIManager`
@@ -220,7 +221,7 @@ export class UIManager implements UIManagerInternalAPI {
 
             // Update toggle button if it exists
             if (toggleButton) {
-                toggleButton.innerHTML = '◀';
+                toggleButton.textContent = '◀';
                 toggleButton.style.right = '-2px';
             }
 
@@ -240,7 +241,7 @@ export class UIManager implements UIManagerInternalAPI {
      */
     createToggleButton(): HTMLButtonElement {
         const toggleButton = document.createElement('button');
-        toggleButton.innerHTML = '▶';
+        toggleButton.textContent = '▶';
         toggleButton.id = 'agentlet-toggle';
         toggleButton.className = 'agentlet-toggle';
 
@@ -264,7 +265,14 @@ export class UIManager implements UIManagerInternalAPI {
         const appDisplay = document.createElement('div');
         appDisplay.id = 'agentlet-app-display';
         appDisplay.className = 'agentlet-app-display';
-        appDisplay.innerHTML = '<strong>Agentlet:</strong> <span id="agentlet-app-name">Ready</span>';
+        const appLabel = document.createElement('strong');
+        appLabel.textContent = 'Agentlet:';
+        const appName = document.createElement('span');
+        appName.id = 'agentlet-app-name';
+        appName.textContent = 'Ready';
+        appDisplay.appendChild(appLabel);
+        appDisplay.appendChild(document.createTextNode(' '));
+        appDisplay.appendChild(appName);
 
         header.appendChild(appDisplay);
 
@@ -475,7 +483,7 @@ export class UIManager implements UIManagerInternalAPI {
 
             // Update toggle button if it exists
             if (toggleButton) {
-                toggleButton.innerHTML = '◀';
+                toggleButton.textContent = '◀';
                 toggleButton.style.right = '-2px';
             }
 
@@ -493,7 +501,7 @@ export class UIManager implements UIManagerInternalAPI {
 
             // Update toggle button if it exists
             if (toggleButton) {
-                toggleButton.innerHTML = '▶';
+                toggleButton.textContent = '▶';
                 toggleButton.style.right = '';
             }
 
@@ -523,7 +531,17 @@ export class UIManager implements UIManagerInternalAPI {
         // Create image overlay
         const imageOverlay = document.createElement('div');
         imageOverlay.className = 'agentlet-image-overlay';
-        imageOverlay.innerHTML = `<img src="${this.core.config.minimizeWithImage}" alt="Agentlet" />`;
+        // The URL is validated (http(s), data:image or relative) and set as a
+        // property, never interpolated into markup.
+        const imageUrl = sanitizeUrl(this.core.config.minimizeWithImage, { allowDataImage: true });
+        const image = document.createElement('img');
+        if (imageUrl !== null) {
+            image.src = imageUrl;
+        } else {
+            console.warn('minimizeWithImage ignored: only http(s), data:image and relative URLs are allowed');
+        }
+        image.alt = 'Agentlet';
+        imageOverlay.appendChild(image);
 
         // Add click handler to toggle collapse
         imageOverlay.addEventListener('click', () => {

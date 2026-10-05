@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- Escaped values the core interpolated into HTML: the panel title and module
+  name, the page URL in the placeholder and settings dialogs, the active module
+  name in the help and settings dialogs, environment variable names and values,
+  the `showModal()` title and keyboard shortcut descriptions. The login button
+  now escapes the user initials, `buttonIcon` and `buttonText` instead of
+  parsing them as HTML.
+- The `minimizeWithImage` URL is validated (`http:`, `https:`, `data:image/...`
+  or relative) and set on an `<img>` element instead of being written into
+  markup. Other schemes, such as `javascript:`, are ignored with a warning.
+- Removed every inline `onclick` handler. The environment variables dialog and
+  the `showModal()` buttons use `addEventListener`, and the internal
+  `window.addEnvVar` and `window.removeEnvVar` globals are gone (they were never
+  part of the public API).
+- `SECURITY.md` now lists the APIs that accept HTML by contract (module
+  `getContent()`, `allowHtml` dialogs, `MessageBubble` with `allowHtml`,
+  `showModal()` content) and what still blocks Trusted Types.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added

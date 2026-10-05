@@ -4,6 +4,7 @@
  */
 import type { AuthManagerAPI, AuthManagerConfig, AuthResult, AuthState, AuthAPI } from '../../types/public-api';
 import { logger } from './Logger.js';
+import { escapeHtml } from '../ui/safeHtml.js';
 
 class AuthManager implements AuthManagerAPI {
     config: Required<AuthManagerConfig>;
@@ -434,7 +435,8 @@ class AuthManager implements AuthManagerAPI {
             const initials = this.getUserInitials(this.authenticatedUser);
             const displayName = this.authenticatedUser.name || this.authenticatedUser.username || initials;
 
-            this.loginButton.innerHTML = `👤 ${initials}`;
+            // escaped: the initials come from the identity provider's user info
+            this.loginButton.innerHTML = `👤 ${escapeHtml(initials)}`;
             this.loginButton.title = `Logged in as ${displayName}. Click to logout.`;
 
             // Update styling for authenticated state
@@ -442,7 +444,7 @@ class AuthManager implements AuthManagerAPI {
             this.loginButton.style.borderColor = '#0056b3';
         } else {
             // Show login state
-            this.loginButton.innerHTML = `${this.config.buttonIcon} ${this.config.buttonText}`;
+            this.loginButton.innerHTML = `${escapeHtml(this.config.buttonIcon)} ${escapeHtml(this.config.buttonText)}`;
             this.loginButton.title = this.config.buttonText;
 
             // Reset to login styling

@@ -134,6 +134,7 @@ export function buildFullscreenDialog(theme: DialogTheme, config: ResolvedFullsc
         message.className = 'agentlet-fullscreen-message';
         message.style.cssText = 'margin-bottom: 20px;';
 
+        // HTML by documented contract (`allowHtml: true`): the caller owns this markup.
         if (config.allowHtml) {
             message.innerHTML = config.message;
         } else {
@@ -153,6 +154,7 @@ export function buildFullscreenDialog(theme: DialogTheme, config: ResolvedFullsc
         `;
 
         if (typeof config.customContent === 'string') {
+            // HTML by documented contract (`allowHtml: true`): the caller owns this markup.
             if (config.allowHtml) {
                 customDiv.innerHTML = config.customContent;
             } else {
