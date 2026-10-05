@@ -5,6 +5,48 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Browser extension (`extension/`, still an unpublished experiment): rebuilt
+  around least privilege. It now requests only `activeTab`, `scripting` and
+  `storage`, and has no host permissions, no content script and no
+  `web_accessible_resources`. Agentlet core is injected into the current tab
+  on demand, from the popup button "Activate on this page" or the keyboard
+  shortcut, using `chrome.scripting.executeScript` with files bundled in the
+  package. Activating again shows or hides the panel. It does not start by
+  itself after a navigation or reload.
+- The extension options page now holds the settings that are applied at
+  activation (debug mode, start minimized) and lists the bundled modules. The
+  popup, options and welcome pages are copied from `extension/` by the build
+  instead of being generated from inline templates, and their text is
+  rewritten. The manifest version follows `package.json`.
+- Only modules bundled in the extension package can run. They are listed in
+  `extension/bundled-modules.js`, and `npm run build:extension` fails if that
+  list and `extension/modules/` differ. The test module is no longer
+  shipped or loaded by default.
+- The extension no longer ships the pdf.js worker, so PDF to image conversion
+  is unavailable in the extension (it needs a web accessible resource).
+- Tests for the extension's background worker (mocked `chrome` API) and a
+  check that `extension/` contains no `fetch(`, `eval(`, `new Function` or
+  `importScripts(` and requests no host access.
+
+### Security
+
+- Browser extension: removed the code path that fetched an arbitrary module
+  URL and ran it in the page, with its regular expression blocklist and the
+  `<script>` element fallback. This was remotely hosted code, which Manifest V3
+  forbids and the Chrome Web Store rejects. Also removed `new Function` in the
+  service worker, the always-on `<all_urls>` content script, the
+  `http://*/*` and `https://*/*` host permissions, the `tabs` and
+  `contextMenus` permissions, the optional `history`, `bookmarks` and
+  `downloads` permissions, the `agentlet-core.js` and `modules/*.js` exposure
+  to every site (which let any page detect the extension), and the analytics
+  stub.
+- The service worker accepts messages only from the extension's own pages and
+  passes only known boolean settings to the page.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added
