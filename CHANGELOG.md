@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default OpenAI model is now `gpt-6-luna` (was `gpt-4o-mini`), OpenAI's
+  most cost-efficient current model, which accepts text and image input on
+  the Chat Completions endpoint. Set `OPENAI_MODEL` (or pass `model`) to keep
+  using another model.
+- The provider now builds the Chat Completions request per model. Classic
+  models (gpt-4o, gpt-4, gpt-3.5 and OpenAI-compatible servers) still get
+  `max_tokens` and `temperature`. gpt-5, gpt-6 and o-series models get
+  `max_completion_tokens` instead, and no `temperature` (they reject it while
+  reasoning is on). `gpt-6-luna` and `gpt-6-sol` are sent
+  `reasoning_effort: "none"`, so the token budget goes to the answer and
+  `temperature` stays valid.
+
 ### Fixed
 
 - `ScriptInjector.inject()` with a `tabId` in an extension no longer passes a
