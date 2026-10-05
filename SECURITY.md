@@ -71,7 +71,7 @@ A module that renders untrusted data (page text, records, server responses) in `
 The panel is still not compatible with pages that enforce Trusted Types (`require-trusted-types-for 'script'`). What blocks it:
 
 - The HTML-by-contract sinks above, plus the core's own template-based dialogs (settings, help, environment variables, keyboard shortcuts, the records preview), assign strings to `innerHTML`. Without a Trusted Types policy the browser rejects those assignments.
-- `ScriptInjector` and the module loader create `<script>` elements and set their `src` or text, and `ScriptInjector` can build functions from strings (`new Function`), which also needs `'unsafe-eval'`.
+- `ScriptInjector` and the module loader create `<script>` elements and set their `src` or text.
 - Bundled libraries (html2canvas, PDF.js, SheetJS, hotkeys-js) are not audited for Trusted Types.
 
 Escaping removes the injection risk in the core's own markup, but does not make these sinks Trusted Types safe.

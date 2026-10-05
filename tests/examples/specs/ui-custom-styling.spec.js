@@ -60,8 +60,8 @@ test.describe('Custom Styling Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait a bit more for the module content to load
-    await page.waitForTimeout(2000);
+    // Wait for the module content to load
+    await expect(page.locator('#agentlet-container button:has-text("ℹ️ Info dialog")')).toBeVisible();
 
     // Verify the buttons are present in the panel
     const infoBtnExists = await page.locator('#agentlet-container button:has-text("ℹ️ Info dialog")').isVisible();
@@ -93,8 +93,8 @@ test.describe('Custom Styling Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for module content to fully load
-    await page.waitForTimeout(2000);
+    // Wait for the module content to load
+    await expect(page.locator('#agentlet-container button:has-text("🖥️ Fullscreen dialog")')).toBeVisible();
 
     // Verify the fullscreen button is present
     const fullscreenBtnExists = await page.locator('#agentlet-container button:has-text("🖥️ Fullscreen dialog")').isVisible();
@@ -140,7 +140,7 @@ test.describe('Custom Styling Example', () => {
 
     // Test Glass theme - use specific ID selector
     await page.locator('#glassBtn').click({ force: true });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('body')).toHaveClass(/theme-glass/);
 
     // Check that glass theme is applied to body
     const hasGlassTheme = await page.evaluate(() => {
@@ -165,15 +165,14 @@ test.describe('Custom Styling Example', () => {
     // page-level `#agentlet-container { ... }` overrides stopped matching
     // anything. A translucent (alpha < 1) panel background is a reliable
     // sign the --agentlet-background-color custom property took effect.
-    const glassPanelBackground = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const panel = window.agentlet.ui.query('#agentlet-container');
       return panel ? window.getComputedStyle(panel).backgroundColor : null;
-    });
-    expect(glassPanelBackground).toMatch(/^rgba\(/);
+    })).toMatch(/^rgba\(/);
 
     // Test Material Design theme
     await page.locator('#materialBtn').click({ force: true });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('body')).toHaveClass(/theme-material/);
 
     // Check that material theme is applied and glass theme is removed
     const materialThemeState = await page.evaluate(() => {
@@ -190,15 +189,14 @@ test.describe('Custom Styling Example', () => {
     // the default white header - this only holds if the panel's own
     // stylesheet (inside the shadow root) picked up the custom properties
     // set on body.theme-material.
-    const materialHeaderBackground = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const header = window.agentlet.ui.query('#agentlet-header');
       return header ? window.getComputedStyle(header).backgroundColor : null;
-    });
-    expect(materialHeaderBackground).toBe('rgb(25, 118, 210)');
+    })).toBe('rgb(25, 118, 210)');
 
     // Test VS Code Dark theme (note: class is theme-vscode, not theme-vscode-dark)
     await page.locator('#vscodeBtn').click({ force: true });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('body')).toHaveClass(/theme-vscode/);
 
     // Check that vscode theme is applied and previous themes are removed
     const vscodeThemeState = await page.evaluate(() => {
@@ -216,15 +214,14 @@ test.describe('Custom Styling Example', () => {
     // shadow DOM landed, the panel and header stayed white when switching
     // to this theme because the page-level CSS could no longer reach
     // #agentlet-container inside the shadow root.
-    const vscodePanelBackground = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const panel = window.agentlet.ui.query('#agentlet-container');
       return panel ? window.getComputedStyle(panel).backgroundColor : null;
-    });
-    expect(vscodePanelBackground).toBe('rgb(30, 30, 30)');
+    })).toBe('rgb(30, 30, 30)');
 
     // Test Tux Linux theme
     await page.locator('#tuxBtn').click({ force: true });
-    await page.waitForTimeout(1500);
+    await expect(page.locator('body')).toHaveClass(/theme-tux/);
 
     // Check that tux theme is applied and previous themes are removed
     const tuxThemeState = await page.evaluate(() => {
@@ -242,11 +239,10 @@ test.describe('Custom Styling Example', () => {
 
     // The Tux theme sets a distinctive orange (#FF6B35) left border on the
     // panel, different from both the default and every other theme here.
-    const tuxPanelBorderColor = await page.evaluate(() => {
+    await expect.poll(() => page.evaluate(() => {
       const panel = window.agentlet.ui.query('#agentlet-container');
       return panel ? window.getComputedStyle(panel).borderLeftColor : null;
-    });
-    expect(tuxPanelBorderColor).toBe('rgb(255, 107, 53)');
+    })).toBe('rgb(255, 107, 53)');
 
     // Verify theme affects the agentlet panel if visible
     const panelVisible = await agentletTest.isPanelVisible();
@@ -293,7 +289,7 @@ test.describe('Custom Styling Example', () => {
         window.agentlet.minimize();
       }
     });
-    await page.waitForTimeout(1000);
+    await expect.poll(() => page.evaluate(() => window.agentlet.isMinimized)).toBe(true);
 
     // Test maximize via API if available
     await page.evaluate(() => {
@@ -301,7 +297,7 @@ test.describe('Custom Styling Example', () => {
         window.agentlet.maximize();
       }
     });
-    await page.waitForTimeout(1000);
+    await expect.poll(() => page.evaluate(() => window.agentlet.isMinimized)).toBe(false);
 
     // Panel should still be accessible
     const finalState = await page.evaluate(() => {
@@ -330,9 +326,6 @@ test.describe('Custom Styling Example', () => {
     const clearButton = page.locator('.console-clear-btn');
     await clearButton.click({ force: true });
 
-    // Output should be cleared (or show clear message)
-    await page.waitForTimeout(1000);
-
     // Verify the button click worked (don't assert on content as it might vary)
     const isClearButtonVisible = await clearButton.isVisible();
     expect(isClearButtonVisible).toBe(true);
@@ -344,9 +337,10 @@ test.describe('Custom Styling Example', () => {
 
     // Initialize and check status updates
     await agentletTest.initializeAgentlet();
-    await page.waitForTimeout(2000);
 
-    // Status should indicate ready state
+    // Status should indicate ready state (the initial text also says "Ready
+    // for ...", so wait for the post-init "Ready!" message)
+    await expect(page.locator('.status-section')).toContainText('Ready! Try switching themes');
     const finalStatus = await page.locator('.status-section').textContent();
     expect(finalStatus).toMatch(/Ready/i);
   });

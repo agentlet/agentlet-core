@@ -7,8 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default OpenAI model is now `gpt-6-luna` (was `gpt-4o-mini`), OpenAI's
+  most cost-efficient current model, which accepts text and image input on
+  the Chat Completions endpoint. Set `OPENAI_MODEL` (or pass `model`) to keep
+  using another model.
+- The provider now builds the Chat Completions request per model. Classic
+  models (gpt-4o, gpt-4, gpt-3.5 and OpenAI-compatible servers) still get
+  `max_tokens` and `temperature`. gpt-5, gpt-6 and o-series models get
+  `max_completion_tokens` instead, and no `temperature` (they reject it while
+  reasoning is on). `gpt-6-luna` and `gpt-6-sol` are sent
+  `reasoning_effort: "none"`, so the token budget goes to the answer and
+  `temperature` stays valid.
+- Browser extension (`extension/`, still an unpublished experiment): rebuilt
+  around least privilege. It now requests only `activeTab`, `scripting` and
+  `storage`, and has no host permissions, no content script and no
+  `web_accessible_resources`. Agentlet core is injected into the current tab
+  on demand, from the popup button "Activate on this page" or the keyboard
+  shortcut, using `chrome.scripting.executeScript` with files bundled in the
+  package. Activating again shows or hides the panel. It does not start by
+  itself after a navigation or reload.
+- The extension options page now holds the settings that are applied at
+  activation (debug mode, start minimized) and lists the bundled modules. The
+  popup, options and welcome pages are copied from `extension/` by the build
+  instead of being generated from inline templates, and their text is
+  rewritten. The manifest version follows `package.json`.
+- Only modules bundled in the extension package can run. They are listed in
+  `extension/bundled-modules.js`, and `npm run build:extension` fails if that
+  list and `extension/modules/` differ. The test module is no longer
+  shipped or loaded by default.
+- The extension no longer ships the pdf.js worker, so PDF to image conversion
+  is unavailable in the extension (it needs a web accessible resource).
+- Tests for the extension's background worker (mocked `chrome` API) and a
+  check that `extension/` contains no `fetch(`, `eval(`, `new Function` or
+  `importScripts(` and requests no host access.
+
+### Fixed
+
+- `ScriptInjector.inject()` with a `tabId` in an extension no longer passes a
+  non-existent `function` key (built with `new Function()`, which MV3 service
+  workers block) to `chrome.scripting.executeScript`. `chrome.scripting` cannot
+  run a code string, so a `code`-only injection (and `injectModule()`) with a
+  `tabId` now rejects with an error that says so and asks for a `file` or a
+  `func`. The `func`, `args` and `file` paths are unchanged, as is the DOM
+  injection used on regular pages.
+
 ### Security
 
+- Browser extension: removed the code path that fetched an arbitrary module
+  URL and ran it in the page, with its regular expression blocklist and the
+  `<script>` element fallback. This was remotely hosted code, which Manifest V3
+  forbids and the Chrome Web Store rejects. Also removed `new Function` in the
+  service worker, the always-on `<all_urls>` content script, the
+  `http://*/*` and `https://*/*` host permissions, the `tabs` and
+  `contextMenus` permissions, the optional `history`, `bookmarks` and
+  `downloads` permissions, the `agentlet-core.js` and `modules/*.js` exposure
+  to every site (which let any page detect the extension), and the analytics
+  stub.
+- The service worker accepts messages only from the extension's own pages and
+  passes only known boolean settings to the page.
 - Escaped values the core interpolated into HTML: the panel title and module
   name, the page URL in the placeholder and settings dialogs, the active module
   name in the help and settings dialogs, environment variable names and values,

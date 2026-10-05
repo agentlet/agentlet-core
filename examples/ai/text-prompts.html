@@ -95,7 +95,7 @@
                         <h4>Basic Configuration</h4>
                         <pre><code class="language-javascript">// Set API key via environment variables
 window.agentlet.env.OPENAI_API_KEY = 'sk-...';
-window.agentlet.env.OPENAI_MODEL = 'gpt-4o-mini';
+window.agentlet.env.OPENAI_MODEL = 'gpt-6-luna';
 
 // Refresh AI manager to pick up new settings
 window.agentlet.ai.refresh();
@@ -116,7 +116,7 @@ const response = await window.agentlet.ai.sendPrompt(
     "Summarize this in bullet points:",
     [], // No images
     {
-        model: 'gpt-4o',
+        model: 'gpt-6-luna',
         temperature: 0.3,
         maxTokens: 150
     }
@@ -305,10 +305,9 @@ const images = await window.agentlet.ai.convertPDFToImages(file);</code></pre>
                     <div style="margin-bottom: 20px;">
                         <label for="dialogModel" style="display: block; margin-bottom: 5px; font-weight: bold;">Model:</label>
                         <select id="dialogModel" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                            <option value="gpt-4o-mini">gpt-4o-mini (recommended)</option>
-                            <option value="gpt-4o">gpt-4o</option>
-                            <option value="gpt-4">gpt-4</option>
-                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                            <option value="gpt-6-luna">gpt-6-luna (recommended)</option>
+                            <option value="gpt-6.1-sol">gpt-6.1-sol</option>
+                            <option value="gpt-4o-mini">gpt-4o-mini (older)</option>
                         </select>
                         <small style="color: #666; font-size: 0.9em;">Choose the OpenAI model to use</small>
                     </div>
@@ -353,7 +352,7 @@ const images = await window.agentlet.ai.convertPDFToImages(file);</code></pre>
 
                 // Set current values
                 const currentApiKey = window.agentlet.env.OPENAI_API_KEY || '';
-                const currentModel = window.agentlet.env.OPENAI_MODEL || 'gpt-4o-mini';
+                const currentModel = window.agentlet.env.OPENAI_MODEL || 'gpt-6-luna';
                 
                 if (currentApiKey) {
                     document.getElementById('dialogApiKey').placeholder = `Current: ${currentApiKey.substring(0, 8)}...`;
@@ -609,7 +608,7 @@ const images = await window.agentlet.ai.convertPDFToImages(file);</code></pre>
                 // Log environment variables (masked)
                 const apiKey = window.agentlet.env.OPENAI_API_KEY;
                 const model = window.agentlet.env.OPENAI_MODEL;
-                currentModel = model || 'gpt-4o-mini';
+                currentModel = model || 'gpt-6-luna';
                 log(`🔑 API Key: ${apiKey ? (apiKey.substring(0, 8) + '...') : 'Not set'}`, 'info');
                 log(`🎛️ Model: ${currentModel}`, 'info');
                 
