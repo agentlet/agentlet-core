@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SheetJS, pdf.js and html2canvas are no longer inlined in the core bundle.
   Each one is loaded the first time a feature needs it (the first Excel
   export, PDF conversion or screenshot), so the core alone is 292 KB
-  minified and 76 KB gzipped instead of 1.31 MB and 379 KB. The script
+  minified and 76 KB gzipped instead of 1.38 MB and 398 KB. The script
   builds (`agentlet-core.js`, `agentlet-core.min.js`) load
   `agentlet-xlsx.min.js`, `agentlet-html2canvas.min.js` and
   `agentlet-pdfjs.min.js` from the folder of the core script. The ES module
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page.
 - The npm package now also ships `agentlet-core.full.min.js`, the three
   library chunks, `dist/chunks/`, `dist/cmaps/` and `dist/standard_fonts/`
-  (tarball 3.2 MB, 8.9 MB unpacked). The bookmarklet build and the browser
+  (tarball 3.2 MB, 9.1 MB unpacked). The bookmarklet build and the browser
   extension bundle keep the libraries inline.
 - The build writes two more esbuild metafiles (`agentlet-core.full.min` and
   `chunks`), and `npm run build` runs a new `verify:dist-chunks` check that

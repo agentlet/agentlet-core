@@ -247,20 +247,20 @@ The package ships built files in `dist/`:
 
 There are no sourcemaps, no browser extension bundle and no bookmarklet HTML in the package.
 
-Measured on the build that introduced on-demand loading (minified, size in bytes divided by 1000, gzip from `gzip -c file | wc -c`). Before it, `agentlet-core.min.js` was 1.31 MB, 379 KB gzipped, and every page paid for all of it.
+Measured on the build that introduced on-demand loading, with SheetJS 0.20.3 (minified, size in bytes divided by 1000, gzip from `gzip -c file | wc -c`). Before it, `agentlet-core.min.js` was 1.38 MB, 398 KB gzipped (version 2.3.0), and every page paid for all of it.
 
 | File | Size | Gzip | Downloaded |
 |---|---|---|---|
 | `dist/agentlet-core.min.js` (the core alone) | 292 KB | 76 KB | always |
-| `dist/agentlet-xlsx.min.js` (SheetJS) | 433 KB | 143 KB | first Excel export |
+| `dist/agentlet-xlsx.min.js` (SheetJS) | 503 KB | 162 KB | first Excel export |
 | `dist/agentlet-html2canvas.min.js` | 205 KB | 48 KB | first screenshot |
 | `dist/agentlet-pdfjs.min.js` (pdf.js) | 381 KB | 113 KB | first PDF conversion |
 | `dist/pdf.worker.min.mjs` | 1.04 MB | 286 KB | first PDF conversion |
 | `dist/cmaps/`, 169 files | 1.17 MB in total | | only the character maps a PDF needs |
 | `dist/standard_fonts/`, 16 files | 0.78 MB in total | | only the standard fonts a PDF needs |
-| `dist/agentlet-core.full.min.js` (everything inlined) | 1.32 MB | 381 KB | always |
+| `dist/agentlet-core.full.min.js` (everything inlined) | 1.39 MB | 401 KB | always |
 
-A page that never exports to Excel, captures or converts a PDF downloads 76 KB gzipped instead of 379 KB. The npm tarball is 3.2 MB (8.9 MB unpacked, because it also holds the unminified IIFE and ESM builds, and the character maps and fonts).
+A page that never exports to Excel, captures or converts a PDF downloads 76 KB gzipped instead of 398 KB. The npm tarball is 3.2 MB (9.1 MB unpacked, because it also holds the unminified IIFE and ESM builds, and the character maps and fonts).
 
 ### Where the files are loaded from
 
