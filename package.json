@@ -89,7 +89,7 @@
     "esbuild": "^0.25.8",
     "eslint": "^9.32.0",
     "express": "^5.1.0",
-    "hotkeys-js": "^3.13.15",
+    "hotkeys-js": "^4.0.8",
     "html2canvas": "^1.4.1",
     "husky": "^9.1.7",
     "jest": "^30.0.5",
