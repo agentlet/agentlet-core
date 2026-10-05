@@ -264,6 +264,135 @@ describe('CookieManager', () => {
 
       expect(cookieManager.pollInterval).toBeNull();
     });
+
+    describe('with fake timers driving the poll', () => {
+      // Writes the way another script on the page would: straight to
+      // document.cookie, so only the poll can notice it (set() notifies
+      // listeners itself).
+      const externalWrite = (name, value) => {
+        global.document.cookie = `${name}=${value}`;
+      };
+
+      test('no timer is scheduled without listeners, even as time passes', () => {
+        const setIntervalSpy = jest.spyOn(global, 'setInterval');
+        const manager = new CookieManager();
+
+        externalWrite('some_cookie', 'value');
+        jest.advanceTimersByTime(10000);
+
+        expect(setIntervalSpy).not.toHaveBeenCalled();
+        expect(jest.getTimerCount()).toBe(0);
+        setIntervalSpy.mockRestore();
+      });
+
+      test('the first listener schedules exactly one timer, later ones reuse it', () => {
+        const setIntervalSpy = jest.spyOn(global, 'setInterval');
+
+        cookieManager.addChangeListener(jest.fn());
+        cookieManager.addChangeListener(jest.fn());
+
+        expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+        expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 1000);
+        expect(jest.getTimerCount()).toBe(1);
+        setIntervalSpy.mockRestore();
+      });
+
+      test('listeners are notified by the poll when a cookie changes', () => {
+        const listener = jest.fn();
+        cookieManager.addChangeListener(listener);
+
+        jest.advanceTimersByTime(1000);
+        expect(listener).not.toHaveBeenCalled();
+
+        externalWrite('session', 'abc');
+        expect(listener).not.toHaveBeenCalled(); // nothing is notified before the next tick
+        jest.advanceTimersByTime(1000);
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(listener).toHaveBeenCalledWith('session', 'abc', undefined);
+
+        externalWrite('session', 'def');
+        jest.advanceTimersByTime(1000);
+        expect(listener).toHaveBeenCalledTimes(2);
+        expect(listener).toHaveBeenLastCalledWith('session', 'def', 'abc');
+      });
+
+      test('removing the last listener clears the timer and stops reading cookies', () => {
+        const listener = jest.fn();
+        cookieManager.addChangeListener(listener);
+        expect(jest.getTimerCount()).toBe(1);
+
+        cookieManager.removeChangeListener(listener);
+        expect(jest.getTimerCount()).toBe(0);
+
+        const checkSpy = jest.spyOn(cookieManager, 'checkForChanges');
+        externalWrite('session', 'abc');
+        jest.advanceTimersByTime(5000);
+        expect(checkSpy).not.toHaveBeenCalled();
+        expect(listener).not.toHaveBeenCalled();
+      });
+
+      test('cleanup() clears the timer and drops the listeners', () => {
+        const listener = jest.fn();
+        cookieManager.addChangeListener(listener);
+
+        cookieManager.cleanup();
+        expect(jest.getTimerCount()).toBe(0);
+
+        externalWrite('session', 'abc');
+        jest.advanceTimersByTime(5000);
+        expect(listener).not.toHaveBeenCalled();
+      });
+
+      test('polling can start again after the last listener was removed', () => {
+        const first = jest.fn();
+        cookieManager.addChangeListener(first);
+        cookieManager.removeChangeListener(first);
+
+        const second = jest.fn();
+        cookieManager.addChangeListener(second);
+        externalWrite('session', 'abc');
+        jest.advanceTimersByTime(1000);
+
+        expect(jest.getTimerCount()).toBe(1);
+        expect(second).toHaveBeenCalledWith('session', 'abc', undefined);
+        expect(first).not.toHaveBeenCalled();
+      });
+
+      test('the polling interval is configurable and applies to a running poll', () => {
+        const listener = jest.fn();
+        cookieManager.addChangeListener(listener);
+        cookieManager.setPollFrequency(200);
+
+        externalWrite('session', 'abc');
+        jest.advanceTimersByTime(199);
+        expect(listener).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(1);
+        expect(listener).toHaveBeenCalledWith('session', 'abc', undefined);
+        expect(jest.getTimerCount()).toBe(1);
+      });
+
+      test('setPollFrequency() does not start a poll when nothing listens', () => {
+        cookieManager.setPollFrequency(200);
+
+        expect(jest.getTimerCount()).toBe(0);
+        expect(cookieManager.pollFrequency).toBe(200);
+      });
+
+      test('a throwing listener does not stop the poll or the other listeners', () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const bad = jest.fn(() => { throw new Error('boom'); });
+        const good = jest.fn();
+        cookieManager.addChangeListener(bad);
+        cookieManager.addChangeListener(good);
+
+        externalWrite('session', 'abc');
+        jest.advanceTimersByTime(1000);
+
+        expect(good).toHaveBeenCalledWith('session', 'abc', undefined);
+        expect(jest.getTimerCount()).toBe(1);
+        consoleSpy.mockRestore();
+      });
+    });
   });
 
   describe('Proxy Access', () => {
