@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # npm dependencies. The xlsx (SheetJS) dependency is installed from
+  # cdn.sheetjs.com, which Dependabot cannot track, so it is ignored here
+  # (see SECURITY.md and CONTRIBUTING.md).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "xlsx"
+
+  # GitHub Actions. Every action is pinned by commit SHA with a trailing tag
+  # comment, and Dependabot updates both the SHA and the comment.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
