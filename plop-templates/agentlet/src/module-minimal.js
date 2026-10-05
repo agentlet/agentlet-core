@@ -7,6 +7,7 @@
             super({
                 name: '{{kebabCase name}}',
                 patterns: ['localhost', '127.0.0.1', 'file://'],
+                matchMode: 'host',
                 description: 'A minimal agentlet for {{name}}',
                 version: '1.0.0'
             });

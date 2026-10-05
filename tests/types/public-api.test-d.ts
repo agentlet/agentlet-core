@@ -15,6 +15,8 @@ import type {
     AgentletAPI,
     AgentletModule,
     ModuleActivationContext,
+    ModuleConfig,
+    ModuleMatchMode,
     ModuleMountContext,
     ModuleMountTrigger,
     EventBusAPI,
@@ -720,3 +722,19 @@ const wrongAiReply: Promise<number> = window.agentlet.ai.sendPrompt('hi');
 void wrongAiReply;
 
 export {};
+
+/* Module matchMode (host matching) */
+
+const hostMatchedAgentlet = new Module({
+    name: 'host-matched',
+    patterns: ['example.com', 'localhost:3000', { type: 'regex', value: 'evil' }],
+    matchMode: 'host'
+});
+const hostMode: ModuleMatchMode = hostMatchedAgentlet.matchMode;
+void hostMode;
+new window.agentlet.Module({ name: 'substring-matched', patterns: 'example.com', matchMode: 'substring' });
+const hostConfig: ModuleConfig = { name: 'cfg', patterns: 'example.com', matchMode: 'host' };
+void hostConfig;
+
+// @ts-expect-error matchMode only accepts 'substring' or 'host'
+new window.agentlet.Module({ name: 'bad-mode', patterns: 'example.com', matchMode: 'hostname' });

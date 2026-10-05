@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Module option `matchMode: 'host'`: string `patterns` are compared with the
+  parsed URL host instead of the full URL text. `'example.com'` matches
+  `example.com` and any subdomain, case-insensitively and for internationalized
+  names, and no longer matches `https://example.com.evil.test/`,
+  `https://notexample.com/` or `https://evil.test/?q=example.com`. A pattern
+  may add a `scheme://`, a `:port` (ignored otherwise) and a `/path-prefix`
+  that matches whole segments. `'*'` and the `{ type, value }` object patterns
+  behave as before. `ModuleMatchMode` is exported from the public types and
+  `AgentletModule.matchMode` exposes the resolved value.
+- With `debugMode` on, a host-looking string pattern used in the default
+  substring mode logs a one-time warning that points to `matchMode: 'host'`.
+  It is gated by `debugMode` because the default is unchanged in 2.x and a
+  warning on every page of every existing deployment would be noise.
+
+### Changed
+
+- The scaffold templates now declare `matchMode: 'host'` (the full and React
+  templates previously declared `matchMode: 'includes'`, which was ignored).
+  A core that predates the option ignores it, so scaffolded projects keep
+  working. Unknown values, including that old `'includes'`, fall back to
+  substring matching; an unrecognized value other than the old scaffold ones
+  logs a warning.
+
+### Deprecated
+
+- Substring matching of plain string patterns. Host matching becomes the
+  default in agentlet-core 3.0. Set `matchMode: 'host'` now, or
+  `matchMode: 'substring'` to keep the current behaviour after 3.0.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added
