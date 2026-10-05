@@ -58,8 +58,10 @@ type FetchMock = jest.Mock<Promise<Response>, [RequestInfo | URL, RequestInit?]>
 /** Body shape `OpenAIProvider.sendPrompt()` builds and JSON-stringifies for `/chat/completions`. */
 interface ChatCompletionRequestBody {
     model: string;
-    max_tokens: number;
-    temperature: number;
+    max_tokens?: number;
+    max_completion_tokens?: number;
+    temperature?: number;
+    reasoning_effort?: string;
     messages: Array<{
         role: string;
         content: Array<{ type: string; text?: string; image_url?: { url: string } }>;
@@ -107,9 +109,10 @@ describe('AIProvider (OpenAIProvider) behaviour characterization', () => {
 
             const body = parseBody(fetchMock);
             expect(body).toEqual({
-                model: 'gpt-4o-mini',
-                max_tokens: 4000,
+                model: 'gpt-6-luna',
+                max_completion_tokens: 4000,
                 temperature: 0.7,
+                reasoning_effort: 'none',
                 messages: [
                     {
                         role: 'user',
@@ -140,6 +143,56 @@ describe('AIProvider (OpenAIProvider) behaviour characterization', () => {
                 { type: 'image_url', image_url: { url: 'https://example.com/photo.jpg' } },
                 { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,rawBase64Data' } }
             ]);
+        });
+
+        test.each([
+            ['gpt-4o-mini', { max_tokens: 4000, temperature: 0.7 }],
+            ['gpt-4o', { max_tokens: 4000, temperature: 0.7 }],
+            ['my-local-model', { max_tokens: 4000, temperature: 0.7 }],
+            ['gpt-6-luna', { max_completion_tokens: 4000, temperature: 0.7, reasoning_effort: 'none' }],
+            ['gpt-6-sol', { max_completion_tokens: 4000, temperature: 0.7, reasoning_effort: 'none' }],
+            ['gpt-6.1-sol', { max_completion_tokens: 4000 }],
+            ['gpt-5-mini', { max_completion_tokens: 4000 }],
+            ['o4-mini', { max_completion_tokens: 4000 }]
+        ])('sends the right token and sampling parameters for the %s override', async (model, expected) => {
+            fetchMock.mockResolvedValue(
+                fakeResponse({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: 'ok' } }] }) })
+            );
+
+            const provider = new OpenAIProvider('sk-test', { model });
+            await provider.sendPrompt('Say hi');
+
+            const { messages, ...rest } = parseBody(fetchMock);
+            expect(messages).toHaveLength(1);
+            expect(rest).toEqual({ model, ...expected });
+        });
+
+        test('applies the same parameter rules to a per-call model override', async () => {
+            fetchMock.mockResolvedValue(
+                fakeResponse({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: 'ok' } }] }) })
+            );
+
+            const provider = new OpenAIProvider('sk-test', { model: 'gpt-4o-mini' });
+            await provider.sendPrompt('Say hi', [], { model: 'gpt-6.1-sol', maxTokens: 50 });
+
+            const body = parseBody(fetchMock);
+            expect(body.model).toBe('gpt-6.1-sol');
+            expect(body.max_completion_tokens).toBe(50);
+            expect(body).not.toHaveProperty('max_tokens');
+            expect(body).not.toHaveProperty('temperature');
+        });
+
+        test('validateAPI() uses the model-appropriate parameters', async () => {
+            fetchMock.mockResolvedValue(
+                fakeResponse({ ok: true, json: () => Promise.resolve({ choices: [{ message: { content: 'Hi' } }] }) })
+            );
+
+            await new OpenAIProvider('sk-test').validateAPI();
+
+            const body = parseBody(fetchMock);
+            expect(body.model).toBe('gpt-6-luna');
+            expect(body.max_completion_tokens).toBe(5);
+            expect(body).not.toHaveProperty('max_tokens');
         });
 
         test('lets per-call options override model/maxTokens/temperature, including temperature: 0', async () => {
@@ -244,7 +297,7 @@ describe('AIProvider (OpenAIProvider) behaviour characterization', () => {
                 error: 'HTTP 429: rate limit exceeded',
                 details: {
                     provider: 'openai',
-                    model: 'gpt-4o-mini',
+                    model: 'gpt-6-luna',
                     errorType: 'RATE_LIMITED'
                 }
             });

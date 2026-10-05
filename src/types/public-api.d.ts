@@ -1621,8 +1621,11 @@ export type AIImageInput = string;
 export type PDFInputData = File | ArrayBuffer | Uint8Array | string;
 
 export interface AIPromptOptions {
+    /** Defaults to the `OPENAI_MODEL` env value, then to `gpt-6-luna`. */
     model?: string;
+    /** Sent as `max_tokens`, or as `max_completion_tokens` to gpt-5, gpt-6 and o-series models. */
     maxTokens?: number;
+    /** Not sent to gpt-5, gpt-6 and o-series models that reject it (`gpt-6-luna` and `gpt-6-sol` accept it). */
     temperature?: number;
     [key: string]: unknown;
 }
