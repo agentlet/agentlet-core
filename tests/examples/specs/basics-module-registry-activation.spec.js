@@ -15,6 +15,32 @@
 import { test, expect } from '@playwright/test';
 import { AgentletTestBase } from '../utils/AgentletTestBase.js';
 
+/**
+ * Counts every URL-based detection pass of the module registry (periodic
+ * poll, pushState, popstate and hashchange all end in checkUrlChange()), so a
+ * test can wait for N passes to have run instead of sleeping for a duration.
+ * Returns a function that resolves once `n` more passes have run.
+ */
+async function trackUrlChecks(page) {
+  await page.evaluate(() => {
+    const registry = window.agentlet.moduleRegistry;
+    if (!registry.__urlCheckCount) {
+      registry.__urlCheckCount = 0;
+      const original = registry.checkUrlChange.bind(registry);
+      registry.checkUrlChange = (...args) => {
+        registry.__urlCheckCount++;
+        return original(...args);
+      };
+    }
+  });
+  const baseline = await page.evaluate(() => window.agentlet.moduleRegistry.__urlCheckCount);
+  return (n) => page.waitForFunction(
+    ([from, count]) => window.agentlet.moduleRegistry.__urlCheckCount >= from + count,
+    [baseline, n],
+    { timeout: 10000 }
+  );
+}
+
 test.describe('Module Registry Activation Example', () => {
   let agentletTest;
 
@@ -62,21 +88,24 @@ test.describe('Module Registry Activation Example', () => {
     await page.locator('#activateBBtn').click();
     await expect.poll(() => page.evaluate(() => window.agentlet.moduleRegistry.activeModule?.name)).toBe('registry-module-b');
 
-    // The URL-based poll runs every second; wait past several ticks. Module A
-    // still matches the page too (same pattern), so before the fix this
-    // would silently switch back to it.
-    await page.waitForTimeout(3500);
+    // The URL-based poll runs every second; wait for several detection passes
+    // to have run. Module A still matches the page too (same pattern), so
+    // before the fix this would silently switch back to it.
+    const afterPoll = await trackUrlChecks(page);
+    await afterPoll(3);
     expect(await page.evaluate(() => window.agentlet.moduleRegistry.activeModule?.name)).toBe('registry-module-b');
 
     // Single-page navigation via pushState: module B's pattern ('localhost')
     // still matches the new URL, so it must stay active.
+    const afterPush = await trackUrlChecks(page);
     await page.locator('#pushStateBtn').click();
-    await page.waitForTimeout(500);
+    await afterPush(1);
     expect(await page.evaluate(() => window.agentlet.moduleRegistry.activeModule?.name)).toBe('registry-module-b');
 
     // Hash-based navigation: same expectation.
+    const afterHash = await trackUrlChecks(page);
     await page.locator('#hashBtn').click();
-    await page.waitForTimeout(500);
+    await afterHash(1);
     expect(await page.evaluate(() => window.agentlet.moduleRegistry.activeModule?.name)).toBe('registry-module-b');
   });
 

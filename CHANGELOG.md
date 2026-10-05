@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The default OpenAI model is now `gpt-6-luna` (was `gpt-4o-mini`), OpenAI's
+  most cost-efficient current model, which accepts text and image input on
+  the Chat Completions endpoint. Set `OPENAI_MODEL` (or pass `model`) to keep
+  using another model.
+- The provider now builds the Chat Completions request per model. Classic
+  models (gpt-4o, gpt-4, gpt-3.5 and OpenAI-compatible servers) still get
+  `max_tokens` and `temperature`. gpt-5, gpt-6 and o-series models get
+  `max_completion_tokens` instead, and no `temperature` (they reject it while
+  reasoning is on). `gpt-6-luna` and `gpt-6-sol` are sent
+  `reasoning_effort: "none"`, so the token budget goes to the answer and
+  `temperature` stays valid.
 - Browser extension (`extension/`, still an unpublished experiment): rebuilt
   around least privilege. It now requests only `activeTab`, `scripting` and
   `storage`, and has no host permissions, no content script and no
@@ -31,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests for the extension's background worker (mocked `chrome` API) and a
   check that `extension/` contains no `fetch(`, `eval(`, `new Function` or
   `importScripts(` and requests no host access.
+
+### Fixed
+
+- `ScriptInjector.inject()` with a `tabId` in an extension no longer passes a
+  non-existent `function` key (built with `new Function()`, which MV3 service
+  workers block) to `chrome.scripting.executeScript`. `chrome.scripting` cannot
+  run a code string, so a `code`-only injection (and `injectModule()`) with a
+  `tabId` now rejects with an error that says so and asks for a `file` or a
+  `func`. The `func`, `args` and `file` paths are unchanged, as is the DOM
+  injection used on regular pages.
 
 ### Security
 
