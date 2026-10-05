@@ -101,11 +101,30 @@ Steps, in order:
 4. `npm publish --provenance --access public`.
 5. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
 
-The job needs `id-token: write` so that npm can attach a signed provenance attestation, and `contents: write` to create the release.
+The job needs `id-token: write` so that npm can authenticate to the registry with a short-lived OIDC token (see below) and attach a signed provenance attestation, and `contents: write` to create the release. Right before publishing, a step upgrades npm to 11.5.1 or later, which trusted publishing requires, and fails if the result is older. Trusted publishing also requires Node.js 22.14.0 or later, which `22.x` provides, and a GitHub-hosted runner.
 
-### Required secret: `NPM_TOKEN`
+### Authentication: npm trusted publishing (OIDC)
 
-Publishing authenticates with an npm automation token stored as the repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions). Create the token on npmjs.com under Access tokens, with the Automation type, using an account that can publish `agentlet-core`. Without the secret, a tag push runs the tests and build and then fails at the publish step.
+`npm publish` authenticates with the job's OIDC identity ([npm documentation](https://docs.npmjs.com/trusted-publishers)), not with a stored token: no `NPM_TOKEN` secret and no `NODE_AUTH_TOKEN` are used. npm exchanges the identity for a short-lived publish token, only if the workflow run matches the trusted publisher configured for the package on npmjs.com. Provenance is then generated automatically. `--provenance` stays in the command so that the publish fails instead of going out without an attestation. `registry-url` stays on `actions/setup-node` because npm needs it.
+
+The trusted publisher is configured once, by a package maintainer, on npmjs.com: package `agentlet-core`, Settings, Trusted Publisher, GitHub Actions, with these values (all case-sensitive, nothing is verified when saving, a mistake only shows up at publish time):
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `agentlet` |
+| Repository | `agentlet-core` |
+| Workflow filename | `release.yml` |
+| Environment name | empty (the workflow does not use a GitHub environment) |
+
+The `repository.url` in `package.json` must match the GitHub repository, and does (`git+https://github.com/agentlet/agentlet-core.git`). If the workflow file is renamed, the trusted publisher must be updated to the new filename. The setting lives in the settings of an existing package, and `agentlet-core` already exists on npm.
+
+Once a release has been published through OIDC:
+
+1. On npmjs.com, open the package Settings, Publishing access, select "Require two-factor authentication and disallow tokens" and save. This blocks token-based publishes.
+2. Revoke the automation token that was used as `NPM_TOKEN` (npmjs.com, Access tokens).
+3. Delete the `NPM_TOKEN` repository secret (GitHub, Settings, Secrets and variables, Actions).
+
+If the trusted publisher is missing or wrong, a tag push still runs the checks, build, SBOM and scan, and then fails at the publish step with an authentication error. Nothing is published, and the job can be re-run after fixing the npmjs.com settings.
 
 ## Dependabot
 

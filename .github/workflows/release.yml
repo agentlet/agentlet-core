@@ -12,8 +12,9 @@ jobs:
     # Playwright e2e suite, plus headroom for the npm publish step itself.
     timeout-minutes: 20
 
-    # npm publish --provenance needs to mint an OIDC token to attest where
-    # the package was built (id-token: write). contents: write is needed to
+    # id-token: write lets npm authenticate to the registry with a short-lived
+    # OIDC token (npm trusted publishing, no NPM_TOKEN secret) and attest
+    # where the package was built (provenance). contents: write is needed to
     # create/attach to the GitHub release for this tag (see "Attach SBOM to
     # the GitHub release" below) - the nightly job in security.yml reads
     # that asset back to rescan already-published versions against newly
@@ -31,7 +32,8 @@ jobs:
       with:
         node-version: 22.x
         cache: 'npm'
-        # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
+        # Required by npm trusted publishing: it points npm at the registry
+        # that has the trusted publisher configured.
         registry-url: 'https://registry.npmjs.org'
 
     - name: Check the tag matches the package version
@@ -85,10 +87,27 @@ jobs:
         artifact-name: release-scan-reports
         fail-on-gate: 'true'
 
+    - name: Upgrade npm for trusted publishing
+      # Trusted publishing (OIDC) needs npm 11.5.1 or later and Node 22.14.0
+      # or later. The npm bundled with Node 22 is older, so upgrade it here,
+      # right before it is needed, and fail clearly if the result is too old.
+      run: |
+        npm install -g 'npm@^11.5.1'
+        npm_version="$(npm --version)"
+        echo "npm ${npm_version}, node $(node --version)"
+        if [ "$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -n 1)" != "11.5.1" ]; then
+          echo "npm ${npm_version} is older than 11.5.1, trusted publishing is not available." >&2
+          exit 1
+        fi
+
     - name: Publish to npm
+      # No NODE_AUTH_TOKEN and no NPM_TOKEN: npm exchanges the job's OIDC
+      # identity for a short-lived publish token, using the trusted publisher
+      # configured on npmjs.com (organization agentlet, repository
+      # agentlet-core, workflow release.yml). Provenance is generated
+      # automatically in that case; --provenance stays so that the publish
+      # fails instead of silently going out without an attestation.
       run: npm publish --provenance --access public
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     - name: Attach SBOM to the GitHub release
       # Runs after the npm publish succeeds: if creating/uploading to the
