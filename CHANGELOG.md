@@ -64,6 +64,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   working. Unknown values, including that old `'includes'`, fall back to
   substring matching; an unrecognized value other than the old scaffold ones
   logs a warning.
+- SheetJS, pdf.js and html2canvas are no longer inlined in the core bundle.
+  Each one is loaded the first time a feature needs it (the first Excel
+  export, PDF conversion or screenshot), so the core alone is 292 KB
+  minified and 76 KB gzipped instead of 1.38 MB and 398 KB. The script
+  builds (`agentlet-core.js`, `agentlet-core.min.js`) load
+  `agentlet-xlsx.min.js`, `agentlet-html2canvas.min.js` and
+  `agentlet-pdfjs.min.js` from the folder of the core script. The ES module
+  build splits them into `dist/chunks/`, which a bundler turns into its own
+  lazy chunks. Public APIs that were already asynchronous keep their
+  signatures.
+- `window.XLSX`, `window.html2canvas` and `window.pdfjsLib` are defined on
+  first use, not right after `init()`. List them in the new
+  `preloadLibraries` option to load them during `init()`, or use the new
+  single-file `agentlet-core.full.min.js`, which inlines all three and
+  registers them during `init()` like before.
+- `isExcelExportAvailable()`, `isScreenCaptureAvailable()` and
+  `isPDFJSAvailable()` are true when the library is loaded or can be loaded
+  on demand. The synchronous `TableExtractor.createExcelWorkbook()` still
+  needs SheetJS loaded: call `await ensureXLSX()` first or preload `xlsx`.
+  Its error now says so.
+- A library that cannot be loaded now rejects with the URL it tried and the
+  option to change, and that message reaches the error returned by
+  `downloadAsExcel()` and thrown by the screenshot and PDF methods.
+- `tableExtractor`, `aiManager` and `shortcutManager` now receive the
+  library setup (it used to be created after them), so they can load
+  libraries on demand.
+- New options `libraryBaseUrl`, `libraryUrls`, `pdfCMapUrl`,
+  `pdfStandardFontsUrl` and `preloadLibraries` (see the README, Size). With
+  no option set, `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/` are
+  resolved next to the core script instead of next to `registryUrl` or the
+  page.
+- The npm package now also ships `agentlet-core.full.min.js`, the three
+  library chunks, `dist/chunks/`, `dist/cmaps/` and `dist/standard_fonts/`
+  (tarball 3.2 MB, 9.1 MB unpacked). The bookmarklet build and the browser
+  extension bundle keep the libraries inline.
+- The build writes two more esbuild metafiles (`agentlet-core.full.min` and
+  `chunks`), and `npm run build` runs a new `verify:dist-chunks` check that
+  the core does not inline the libraries and that every file loaded on
+  demand is present and published.
 
 ### Deprecated
 
@@ -114,6 +153,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default `Module.getContent()` escapes the module name (and the page URL
   shown when there is no description) before putting it in the panel markup,
   so a module name containing HTML renders as text.
+- PDF conversion no longer fetches pdf.js character maps and standard fonts
+  from cdnjs.cloudflare.com (which also served version 3.11 files to a 5.4
+  library). They ship in `dist/cmaps/` and `dist/standard_fonts/`, from the
+  installed `pdfjs-dist`, and are resolved like the worker. The core makes
+  no third-party request by itself.
 
 ## [2.3.0] - 2026-10-01
 

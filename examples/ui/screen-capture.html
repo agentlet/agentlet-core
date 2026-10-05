@@ -154,7 +154,11 @@ window.agentlet.utils.ElementSelector.start(async (element, elementInfo) => {
         window.agentletConfig = {
             debugMode: true,
             theme: 'default',
-            startMinimized: true  // Start with panel minimized
+            startMinimized: true,  // Start with panel minimized
+            // html2canvas is loaded the first time a capture needs it. Listing
+            // it here loads it during init() instead, so window.html2canvas
+            // exists as soon as the panel is ready.
+            preloadLibraries: ['html2canvas']
         };
 
 

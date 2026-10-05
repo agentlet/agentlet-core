@@ -8,7 +8,31 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { spawnSync } = require('child_process');
+
+/**
+ * How each build obtains SheetJS, pdf.js and html2canvas (see
+ * src/libraries/embeddedLibraries.ts): 'script' = separate chunk files,
+ * 'split' = ES module chunks, 'inline' = inlined in the output file.
+ */
+function libsDefine(mode) {
+    return { __AGENTLET_LIBS__: JSON.stringify(mode) };
+}
+
+/** On-demand library chunks: source entry (under src/libraries/chunks/) and output name (without .js). */
+const LIBRARY_CHUNKS = {
+    xlsx: { entry: 'xlsx.ts', out: 'agentlet-xlsx.min' },
+    html2canvas: { entry: 'html2canvas.ts', out: 'agentlet-html2canvas.min' },
+    pdfjs: { entry: 'pdfjs.ts', out: 'agentlet-pdfjs.min' }
+};
+
+/** "123.45 KB (gzip 45.67 KB)" for a built file, KB being 1024 bytes like the other size lines, gzip at the default level like `gzip -c`. */
+function describeSize(file) {
+    const bytes = fs.readFileSync(file);
+    const gzipped = zlib.gzipSync(bytes).length;
+    return `${(bytes.length / 1024).toFixed(2)} KB (gzip ${(gzipped / 1024).toFixed(2)} KB)`;
+}
 
 class AgentletCoreBuilder {
     constructor() {
@@ -30,6 +54,9 @@ class AgentletCoreBuilder {
                 minify: false,
                 sourcemap: true,
                 metafile: true,
+                // SheetJS, pdf.js and html2canvas are not part of this file:
+                // each is a chunk loaded on first use (see buildChunks()).
+                define: libsDefine('script'),
                 // esbuild's iife+globalName output only assigns to the global
                 // variable. Since package.json's "require"/"default" exports
                 // condition resolves to this file, also assign module.exports
@@ -51,20 +78,72 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                define: libsDefine('script'),
                 footer: {
                     js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
                 }
             },
 
+            // The same core with SheetJS, pdf.js and html2canvas inlined, for
+            // consumers that want one self-contained file.
+            coreFull: {
+                entryPoints: [this.entryPoint],
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outfile: path.join(this.distDir, 'agentlet-core.full.min.js'),
+                globalName: 'AgentletCore',
+                minify: true,
+                sourcemap: false,
+                metafile: true,
+                define: libsDefine('inline'),
+                footer: {
+                    js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
+                }
+            },
+
+            // One classic-script file per on-demand library, built as
+            // minified IIFEs that set window.XLSX / window.pdfjsLib /
+            // window.html2canvas. `outdir` + `out` names keep the files
+            // next to the core bundle.
+            chunks: {
+                entryPoints: Object.entries(LIBRARY_CHUNKS).map(([, chunk]) => ({
+                    in: path.join(this.srcDir, 'libraries', 'chunks', chunk.entry),
+                    out: chunk.out
+                })),
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outdir: this.distDir,
+                minify: true,
+                sourcemap: false,
+                metafile: true,
+                legalComments: 'eof'
+            },
+
+            // Code splitting turns the three dynamic imports in
+            // src/libraries/embeddedLibraries.ts into ES module chunks under
+            // dist/chunks/. A bundler consuming the package makes them its own
+            // lazy chunks; a plain <script type="module"> fetches them
+            // relative to the module URL.
             coreEsm: {
                 entryPoints: [this.entryPoint],
                 bundle: true,
                 format: 'esm',
                 target: 'es2020',
-                outfile: path.join(this.distDir, 'agentlet-core.esm.js'),
+                outdir: this.distDir,
+                entryNames: 'agentlet-core.esm',
+                chunkNames: 'chunks/[name]-[hash]',
+                splitting: true,
                 minify: false,
                 sourcemap: true,
-                metafile: true
+                metafile: true,
+                define: libsDefine('split'),
+                // The only way an ES module can learn its own URL; read by
+                // src/libraries/LibraryUrls.ts.
+                banner: {
+                    js: 'const __AGENTLET_MODULE_URL__ = import.meta.url;'
+                }
             },
 
             bookmarklet: {
@@ -77,6 +156,9 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                // A javascript: URL has no script URL to resolve chunks
+                // against, so the bookmarklet carries everything.
+                define: libsDefine('inline'),
                 banner: {
                     js: 'javascript:(function(){'
                 },
@@ -95,6 +177,9 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                // Content scripts run in an isolated world: a chunk loaded
+                // through a page script tag would not be visible to them.
+                define: libsDefine('inline'),
                 external: ['chrome']
             }
         };
@@ -205,21 +290,117 @@ class AgentletCoreBuilder {
      * `pdfWorkerUrl` resolution and to keep a host's copy of this file
      * indistinguishable from the one it could take directly from its own
      * `node_modules/pdfjs-dist/build/`.
+     *
+     * Also copies the `cmaps/` and `standard_fonts/` folders of the installed
+     * pdfjs-dist (same version as the bundled library), which PDFProcessor
+     * passes to pdf.js so it never fetches them from a third-party host.
      */
-    copyPDFJSWorker() {
+    copyPDFJSWorker(destDir = this.distDir) {
+        // buildAll() reaches this from several targets; copy once per folder.
+        this.copiedPdfAssets = this.copiedPdfAssets || new Set();
+        if (this.copiedPdfAssets.has(destDir)) {
+            return;
+        }
+        this.copiedPdfAssets.add(destDir);
+
         try {
-            const workerSrcPath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
-            const workerDestPath = path.join(this.distDir, 'pdf.worker.min.mjs');
+            const pdfjsDir = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist');
+            const workerSrcPath = path.join(pdfjsDir, 'build', 'pdf.worker.min.mjs');
+            const workerDestPath = path.join(destDir, 'pdf.worker.min.mjs');
 
             if (fs.existsSync(workerSrcPath)) {
+                fs.mkdirSync(destDir, { recursive: true });
                 fs.copyFileSync(workerSrcPath, workerDestPath);
                 console.log(`📄 PDF.js worker copied to: ${workerDestPath}`);
             } else {
                 console.warn('⚠️ PDF.js worker not found in node_modules, skipping copy');
             }
+
+            for (const folder of ['cmaps', 'standard_fonts']) {
+                const folderSrcPath = path.join(pdfjsDir, folder);
+                const folderDestPath = path.join(destDir, folder);
+                if (fs.existsSync(folderSrcPath)) {
+                    fs.rmSync(folderDestPath, { recursive: true, force: true });
+                    this.copyDirectoryRecursive(folderSrcPath, folderDestPath);
+                    console.log(`📄 PDF.js ${folder} copied to: ${folderDestPath}`);
+                } else {
+                    console.warn(`⚠️ PDF.js ${folder} not found in node_modules, skipping copy`);
+                }
+            }
         } catch (error) {
-            console.warn(`⚠️ Failed to copy PDF.js worker: ${error.message}`);
+            console.warn(`⚠️ Failed to copy PDF.js worker and assets: ${error.message}`);
         }
+    }
+
+    /**
+     * Build the on-demand library chunks (agentlet-xlsx.min.js,
+     * agentlet-html2canvas.min.js, agentlet-pdfjs.min.js): classic scripts
+     * the script builds of the core load on first use.
+     */
+    async buildChunks() {
+        console.log('🔨 Building on-demand library chunks...');
+        this.ensureDistDir();
+
+        try {
+            const result = await esbuild.build(this.configs.chunks);
+            this.writeMetafile('chunks', result.metafile);
+
+            const outputs = Object.values(LIBRARY_CHUNKS).map(chunk => {
+                const outputFile = path.join(this.distDir, `${chunk.out}.js`);
+                const size = fs.statSync(outputFile).size;
+                console.log(`   📦 ${path.basename(outputFile)}: ${describeSize(outputFile)}`);
+                return { outputFile, size };
+            });
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputs, size: outputs.reduce((sum, output) => sum + output.size, 0) };
+        } catch (error) {
+            console.error('❌ Chunk build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Build the single-file core (agentlet-core.full.min.js), which inlines
+     * SheetJS, pdf.js and html2canvas.
+     */
+    async buildCoreFull() {
+        console.log('🔨 Building Agentlet Core (single file, libraries inlined)...');
+        this.ensureDistDir();
+
+        const config = this.configs.coreFull;
+        try {
+            const result = await esbuild.build(config);
+            this.writeMetafile('agentlet-core.full.min', result.metafile);
+
+            const stats = fs.statSync(config.outfile);
+            console.log(`✅ Core (single file) built successfully`);
+            console.log(`   📦 Output: ${config.outfile}`);
+            console.log(`   📏 Size: ${describeSize(config.outfile)}`);
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputFile: config.outfile, size: stats.size };
+        } catch (error) {
+            console.error('❌ Single-file build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Guard rail for the on-demand layout of dist/: the script builds of the
+     * core must not contain the libraries any more, and every file they load
+     * on demand must exist. See tools/verify-dist-chunks.mjs.
+     */
+    verifyDistChunks() {
+        const scriptPath = path.join(__dirname, 'verify-dist-chunks.mjs');
+        const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' });
+        return { success: result.status === 0 };
     }
 
     /**
@@ -272,7 +453,7 @@ class AgentletCoreBuilder {
             
             console.log(`✅ Core built successfully`);
             console.log(`   📦 Output: ${outputFile}`);
-            console.log(`   📏 Size: ${sizeKB} KB`);
+            console.log(`   📏 Size: ${minified ? describeSize(outputFile) : `${sizeKB} KB`}`);
             
             if (result.warnings && result.warnings.length > 0) {
                 console.warn('⚠️  Warnings:', result.warnings);
@@ -304,10 +485,13 @@ class AgentletCoreBuilder {
         const config = this.configs.coreEsm;
 
         try {
+            // Chunk names carry a content hash, so drop the previous build's.
+            fs.rmSync(path.join(this.distDir, 'chunks'), { recursive: true, force: true });
+
             const result = await esbuild.build(config);
             this.writeMetafile('agentlet-core.esm', result.metafile);
 
-            const outputFile = config.outfile;
+            const outputFile = path.join(this.distDir, 'agentlet-core.esm.js');
             const stats = fs.statSync(outputFile);
             const sizeKB = (stats.size / 1024).toFixed(2);
 
@@ -1023,6 +1207,8 @@ MIT
         const results = {
             core: await this.buildCore(false),
             coreMinified: await this.buildCore(true),
+            coreFull: await this.buildCoreFull(),
+            chunks: await this.buildChunks(),
             coreEsm: await this.buildCoreEsm(),
             bookmarklet: await this.buildBookmarklet(),
             extension: await this.buildExtension()
@@ -1036,6 +1222,10 @@ MIT
         // Guard rail: make sure the just-built dist/agentlet-core.js and
         // dist/agentlet-core.esm.js still load under plain Node (no jsdom).
         results.nodeImport = this.verifyNodeImport();
+
+        // Guard rail: the script builds must not contain the on-demand
+        // libraries, and every file they load on demand must exist.
+        results.distChunks = this.verifyDistChunks();
 
         console.log('\n📋 Build Summary:');
         Object.entries(results).forEach(([target, result]) => {
@@ -1071,7 +1261,7 @@ Usage:
   node build.js [options]
 
 Options:
-  --target=<target>     Build specific target (core, bookmarklet, extension, all)
+  --target=<target>     Build specific target (core, esm, full, chunks, bookmarklet, extension, all)
   --minified           Build minified version
   --module=<name>      Generate module template
   --package            Package extension for distribution
@@ -1079,8 +1269,11 @@ Options:
 
 Examples:
   node build.js                           # Build all targets
-  node build.js --target=core             # Build core only
-  node build.js --target=core --minified  # Build minified core
+  node build.js --target=core             # Build core and its on-demand library chunks
+  node build.js --target=core --minified  # Build minified core and its chunks
+  node build.js --target=esm              # Build the ES module core and its dist/chunks/
+  node build.js --target=full             # Build the single-file core (libraries inlined)
+  node build.js --target=chunks           # Build the on-demand library chunks only
   node build.js --target=bookmarklet      # Build bookmarklet
   node build.js --target=extension        # Build Chrome extension
   node build.js --target=extension --package  # Build and package extension
@@ -1101,6 +1294,16 @@ Examples:
             switch (target) {
                 case 'core':
                     await builder.buildCore(minified);
+                    await builder.buildChunks();
+                    break;
+                case 'esm':
+                    await builder.buildCoreEsm();
+                    break;
+                case 'full':
+                    await builder.buildCoreFull();
+                    break;
+                case 'chunks':
+                    await builder.buildChunks();
                     break;
                 case 'bookmarklet':
                     await builder.buildBookmarklet();

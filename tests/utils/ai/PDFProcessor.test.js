@@ -174,13 +174,58 @@ describe('PDFProcessor', () => {
             
             expect(images).toHaveLength(3); // mockPDFDocument.numPages
             expect(images[0]).toBe('data:image/png;base64,mock-image-data');
+            // No library setup, so no known location for the character maps and
+            // standard fonts: the options are left out rather than pointing at a
+            // third party.
             expect(mockPDFJS.getDocument).toHaveBeenCalledWith({
                 data: mockArrayBuffer,
-                cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                cMapPacked: true,
+                verbosity: 0
+            });
+        });
+
+        test('should read character maps and standard fonts from the folders the library setup resolves', async () => {
+            const librarySetup = {
+                ensureLibrary: jest.fn().mockResolvedValue(true),
+                getPDFAssetUrls: jest.fn(() => ({
+                    cMapUrl: 'https://cdn.example.com/agentlet/cmaps/',
+                    standardFontDataUrl: 'https://cdn.example.com/agentlet/standard_fonts/'
+                }))
+            };
+            const processor = new PDFProcessor(librarySetup);
+            const mockArrayBuffer = new ArrayBuffer(8);
+
+            await processor.convertPDFToImages(mockArrayBuffer);
+
+            expect(mockPDFJS.getDocument).toHaveBeenCalledWith({
+                data: mockArrayBuffer,
+                cMapUrl: 'https://cdn.example.com/agentlet/cmaps/',
                 cMapPacked: true,
                 verbosity: 0,
-                standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+                standardFontDataUrl: 'https://cdn.example.com/agentlet/standard_fonts/'
             });
+            const params = mockPDFJS.getDocument.mock.calls[mockPDFJS.getDocument.mock.calls.length - 1][0];
+            expect(JSON.stringify(params)).not.toContain('cdnjs.cloudflare.com');
+        });
+
+        test('should load PDF.js on demand through the library setup and report why it could not load', async () => {
+            delete window.pdfjsLib;
+            const librarySetup = {
+                ensureLibrary: jest.fn().mockRejectedValue(new Error("Failed to load library 'pdfjs' from https://cdn.example.com/agentlet-pdfjs.min.js."))
+            };
+            const processor = new PDFProcessor(librarySetup);
+
+            await expect(processor.convertPDFToImages(new ArrayBuffer(8))).rejects.toThrow(
+                "PDF.js library not available. PDF processing is disabled. Failed to load library 'pdfjs' from https://cdn.example.com/agentlet-pdfjs.min.js."
+            );
+            expect(librarySetup.ensureLibrary).toHaveBeenCalledWith('pdfjs');
+        });
+
+        test('isPDFJSAvailable is true while PDF.js is not loaded yet but the library setup can load it', () => {
+            delete window.pdfjsLib;
+            const processor = new PDFProcessor({ ensureLibrary: jest.fn(), canLoadLibrary: jest.fn(() => true) });
+            expect(processor.isPDFJSAvailable()).toBe(true);
+            expect(processor.isPDFJSLoaded()).toBe(false);
         });
 
         test('should handle File objects by converting to ArrayBuffer', async () => {

@@ -2,7 +2,7 @@
  * PDF Processor - PDF-to-image conversion utility for agentlet-core
  * Converts PDF files to images for AI analysis using PDF.js
  */
-import type { PDFConversionOptions, PDFCapabilities, PDFProcessorAPI, LibrarySetupAPI } from '../../types/public-api';
+import type { PDFConversionOptions, PDFCapabilities, PDFProcessorAPI, LibrarySetupAPI, PDFAssetUrls } from '../../types/public-api';
 import { logger } from '../system/Logger.js';
 
 /**
@@ -63,10 +63,13 @@ interface PDFProcessorDefaultOptions {
 
 export default class PDFProcessor implements PDFProcessorAPI {
     librarySetup: LibrarySetupAPI | null;
+    /** Why the last `ensurePDFJS()` could not load PDF.js, for error messages. */
+    lastLoadError: string | null;
     defaultOptions: PDFProcessorDefaultOptions;
 
     constructor(librarySetup: LibrarySetupAPI | null = null) {
         this.librarySetup = librarySetup;
+        this.lastLoadError = null;
         this.defaultOptions = {
             scale: 1.5,
             format: 'image/png',
@@ -77,27 +80,43 @@ export default class PDFProcessor implements PDFProcessorAPI {
     }
 
     /**
-     * Check if PDF.js is available
+     * Check if PDF.js is loaded right now (`window.pdfjsLib` exists)
      * @returns True if PDF.js is loaded
      */
-    isPDFJSAvailable(): boolean {
+    isPDFJSLoaded(): boolean {
         return typeof getPdfjsLib() !== 'undefined';
     }
 
     /**
-     * Ensure PDF.js library is loaded
+     * Check if PDF.js is available: loaded already, or loadable on demand by
+     * the first conversion.
+     * @returns True if PDF.js is loaded or can be loaded
+     */
+    isPDFJSAvailable(): boolean {
+        if (this.isPDFJSLoaded()) {
+            return true;
+        }
+        const librarySetup = this.librarySetup;
+        return !!librarySetup && typeof librarySetup.canLoadLibrary === 'function' && librarySetup.canLoadLibrary('pdfjs');
+    }
+
+    /**
+     * Ensure PDF.js library is loaded. Resolves false when it cannot be
+     * loaded; the reason is then in `lastLoadError`.
      */
     async ensurePDFJS(): Promise<boolean> {
-        if (this.isPDFJSAvailable()) {
+        if (this.isPDFJSLoaded()) {
             return true;
         }
 
         if (this.librarySetup) {
             try {
                 logger.log('📄 Loading PDF.js library for PDF processing...');
+                this.lastLoadError = null;
                 return await this.librarySetup.ensureLibrary('pdfjs');
             } catch (error) {
-                console.warn('📄 Failed to load PDF.js library:', (error as Error).message);
+                this.lastLoadError = (error as Error).message;
+                console.warn('📄 Failed to load PDF.js library:', this.lastLoadError);
                 return false;
             }
         }
@@ -106,12 +125,12 @@ export default class PDFProcessor implements PDFProcessorAPI {
         let attempts = 0;
         const maxAttempts = 50; // 5 seconds max wait
 
-        while (!this.isPDFJSAvailable() && attempts < maxAttempts) {
+        while (!this.isPDFJSLoaded() && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
 
-        if (!this.isPDFJSAvailable()) {
+        if (!this.isPDFJSLoaded()) {
             console.warn('📄 PDF.js library is not available. PDF processing is disabled.');
             return false;
         }
@@ -140,7 +159,7 @@ export default class PDFProcessor implements PDFProcessorAPI {
     async convertPDFToImages(pdfData: File | ArrayBuffer | Uint8Array, options: PDFConversionOptions = {}): Promise<string[]> {
         const pdfJSAvailable = await this.ensurePDFJS();
         if (!pdfJSAvailable) {
-            throw new Error('PDF.js library not available. PDF processing is disabled.');
+            throw new Error(`PDF.js library not available. PDF processing is disabled.${this.lastLoadError ? ` ${this.lastLoadError}` : ''}`);
         }
 
         const mergedOptions: PDFProcessorDefaultOptions = { ...this.defaultOptions, ...options };
@@ -168,12 +187,16 @@ export default class PDFProcessor implements PDFProcessorAPI {
             }
 
             // Load PDF document with proper error handling
+            // Character maps and standard fonts are served from the same
+            // place as the worker (cmaps/ and standard_fonts/ next to the core
+            // bundle, see LibrarySetup.getPDFAssetUrls()), never a third party.
+            const assetUrls = this.getAssetUrls();
             const loadingTask = getPdfjsLib()!.getDocument({
                 data: bufferData,
-                cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
                 cMapPacked: true,
                 verbosity: 0, // Reduce console noise
-                standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+                ...(assetUrls.cMapUrl ? { cMapUrl: assetUrls.cMapUrl } : {}),
+                ...(assetUrls.standardFontDataUrl ? { standardFontDataUrl: assetUrls.standardFontDataUrl } : {})
             });
 
             const pdf = await loadingTask.promise;
@@ -235,9 +258,9 @@ export default class PDFProcessor implements PDFProcessorAPI {
             if (errorMessage && errorMessage.includes('GlobalWorkerOptions.workerSrc')) {
                 throw new Error(
                     'PDF conversion failed: no PDF.js worker is configured or reachable. ' +
-                    'Set `pdfWorkerUrl` in the AgentletCore config to the URL of the ' +
-                    'pdf.worker.min.mjs matching the bundled pdfjs-dist version (see ' +
-                    'dist/pdf.worker.min.mjs), or call ' +
+                    'Serve dist/pdf.worker.min.mjs next to the core script (or set ' +
+                    '`libraryBaseUrl` to the folder that serves it), set `pdfWorkerUrl` in the ' +
+                    'AgentletCore config to its URL, or call ' +
                     'window.agentlet.configurePDFWorker("/path/to/pdf.worker.min.mjs") and retry. ' +
                     `Original error: ${errorMessage}`
                 );
@@ -245,6 +268,19 @@ export default class PDFProcessor implements PDFProcessorAPI {
 
             throw new Error(`PDF conversion failed: ${errorMessage}`);
         }
+    }
+
+    /**
+     * Where PDF.js reads its character maps and standard fonts from: the
+     * folders the library setup resolved, or none when there is no library
+     * setup or no known location (the options are then left out).
+     */
+    getAssetUrls(): PDFAssetUrls {
+        const librarySetup = this.librarySetup;
+        if (librarySetup && typeof librarySetup.getPDFAssetUrls === 'function') {
+            return librarySetup.getPDFAssetUrls();
+        }
+        return { cMapUrl: undefined, standardFontDataUrl: undefined };
     }
 
     /**

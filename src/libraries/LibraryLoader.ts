@@ -8,6 +8,27 @@ import { logger } from '../utils/system/Logger.js';
 export interface LibraryRegistryConfig {
     libraries?: Record<string, string>;
     baseUrl?: string;
+    /**
+     * Libraries that are part of this build and are loaded with `import()`
+     * rather than a script tag (the ES module and single-file builds). An
+     * importer wins over a configured URL for the same name.
+     */
+    importers?: Record<string, () => Promise<unknown>>;
+    /**
+     * Called once per successful load, after the library's global is set up.
+     * `library` is whatever an importer resolved to, and undefined for a script
+     * load (the script itself assigns the global).
+     */
+    onLoaded?: (name: string, library: unknown) => void;
+    /**
+     * `crossorigin` attribute of the injected script tag. Defaults to
+     * `'anonymous'`; `null` leaves the attribute off, which is how the core's
+     * own on-demand chunks load (a plain script tag needs no CORS header from
+     * the server, exactly like the core script that brought them in).
+     */
+    crossOrigin?: string | null;
+    /** Appended to the error thrown when a script cannot be loaded (how to point at another URL). */
+    loadFailureHint?: string;
 }
 
 /** Per-library snapshot returned by `getLoadingStatus()`. */
@@ -63,12 +84,20 @@ class LibraryLoader {
     loadedLibraries: Set<string>;
     loadingPromises: Map<string, Promise<boolean>>;
     baseUrl: string;
+    importers: Record<string, () => Promise<unknown>>;
+    onLoaded: ((name: string, library: unknown) => void) | null;
+    loadFailureHint: string;
+    crossOrigin: string | null;
 
     constructor(registryConfig: LibraryRegistryConfig = {}) {
         this.libraries = registryConfig.libraries || {};
         this.loadedLibraries = new Set();
         this.loadingPromises = new Map();
         this.baseUrl = registryConfig.baseUrl || '';
+        this.importers = registryConfig.importers || {};
+        this.onLoaded = registryConfig.onLoaded || null;
+        this.loadFailureHint = registryConfig.loadFailureHint || '';
+        this.crossOrigin = registryConfig.crossOrigin === undefined ? 'anonymous' : registryConfig.crossOrigin;
 
         logger.log('📚 LibraryLoader initialized with libraries:', Object.keys(this.libraries));
     }
@@ -90,6 +119,30 @@ class LibraryLoader {
             return await existingPromise;
         }
 
+        const importer = this.importers[name];
+        if (importer) {
+            logger.log(`📚 Loading embedded library: ${name}`);
+            const importPromise: Promise<boolean> = importer()
+                .then((library) => {
+                    this.loadedLibraries.add(name);
+                    this.setupLibraryGlobals(name);
+                    this.onLoaded?.(name, library);
+                    logger.log(`✅ Library loaded successfully: ${name}`);
+                    return true;
+                })
+                .catch((error: unknown) => {
+                    console.error(`❌ Failed to load library ${name}:`, error);
+                    const cause = error instanceof Error ? ` (${error.message})` : '';
+                    throw new Error(`Failed to load library '${name}'${cause}.`);
+                })
+                .finally(() => {
+                    this.loadingPromises.delete(name);
+                });
+
+            this.loadingPromises.set(name, importPromise);
+            return await importPromise;
+        }
+
         const url = this.getLibraryUrl(name);
         if (!url) {
             throw new Error(`Library '${name}' not configured in registry. Add it to agentlets-registry.json libraries section.`);
@@ -101,12 +154,14 @@ class LibraryLoader {
             .then(() => {
                 this.loadedLibraries.add(name);
                 this.setupLibraryGlobals(name);
+                this.onLoaded?.(name, undefined);
                 logger.log(`✅ Library loaded successfully: ${name}`);
                 return true;
             })
             .catch((error: unknown) => {
                 console.error(`❌ Failed to load library ${name}:`, error);
-                throw new Error(`Failed to load library '${name}' from ${url}. Check that the file exists and is accessible.`);
+                const hint = this.loadFailureHint ? ` ${this.loadFailureHint}` : '';
+                throw new Error(`Failed to load library '${name}' from ${url}. Check that the file exists and is accessible.${hint}`);
             })
             .finally(() => {
                 this.loadingPromises.delete(name);
@@ -169,7 +224,9 @@ class LibraryLoader {
             const script = document.createElement('script');
             script.src = url;
             script.type = 'text/javascript';
-            script.crossOrigin = 'anonymous'; // For CORS support
+            if (this.crossOrigin !== null) {
+                script.crossOrigin = this.crossOrigin; // For CORS support
+            }
 
             script.onload = (): void => {
                 logger.log(`📚 Script loaded: ${url}`);
