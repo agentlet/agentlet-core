@@ -85,8 +85,6 @@ test.describe('Highlighting Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for statistics to update
-    await page.waitForTimeout(2000);
 
     // Check that PageHighlighter is now available
     await expect(page.locator('#highlighterAvailable')).toContainText('Yes');
@@ -109,11 +107,10 @@ test.describe('Highlighting Example', () => {
 
     // Click check status button
     await page.locator('button:has-text("Check Status")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('PageHighlighter is ready for use!');
 
     // Console should show status information
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/PageHighlighter.*available|checking.*status/i);
+    await agentletTest.expectTextToMatch(/PageHighlighter.*available|checking.*status/i);
 
     // Status should be updated
     const status = page.locator('#status');
@@ -130,7 +127,7 @@ test.describe('Highlighting Example', () => {
 
     // Click border highlight button
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Border');
 
     // Active highlights should increase
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -139,8 +136,7 @@ test.describe('Highlighting Example', () => {
     await expect(page.locator('#lastHighlightType')).toContainText('Border');
 
     // Console should show creation activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Border.*highlight.*created/i);
+    await agentletTest.expectTextToMatch(/Border.*highlight.*created/i);
   });
 
   test('should create arrow highlight', async ({ page }) => {
@@ -150,7 +146,7 @@ test.describe('Highlighting Example', () => {
 
     // Click arrow highlight button
     await page.locator('button:has-text("Arrow Pointer")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Arrow');
 
     // Active highlights should be 1
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -159,8 +155,7 @@ test.describe('Highlighting Example', () => {
     await expect(page.locator('#lastHighlightType')).toContainText('Arrow');
 
     // Console should show creation activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Arrow.*highlight.*created/i);
+    await agentletTest.expectTextToMatch(/Arrow.*highlight.*created/i);
   });
 
   test('should create sticker highlight', async ({ page }) => {
@@ -170,7 +165,7 @@ test.describe('Highlighting Example', () => {
 
     // Click sticker highlight button
     await page.locator('button:has-text("Sticker Badge")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Sticker');
 
     // Active highlights should be 1
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -179,8 +174,7 @@ test.describe('Highlighting Example', () => {
     await expect(page.locator('#lastHighlightType')).toContainText('Sticker');
 
     // Console should show creation activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Sticker.*highlight.*created/i);
+    await agentletTest.expectTextToMatch(/Sticker.*highlight.*created/i);
   });
 
   test('should create clickable highlight', async ({ page }) => {
@@ -190,7 +184,7 @@ test.describe('Highlighting Example', () => {
 
     // Click clickable highlight button
     await page.locator('button:has-text("Clickable Highlight")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Clickable');
 
     // Active highlights should be 1
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -200,8 +194,7 @@ test.describe('Highlighting Example', () => {
 
     // The clickable area should be highlighted - we can test by looking for highlight elements
     // or check console output for creation
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Clickable.*highlight.*created/i);
+    await agentletTest.expectTextToMatch(/Clickable.*highlight.*created/i);
   });
 
   test('should clear all highlights', async ({ page }) => {
@@ -211,23 +204,22 @@ test.describe('Highlighting Example', () => {
 
     // Create some highlights first
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Border');
     await page.locator('button:has-text("Arrow Pointer")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Arrow');
 
     // Should have 2 highlights
     await expect(page.locator('#activeHighlights')).toContainText('2');
 
     // Clear all highlights
     await page.locator('button:has-text("Clear All Highlights")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Clearing');
 
     // Should have 0 highlights
     await expect(page.locator('#activeHighlights')).toContainText('0');
 
     // Console should show clearing activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Clearing.*highlights/i);
+    await agentletTest.expectTextToMatch(/Clearing.*highlights/i);
   });
 
   test('should update existing highlights', async ({ page }) => {
@@ -237,14 +229,14 @@ test.describe('Highlighting Example', () => {
 
     // Create a highlight first
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Border');
 
     // Should have 1 highlight
     await expect(page.locator('#activeHighlights')).toContainText('1');
 
     // Update the highlight
     await page.locator('button:has-text("Update Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Updated');
 
     // Should still have 1 highlight (updated, not new)
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -253,8 +245,7 @@ test.describe('Highlighting Example', () => {
     await expect(page.locator('#lastHighlightType')).toContainText('Updated');
 
     // Console should show update activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/highlight.*updated.*message/i);
+    await agentletTest.expectTextToMatch(/highlight.*updated.*message/i);
   });
 
   test('should handle update highlight with no existing highlights', async ({ page }) => {
@@ -264,11 +255,10 @@ test.describe('Highlighting Example', () => {
 
     // Try to update with no highlights
     await page.locator('button:has-text("Update Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('No highlights');
 
     // Console should show warning about no highlights
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/No highlights.*update.*Create.*highlights.*first/i);
+    await agentletTest.expectTextToMatch(/No highlights.*update.*Create.*highlights.*first/i);
   });
 
   test('should show top banner overlay', async ({ page }) => {
@@ -281,7 +271,7 @@ test.describe('Highlighting Example', () => {
 
     // Click top banner button
     await page.locator('button:has-text("Top Banner")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Top Banner');
 
     // Active overlays should increase
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -289,8 +279,9 @@ test.describe('Highlighting Example', () => {
     // Last highlight type should be updated
     await expect(page.locator('#lastHighlightType')).toContainText('Top Banner');
 
-    // Wait for overlay to auto-hide (duration: 5000)
-    await page.waitForTimeout(6000);
+    // The banner auto-hides after 5000 ms (the stats refresh every 2 s), so
+    // wait for the overlay count to drop instead of sleeping
+    await expect(page.locator('#activeOverlays')).toContainText('0', { timeout: 10000 });
 
     // Overlay should be gone
     await expect(page.locator('#activeOverlays')).toContainText('0');
@@ -303,7 +294,7 @@ test.describe('Highlighting Example', () => {
 
     // Click bottom banner button
     await page.locator('button:has-text("Bottom Banner")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Bottom Banner');
 
     // Active overlays should be 1
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -319,7 +310,7 @@ test.describe('Highlighting Example', () => {
 
     // Click centered banner button
     await page.locator('button:has-text("Centered Banner")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Centered Banner');
 
     // Active overlays should be 1
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -335,7 +326,7 @@ test.describe('Highlighting Example', () => {
 
     // Click background overlay button
     await page.locator('button:has-text("With Background Overlay")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Background Overlay');
 
     // Active overlays should be 1
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -351,7 +342,7 @@ test.describe('Highlighting Example', () => {
 
     // Click closeable message button
     await page.locator('button:has-text("Closeable Message")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Closeable Message');
 
     // Active overlays should be 1
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -359,7 +350,9 @@ test.describe('Highlighting Example', () => {
     // Last highlight type should be updated
     await expect(page.locator('#lastHighlightType')).toContainText('Closeable Message');
 
-    // This overlay should be persistent (not auto-hide)
+    // This overlay should be persistent (not auto-hide). Fixed wait kept on
+    // purpose: the behavior under test is the absence of a time-based close,
+    // so there is no condition to wait for.
     await page.waitForTimeout(3000);
     await expect(page.locator('#activeOverlays')).toContainText('1');
   });
@@ -371,7 +364,7 @@ test.describe('Highlighting Example', () => {
 
     // Click center progress button
     await page.locator('button:has-text("Center Progress")').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Center Progress');
 
     // Active overlays should be 1
     await expect(page.locator('#activeOverlays')).toContainText('1');
@@ -379,8 +372,9 @@ test.describe('Highlighting Example', () => {
     // Last highlight type should be updated
     await expect(page.locator('#lastHighlightType')).toContainText('Center Progress');
 
-    // Wait for progress to complete (simulates 100% in about 10 seconds)
-    await page.waitForTimeout(12000);
+    // The simulated progress reaches 100% in about 10 seconds and then clears
+    // itself: wait for the overlay count to drop
+    await expect(page.locator('#activeOverlays')).toContainText('0', { timeout: 20000 });
 
     // Should eventually clear itself after completion
     await expect(page.locator('#activeOverlays')).toContainText('0');
@@ -393,23 +387,22 @@ test.describe('Highlighting Example', () => {
 
     // Create some overlays first
     await page.locator('button:has-text("Top Banner")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Top Banner');
     await page.locator('button:has-text("Closeable Message")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Closeable Message');
 
     // Should have 2 overlays
     await expect(page.locator('#activeOverlays')).toContainText('2');
 
     // Clear all overlays
     await page.locator('button:has-text("Clear All Overlays")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Clearing');
 
     // Should have 0 overlays
     await expect(page.locator('#activeOverlays')).toContainText('0');
 
     // Console should show clearing activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Clearing.*overlays/i);
+    await agentletTest.expectTextToMatch(/Clearing.*overlays/i);
   });
 
   test('should handle scroll controls', async ({ page }) => {
@@ -419,19 +412,15 @@ test.describe('Highlighting Example', () => {
 
     // Test scroll to top
     await page.locator('button:has-text("Scroll to Top")').click();
-    await page.waitForTimeout(2000);
 
     // Console should show scroll activity
-    let consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Scrolling.*top/i);
+    await agentletTest.expectTextToMatch(/Scrolling.*top/i);
 
     // Test scroll to bottom
     await page.locator('button:has-text("Scroll to Bottom")').click();
-    await page.waitForTimeout(2000);
 
     // Console should show scroll activity
-    consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Scrolling.*bottom/i);
+    await agentletTest.expectTextToMatch(/Scrolling.*bottom/i);
   });
 
   test('should handle scroll and highlight demo', async ({ page }) => {
@@ -441,11 +430,9 @@ test.describe('Highlighting Example', () => {
 
     // Test scroll and highlight
     await page.locator('button:has-text("Scroll + Highlight Demo")').click();
-    await page.waitForTimeout(3000);
 
     // Console should show scroll and highlight activity
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Scrolling.*API.*Reference.*highlighting/i);
+    await agentletTest.expectTextToMatch(/Scrolling.*API.*Reference.*highlighting/i);
 
     // Should create a highlight
     await expect(page.locator('#activeHighlights')).toContainText('1');
@@ -479,7 +466,7 @@ test.describe('Highlighting Example', () => {
 
     // Create highlighting activity to generate output
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Border');
 
     // Verify there is output
     let consoleOutput = await page.locator('#console').textContent();
@@ -487,23 +474,21 @@ test.describe('Highlighting Example', () => {
 
     // Clear console
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000);
 
-    // Console should be cleared or contain different content
-    const consoleOutputAfterClear = await page.locator('#console').textContent();
-
-    // Check that either console is cleared OR content has changed
-    const isCleared = consoleOutputAfterClear.trim() === '' ||
-                     consoleOutputAfterClear !== consoleOutput ||
-                     consoleOutputAfterClear.includes('cleared') ||
-                     consoleOutputAfterClear.includes('Console cleared');
-    expect(isCleared).toBe(true);
+    // Console should be cleared or contain different content: check that
+    // either console is cleared OR content has changed
+    await expect.poll(async () => {
+      const consoleOutputAfterClear = await page.locator('#console').textContent();
+      return consoleOutputAfterClear.trim() === '' ||
+             consoleOutputAfterClear !== consoleOutput ||
+             consoleOutputAfterClear.includes('cleared') ||
+             consoleOutputAfterClear.includes('Console cleared');
+    }).toBe(true);
   });
 
   test('should handle trying to use highlighting without initialization', async ({ page }) => {
     // Try to use highlighting without initializing first
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(1000);
 
     // Status should show error about initialization
     const status = page.locator('#status');
@@ -520,16 +505,17 @@ test.describe('Highlighting Example', () => {
 
     // Create some highlights and overlays
     await page.locator('button:has-text("Border Highlight")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Border');
     await page.locator('button:has-text("Top Banner")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#lastHighlightType')).toContainText('Top Banner');
 
     // Statistics should reflect the current state
     await expect(page.locator('#activeHighlights')).toContainText('1');
     await expect(page.locator('#activeOverlays')).toContainText('1');
 
-    // Wait for periodic update interval (the code updates every 2 seconds)
-    await page.waitForTimeout(3000);
+    // The example refreshes its statistics every 2 seconds: overwrite a value
+    // and wait for the next refresh to put it back
+    await page.evaluate(() => { document.getElementById('highlighterAvailable').textContent = 'stale'; });
 
     // Statistics should still be accurate
     await expect(page.locator('#highlighterAvailable')).toContainText('Yes');

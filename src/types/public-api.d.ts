@@ -603,9 +603,15 @@ export interface ZIndexAPI {
 /* ------------------------------------------------------------------ */
 
 export interface ScriptInjectOptions {
+    /**
+     * JavaScript source to run. With `tabId` in a Chrome extension it is
+     * rejected (`chrome.scripting` cannot run a code string): pass `file` or
+     * `func` instead.
+     */
     code?: string;
+    /** Path of a script file. With `tabId`, an extension-relative path for `chrome.scripting`. */
     file?: string;
-    /** Chrome-extension environments only. */
+    /** Chrome-extension environments only. Requires `file` or `func`, not `code`. */
     tabId?: number;
     target?: 'main' | 'isolated';
     allFrames?: boolean;
@@ -616,6 +622,7 @@ export interface ScriptInjectOptions {
 export interface ScriptInjectorAPI {
     /** Requires one of `code`, `file`, or `func`. */
     inject(options: ScriptInjectOptions): Promise<unknown>;
+    /** Injects a code string, so it rejects when `tabId` is set in an extension (see {@link ScriptInjectOptions.code}). */
     injectModule(options: { moduleCode?: string; moduleUrl?: string; tabId?: number }): Promise<unknown>;
     /** Rejects any pending injections and clears internal state. */
     cleanup(): void;
@@ -1628,8 +1635,11 @@ export type AIImageInput = string;
 export type PDFInputData = File | ArrayBuffer | Uint8Array | string;
 
 export interface AIPromptOptions {
+    /** Defaults to the `OPENAI_MODEL` env value, then to `gpt-6-luna`. */
     model?: string;
+    /** Sent as `max_tokens`, or as `max_completion_tokens` to gpt-5, gpt-6 and o-series models. */
     maxTokens?: number;
+    /** Not sent to gpt-5, gpt-6 and o-series models that reject it (`gpt-6-luna` and `gpt-6-sol` accept it). */
     temperature?: number;
     [key: string]: unknown;
 }
@@ -2020,11 +2030,34 @@ export interface LibrarySetupAPI {
  */
 export type ModulePatternMatcher = string | { type: 'includes' | 'exact' | 'regex'; value: string };
 
+/**
+ * How a module's plain string patterns are matched.
+ *
+ * - `'substring'` (default in 2.x): `url.includes(pattern)` on the full URL,
+ *   so `'example.com'` also matches `https://evil.test/?q=example.com` and
+ *   `https://example.com.evil.test/`.
+ * - `'host'`: the pattern is `[scheme://]host[:port][/path-prefix]` and is
+ *   compared with the parsed URL host. `'example.com'` matches
+ *   `example.com` and any subdomain (`app.example.com`), case-insensitively
+ *   and IDN-safe, but not `example.com.evil.test` or `notexample.com`. The
+ *   port is ignored unless the pattern names one, and a path prefix matches
+ *   whole segments (`'example.com/app'` matches `/app` and `/app/x`, not
+ *   `/apple`). `'*'` alone still matches any URL; other `*` globs are not
+ *   supported and never match. `'file://'` matches any `file:` URL. Object
+ *   patterns are not affected.
+ *
+ * Host matching becomes the default in agentlet-core 3.0; set
+ * `matchMode: 'substring'` then to keep the old behaviour.
+ */
+export type ModuleMatchMode = 'substring' | 'host';
+
 export interface ModuleConfig {
     name: string;
     version?: string;
     description?: string;
     patterns: ModulePatternMatcher | ModulePatternMatcher[];
+    /** How plain string `patterns` are matched. Defaults to `'substring'` in 2.x. See {@link ModuleMatchMode}. */
+    matchMode?: ModuleMatchMode;
     eventBus?: EventBusAPI;
 }
 
@@ -2094,6 +2127,8 @@ export declare class AgentletModule {
     version: string;
     description: string;
     patterns: ModulePatternMatcher[];
+    /** How plain string patterns are matched; see `ModuleMatchMode`. */
+    matchMode: ModuleMatchMode;
     isActive: boolean;
     eventBus?: EventBusAPI;
     injectedStyles: Set<string>;

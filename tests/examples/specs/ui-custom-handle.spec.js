@@ -85,16 +85,12 @@ test.describe('Custom Handle Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for initialization to complete
-    await page.waitForTimeout(2000);
-
     // Check status shows success with custom handle ready
     const status = page.locator('#status');
     await expect(status).toContainText(/Ready.*Tux.*handle.*minimize.*maximize/i);
 
     // Console should show custom handle initialization
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/custom.*handle|Tux.*handle/i);
+    await agentletTest.expectTextToMatch(/custom.*handle|Tux.*handle/i);
   });
 
   test('should show custom handle success message', async ({ page }) => {
@@ -107,8 +103,7 @@ test.describe('Custom Handle Example', () => {
     await expect(status).toContainText(/Click.*Tux.*handle/i);
 
     // Console should mention Tux penguin handle
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Tux.*penguin.*handle.*control.*panel/i);
+    await agentletTest.expectTextToMatch(/Tux.*penguin.*handle.*control.*panel/i);
   });
 
   test('should load with custom handle configuration in agentletConfig', async ({ page }) => {
@@ -140,7 +135,6 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(2000);
 
     // Look for the agentlet panel (use specific class selector to avoid style elements)
     const agentletPanel = page.locator('.agentlet-panel');
@@ -155,7 +149,7 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('.agentlet-panel').first()).toBeVisible({ timeout: 10000 });
 
     // Look for Tux handle image in the agentlet panel
     const tuxHandle = page.locator('img[src*="tux.svg"], img[src*="./tux.svg"]');
@@ -177,7 +171,7 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('.agentlet-panel').first()).toBeVisible({ timeout: 10000 });
 
     // Look for any clickable handle element (could be image or containing element)
     const handleElements = [
@@ -195,7 +189,6 @@ test.describe('Custom Handle Example', () => {
         try {
           // Try to click the handle
           await handle.first().click();
-          await page.waitForTimeout(1000);
           handleFound = true;
           break;
         } catch (error) {
@@ -224,7 +217,7 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('.agentlet-panel').first()).toBeVisible({ timeout: 10000 });
 
     // Should NOT have default arrow elements
     const defaultArrow = page.locator('.agentlet-arrow, [class*="arrow"], .side-arrow');
@@ -247,7 +240,6 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
 
     // The agentlet panel should exist after initialization
     const agentletPanel = page.locator('.agentlet-panel');
@@ -271,7 +263,7 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('.agentlet-panel').first()).toBeVisible({ timeout: 10000 });
 
     // Check the preview Tux image properties
     const previewTux = page.locator('img[src="tux.svg"][alt="Tux penguin"]');
@@ -300,7 +292,7 @@ test.describe('Custom Handle Example', () => {
     // Initialize Agentlet
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
-    await page.waitForTimeout(3000);
+    await expect(page.locator('.agentlet-panel').first()).toBeVisible({ timeout: 10000 });
 
     // Verify the configuration was used
     const postInitCheck = await page.evaluate(() => {
@@ -329,17 +321,16 @@ test.describe('Custom Handle Example', () => {
 
     // Clear console
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000);
 
-    // Console should be cleared or contain different content
-    const consoleOutputAfterClear = await page.locator('#console').textContent();
-
-    // Check that either console is cleared OR content has changed
-    const isCleared = consoleOutputAfterClear.trim() === '' ||
-                     consoleOutputAfterClear !== consoleOutput ||
-                     consoleOutputAfterClear.includes('cleared') ||
-                     consoleOutputAfterClear.includes('Console cleared');
-    expect(isCleared).toBe(true);
+    // Console should be cleared or contain different content: check that
+    // either console is cleared OR content has changed
+    await expect.poll(async () => {
+      const consoleOutputAfterClear = await page.locator('#console').textContent();
+      return consoleOutputAfterClear.trim() === '' ||
+             consoleOutputAfterClear !== consoleOutput ||
+             consoleOutputAfterClear.includes('cleared') ||
+             consoleOutputAfterClear.includes('Console cleared');
+    }).toBe(true);
   });
 
 
@@ -366,11 +357,9 @@ test.describe('Custom Handle Example', () => {
 
     // Try to initialize again
     await page.locator('button:has-text("Initialize agentlet with custom handle")').click();
-    await page.waitForTimeout(1000);
 
     // Should show warning about already loaded
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Agentlet.*already.*loaded/i);
+    await agentletTest.expectTextToMatch(/Agentlet.*already.*loaded/i);
 
     // Status should still show ready state
     const status = page.locator('#status');
@@ -399,16 +388,15 @@ test.describe('Custom Handle Example', () => {
     await agentletTest.waitForAgentletCore();
 
     // Console should show specific messages about custom handle
-    const consoleOutput = await page.locator('#console').textContent();
 
     // Should mention custom handle creation
-    expect(consoleOutput).toMatch(/Creating.*AgentletCore.*instance.*custom.*handle/i);
+    await agentletTest.expectTextToMatch(/Creating.*AgentletCore.*instance.*custom.*handle/i);
 
     // Should mention Tux handle specifically
-    expect(consoleOutput).toMatch(/custom.*Tux.*handle|Tux.*penguin.*handle/i);
+    await agentletTest.expectTextToMatch(/custom.*Tux.*handle|Tux.*penguin.*handle/i);
 
     // Should provide instructions about the handle
-    expect(consoleOutput).toMatch(/Look.*for.*the.*Tux.*penguin.*handle.*control.*panel/i);
+    await agentletTest.expectTextToMatch(/Look.*for.*the.*Tux.*penguin.*handle.*control.*panel/i);
   });
 
 

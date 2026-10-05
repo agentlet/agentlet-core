@@ -685,7 +685,7 @@ describe('AgentletCore behaviour', () => {
             expect(agentlet.ui.query('.env-vars-list')?.textContent).toContain('No environment variables set');
         });
 
-        test('window.addEnvVar() stores the value and refreshes the list in place', async () => {
+        test('the Add/Update button stores the value and refreshes the list in place', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
             agentlet.showEnvVarsDialog();
@@ -695,36 +695,36 @@ describe('AgentletCore behaviour', () => {
             keyInput.value = 'MY_KEY';
             valueInput.value = 'my-value';
 
-            (window as unknown as { addEnvVar: () => void }).addEnvVar();
+            (agentlet.ui.query('[data-env-action="add"]') as HTMLElement).click();
 
             expect(agentlet.envManager?.get('MY_KEY')).toBe('my-value');
             expect(agentlet.ui.query('.env-vars-list')?.textContent).toContain('MY_KEY');
+            expect((agentlet.ui.query('#env-var-key') as HTMLInputElement).value).toBe('');
         });
 
-        test('window.removeEnvVar() removes the value and refreshes the list', async () => {
+        test('the Delete button removes the value and refreshes the list', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
             agentlet.envManager?.set('TO_REMOVE', 'x');
             agentlet.showEnvVarsDialog();
             expect(agentlet.ui.query('.env-vars-list')?.textContent).toContain('TO_REMOVE');
 
-            (window as unknown as { removeEnvVar: (key: string) => void }).removeEnvVar('TO_REMOVE');
+            (agentlet.ui.query('[data-env-action="remove"][data-env-key="TO_REMOVE"]') as HTMLElement).click();
 
             expect(agentlet.envManager?.has('TO_REMOVE')).toBe(false);
             expect(agentlet.ui.query('.env-vars-list')?.textContent).not.toContain('TO_REMOVE');
         });
 
-        test('cleans up the window.addEnvVar/removeEnvVar globals once the dialog closes', async () => {
+        test('does not leave window.addEnvVar/removeEnvVar globals behind', async () => {
             agentlet = new AgentletCore();
             await agentlet.init();
 
             agentlet.showEnvVarsDialog();
-            expect(typeof (window as unknown as { addEnvVar?: unknown }).addEnvVar).toBe('function');
-
-            agentlet.currentEnvVarsDialog?.close();
-
             expect((window as unknown as { addEnvVar?: unknown }).addEnvVar).toBeUndefined();
             expect((window as unknown as { removeEnvVar?: unknown }).removeEnvVar).toBeUndefined();
+
+            agentlet.currentEnvVarsDialog?.close();
+            expect(agentlet.currentEnvVarsDialog).toBeNull();
         });
     });
 

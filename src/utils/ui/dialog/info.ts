@@ -91,6 +91,8 @@ export function buildInfoDialog(theme: DialogTheme, config: ResolvedInfoConfig, 
         overflow-y: auto;
     `;
 
+    // HTML by documented contract (`allowHtml: true`): the caller owns this markup
+    // and must escape any untrusted value (see `escapeHtml()` in `src/utils/ui/safeHtml.ts`).
     if (config.allowHtml) {
         content.innerHTML = config.message;
     } else {

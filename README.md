@@ -199,7 +199,8 @@ class MyModule extends Module {
     constructor() {
         super({
             name: 'my-module',
-            patterns: 'example.com' // matches any URL containing this string
+            patterns: 'example.com', // example.com and its subdomains
+            matchMode: 'host'
         });
     }
 
@@ -212,6 +213,22 @@ const agentlet = new AgentletCore();
 await agentlet.init();
 agentlet.modules.register(new MyModule());
 ```
+
+### Matching URLs
+
+`patterns` decides on which pages a module is active. With `matchMode: 'host'`, a string pattern is compared with the host of the page URL:
+
+| Pattern | Matches | Does not match |
+|---|---|---|
+| `'example.com'` | `https://example.com/`, `https://app.example.com/x` | `https://example.com.evil.test/`, `https://notexample.com/`, `https://evil.test/?q=example.com` |
+| `'localhost:3000'` | `http://localhost:3000/` | `http://localhost:3001/` |
+| `'example.com/app'` | `https://example.com/app/users` | `https://example.com/apple` |
+| `'https://example.com'` | `https://example.com/` | `http://example.com/` |
+| `'file://'` | any `file:` URL | |
+
+Matching is case-insensitive and internationalized names work in either form. The port is ignored unless the pattern names one. `'*'` still matches every page. Object patterns (`{ type: 'includes' | 'exact' | 'regex', value }`) are not affected by `matchMode`, so `{ type: 'includes', value: '/internal/' }` is the way to match a fragment of the URL.
+
+The default, `matchMode: 'substring'`, is unchanged in 2.x: a string pattern matches any URL that contains it, so `'example.com'` also matches `https://evil.test/?q=example.com` and `https://example.com.evil.test/`. **Host matching becomes the default in agentlet-core 3.0.** Set `matchMode: 'host'` now, or `matchMode: 'substring'` to keep today's behaviour after 3.0. With `debugMode` on, a string pattern that looks like a host and is used in substring mode logs a one-time warning that points to this option.
 
 ## Getting started
 
@@ -233,7 +250,7 @@ Full documentation lives at **[agentlet.io/docs](https://agentlet.io/docs/)**, i
 
 An agentlet runs inside the host page, with the page's privileges, and is not sandboxed. Any other script on that page can read `window.agentlet` and the environment variables it keeps in `localStorage`, including `OPENAI_API_KEY`. For anything beyond local experiments, point `OPENAI_BASE_URL` at a proxy on your backend so the real provider key never reaches the browser. [SECURITY.md](SECURITY.md) describes the threat model, what data leaves the page, and how to report a vulnerability.
 
-The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package.
+The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package. It is built to need little trust: it asks for `activeTab`, `scripting` and `storage` only, has no host permissions and no content script, injects the bundled core into a tab only when you click or press its shortcut, and runs only modules shipped inside the package, never code fetched from a URL.
 
 ## Size
 

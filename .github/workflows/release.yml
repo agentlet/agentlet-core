@@ -6,33 +6,15 @@ on:
       - 'v*'
 
 jobs:
-  release:
+  verify-tag:
+    name: verify tag
     runs-on: ubuntu-latest
-    # Same order of magnitude as test.yml (npm ci, jest, build), without the
-    # Playwright e2e suite, plus headroom for the npm publish step itself.
-    timeout-minutes: 20
-
-    # npm publish --provenance needs to mint an OIDC token to attest where
-    # the package was built (id-token: write). contents: write is needed to
-    # create/attach to the GitHub release for this tag (see "Attach SBOM to
-    # the GitHub release" below) - the nightly job in security.yml reads
-    # that asset back to rescan already-published versions against newly
-    # disclosed CVEs.
+    timeout-minutes: 5
     permissions:
-      id-token: write
-      contents: write
-
+      contents: read
     steps:
     - name: Checkout code
-      uses: actions/checkout@v7
-
-    - name: Use Node.js 22.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 22.x
-        cache: 'npm'
-        # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
-        registry-url: 'https://registry.npmjs.org'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: Check the tag matches the package version
       # An npm version is immutable once published. Pushing tag v2.0.1 while
@@ -48,6 +30,48 @@ jobs:
           exit 1
         fi
         echo "Tag ${GITHUB_REF_NAME} matches package.json version ${pkg_version}."
+
+  # The same jobs as test.yml (Jest, lint, type check, build, and the e2e
+  # suite on chromium, firefox and webkit), run on the tagged commit. The
+  # release job below needs them, so a tag on a bad commit cannot publish.
+  # Starts only once the tag is known to match package.json, so a mistyped
+  # tag fails in seconds instead of after the e2e suite.
+  checks:
+    name: checks
+    needs: verify-tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: [verify-tag, checks]
+    runs-on: ubuntu-latest
+    # npm ci, jest and build again for the publish itself (the checks job
+    # above is a separate runner), plus the SBOM, the scan and the npm
+    # publish. The e2e suite runs in the checks job, not here.
+    timeout-minutes: 20
+
+    # npm publish --provenance needs to mint an OIDC token to attest where
+    # the package was built (id-token: write). contents: write is needed to
+    # create/attach to the GitHub release for this tag (see "Attach SBOM to
+    # the GitHub release" below) - the nightly job in security.yml reads
+    # that asset back to rescan already-published versions against newly
+    # disclosed CVEs.
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Use Node.js 22.x
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 22.x
+        cache: 'npm'
+        # Required for NODE_AUTH_TOKEN to be picked up by npm publish.
+        registry-url: 'https://registry.npmjs.org'
 
     - name: Install dependencies
       run: npm ci

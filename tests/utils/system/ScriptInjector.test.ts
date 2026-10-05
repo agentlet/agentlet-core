@@ -326,22 +326,45 @@ describe('ScriptInjector', () => {
     });
 
     describe('extension API injection (chrome.scripting)', () => {
-        test('injects code via new Function() and returns the executeScript result', async () => {
+        test('rejects a code string with a clear error and never calls executeScript', async () => {
             const executeScript = jest.fn().mockResolvedValue([{ result: 42 }]);
             setChromeGlobal({ scripting: { executeScript } });
             const injector = makeInjector();
+            const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
-            const result = await injector.inject({ code: '1+1', tabId: 5 });
+            const rejection = injector.inject({ code: '1+1', tabId: 5 });
 
-            expect(result).toBe(42);
-            expect(executeScript).toHaveBeenCalledTimes(1);
-            const callOptions = executeScript.mock.calls[0][0];
-            // Note: `_injectViaExtensionAPI` destructures `allFrames` straight off
-            // `options` with no default, so an omitted `allFrames` stays `undefined`
-            // here (unlike the JSDoc's documented `[options.allFrames=false]`).
-            expect(callOptions.target).toEqual({ tabId: 5, allFrames: undefined });
-            expect(callOptions.world).toBe('MAIN');
-            expect(typeof callOptions.function).toBe('function');
+            await expect(rejection).rejects.toThrow(/code strings cannot be injected with chrome\.scripting/);
+            await expect(rejection).rejects.toThrow(/options\.file/);
+            await expect(rejection).rejects.toThrow(/options\.func/);
+            expect(executeScript).not.toHaveBeenCalled();
+            consoleError.mockRestore();
+        });
+
+        test('injectModule() with a tabId in an extension rejects with the same error', async () => {
+            const executeScript = jest.fn().mockResolvedValue([{ result: undefined }]);
+            setChromeGlobal({ scripting: { executeScript } });
+            const injector = makeInjector();
+            const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            await expect(injector.injectModule({ moduleCode: 'var a = 1;', moduleUrl: 'm.js', tabId: 5 }))
+                .rejects.toThrow(/code strings cannot be injected with chrome\.scripting/);
+            expect(executeScript).not.toHaveBeenCalled();
+            consoleError.mockRestore();
+        });
+
+        test('prefers func, then file, over code when several are given', async () => {
+            const executeScript = jest.fn().mockResolvedValue([{ result: 'ok' }]);
+            setChromeGlobal({ scripting: { executeScript } });
+            const injector = makeInjector();
+            const fn = (): number => 1;
+
+            await injector.inject({ code: '1+1', file: '/a.js', tabId: 5 });
+            await injector.inject({ code: '1+1', file: '/a.js', func: fn, tabId: 5 });
+
+            expect(executeScript.mock.calls[0][0].files).toEqual(['/a.js']);
+            expect(executeScript.mock.calls[1][0].func).toBe(fn);
+            expect(executeScript.mock.calls[1][0].files).toBeUndefined();
         });
 
         test('uses world "ISOLATED" when target is "isolated"', async () => {
@@ -349,12 +372,12 @@ describe('ScriptInjector', () => {
             setChromeGlobal({ scripting: { executeScript } });
             const injector = makeInjector();
 
-            await injector.inject({ code: '1+1', tabId: 5, target: 'isolated' });
+            await injector.inject({ func: () => 1, tabId: 5, target: 'isolated' });
 
             expect(executeScript.mock.calls[0][0].world).toBe('ISOLATED');
         });
 
-        test('passes func/args through directly instead of wrapping with new Function()', async () => {
+        test('passes func/args through directly as the func key', async () => {
             const executeScript = jest.fn().mockResolvedValue([{ result: 'ok' }]);
             setChromeGlobal({ scripting: { executeScript } });
             const injector = makeInjector();
@@ -365,7 +388,8 @@ describe('ScriptInjector', () => {
             const callOptions = executeScript.mock.calls[0][0];
             expect(callOptions.func).toBe(fn);
             expect(callOptions.args).toEqual([1, 2]);
-            expect(callOptions.function).toBeUndefined();
+            expect(callOptions).not.toHaveProperty('function');
+            expect(callOptions.world).toBe('MAIN');
         });
 
         test('sets files: [file] when a file path is provided', async () => {

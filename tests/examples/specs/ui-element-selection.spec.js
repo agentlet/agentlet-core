@@ -78,9 +78,6 @@ test.describe('Element Selection Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for statistics to update
-    await page.waitForTimeout(2000);
-
     // Check that ElementSelector is now available
     await expect(page.locator('#selectorAvailable')).toContainText('Yes');
   });
@@ -98,7 +95,6 @@ test.describe('Element Selection Example', () => {
   test('should handle trying to select without initialization', async ({ page }) => {
     // Try to use element selection without initializing first
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
 
     // Status should show error about initialization
     const status = page.locator('#status');
@@ -118,15 +114,14 @@ test.describe('Element Selection Example', () => {
 
     // Start single element selection
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
 
     // Status should show selection instructions
     const status = page.locator('#status');
     await expect(status).toContainText(/Click.*element.*select/i);
 
     // Console should show selection started
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Starting.*single.*element.*selection/i);
+    await agentletTest.expectTextToMatch(/Starting.*single.*element.*selection/i);
   });
 
   test('should perform single element selection', async ({ page }) => {
@@ -136,11 +131,10 @@ test.describe('Element Selection Example', () => {
 
     // Start single element selection
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
 
     // Click on a test element (the console clear button for example)
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(2000);
 
     // Should have selected 1 element
     await expect(page.locator('#elementsSelected')).toContainText('1');
@@ -148,9 +142,8 @@ test.describe('Element Selection Example', () => {
     await expect(page.locator('#lastSelectionMode')).toContainText('Single');
 
     // Console should show successful selection
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Element selected.*button/i);
-    expect(consoleOutput).toMatch(/Generated selector/i);
+    await agentletTest.expectTextToMatch(/Element selected.*button/i);
+    await agentletTest.expectTextToMatch(/Generated selector/i);
   });
 
   test('should start multiple element selection mode', async ({ page }) => {
@@ -160,15 +153,14 @@ test.describe('Element Selection Example', () => {
 
     // Start multiple element selection
     await page.locator('button:has-text("Select multiple elements")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click elements one by one, press Escape when done');
 
     // Status should show multiple selection instructions
     const status = page.locator('#status');
     await expect(status).toContainText(/Click.*elements.*one.*Escape/i);
 
     // Console should show multiple selection started
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Starting.*multiple.*element.*selection/i);
+    await agentletTest.expectTextToMatch(/Starting.*multiple.*element.*selection/i);
   });
 
   test('should perform multiple element selection', async ({ page }) => {
@@ -178,17 +170,16 @@ test.describe('Element Selection Example', () => {
 
     // Start multiple element selection
     await page.locator('button:has-text("Select multiple elements")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click elements one by one, press Escape when done');
 
     // Click on multiple elements
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Element 1 selected');
     await page.locator('button:has-text("Initialize agentlet")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Element 2 selected');
 
     // Press Escape to finish selection
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(2000);
 
     // Should have selected 2 elements
     await expect(page.locator('#elementsSelected')).toContainText('2');
@@ -196,8 +187,7 @@ test.describe('Element Selection Example', () => {
     await expect(page.locator('#lastSelectionMode')).toContainText('Multiple');
 
     // Console should show completion
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Multiple.*selection.*completed.*2.*elements/i);
+    await agentletTest.expectTextToMatch(/Multiple.*selection.*completed.*2.*elements/i);
   });
 
   test('should cancel active selection', async ({ page }) => {
@@ -207,7 +197,7 @@ test.describe('Element Selection Example', () => {
 
     // Start single element selection
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
 
     // Status should show selection mode active
     const status = page.locator('#status');
@@ -215,7 +205,7 @@ test.describe('Element Selection Example', () => {
 
     // Cancel the selection using Escape key (proper way to cancel)
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(() => !window.agentlet.utils.ElementSelector.isActive);
 
     // Alternatively, we can also test the cancel button, but need to use keyboard or
     // check that selection is cancelled by testing element selection behavior
@@ -225,7 +215,7 @@ test.describe('Element Selection Example', () => {
 
     // Test that clicking the cancel button works when called programmatically
     await page.locator('button:has-text("Cancel selection")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Selection cancelled');
 
     // Console should show cancellation attempt (may show different messages depending on implementation)
     const finalConsoleOutput = await page.locator('#console').textContent();
@@ -234,7 +224,7 @@ test.describe('Element Selection Example', () => {
 
     // Most importantly, verify we can start a new selection after cancelling
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
 
     // Status should show selection mode is active again
     await expect(status).toContainText(/Click.*element.*select/i);
@@ -247,27 +237,24 @@ test.describe('Element Selection Example', () => {
 
     // Start button-only selection
     await page.locator('button:has-text("Select buttons only")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on buttons only');
 
     // Status should show button selection instructions
     const status = page.locator('#status');
     await expect(status).toContainText(/Click.*buttons.*only/i);
 
     // Console should show button selection started
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Starting.*button.*only.*selection/i);
+    await agentletTest.expectTextToMatch(/Starting.*button.*only.*selection/i);
 
     // Click on a button element
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(2000);
 
     // Should have selected 1 element with filtered mode
     await expect(page.locator('#elementsSelected')).toContainText('1');
     await expect(page.locator('#lastSelectionMode')).toContainText('Filtered (buttons)');
 
     // Console should show button selection success
-    const finalConsoleOutput = await page.locator('#console').textContent();
-    expect(finalConsoleOutput).toMatch(/Button selected/i);
+    await agentletTest.expectTextToMatch(/Button selected/i);
   });
 
   test('should perform custom callback selection', async ({ page }) => {
@@ -277,30 +264,27 @@ test.describe('Element Selection Example', () => {
 
     // Start custom callback selection
     await page.locator('button:has-text("Custom callback")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Select any element to see detailed info');
 
     // Status should show custom selection instructions
     const status = page.locator('#status');
     await expect(status).toContainText(/Select.*element.*detailed.*info/i);
 
     // Console should show custom callback selection started
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Starting.*selection.*custom.*callback/i);
+    await agentletTest.expectTextToMatch(/Starting.*selection.*custom.*callback/i);
 
     // Click on an element to analyze
     await page.locator('h1').click(); // Click on the main heading
-    await page.waitForTimeout(2000);
 
     // Should have selected 1 element with custom callback mode
     await expect(page.locator('#elementsSelected')).toContainText('1');
     await expect(page.locator('#lastSelectionMode')).toContainText('Custom Callback');
 
     // Console should show detailed analysis
-    const finalConsoleOutput = await page.locator('#console').textContent();
-    expect(finalConsoleOutput).toMatch(/Element analyzed/i);
-    expect(finalConsoleOutput).toMatch(/Element properties/i);
-    expect(finalConsoleOutput).toMatch(/XPath/i);
-    expect(finalConsoleOutput).toMatch(/Visible/i);
+    await agentletTest.expectTextToMatch(/Element analyzed/i);
+    await agentletTest.expectTextToMatch(/Element properties/i);
+    await agentletTest.expectTextToMatch(/XPath/i);
+    await agentletTest.expectTextToMatch(/Visible/i);
   });
 
   test('should track statistics correctly across different selection modes', async ({ page }) => {
@@ -310,9 +294,8 @@ test.describe('Element Selection Example', () => {
 
     // Perform a single selection
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(2000);
 
     // Check stats after first selection
     await expect(page.locator('#elementsSelected')).toContainText('1');
@@ -320,9 +303,8 @@ test.describe('Element Selection Example', () => {
 
     // Perform a button selection
     await page.locator('button:has-text("Select buttons only")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on buttons only');
     await page.locator('button:has-text("Initialize agentlet")').click();
-    await page.waitForTimeout(2000);
 
     // Check stats after second selection
     await expect(page.locator('#elementsSelected')).toContainText('2');
@@ -339,19 +321,19 @@ test.describe('Element Selection Example', () => {
 
     // Start single element selection
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
 
     // Click on a test element
     const targetButton = page.locator('button.console-clear-btn');
     await targetButton.click();
-    await page.waitForTimeout(1000);
+    await expect(targetButton).toHaveClass(/element-selected/);
 
-    // The selected element should have the 'element-selected' class temporarily
-    // We can't directly check the class due to timing, but we can verify selection occurred
+    // The selected element gets the 'element-selected' class temporarily
+    // (set synchronously by the example), and the selection is counted
     await expect(page.locator('#elementsSelected')).toContainText('1');
 
-    // Wait for highlight to be removed (3 seconds as per the code)
-    await page.waitForTimeout(4000);
+    // The example removes the highlight class after 3 seconds: wait for the class to go
+    await expect(targetButton).not.toHaveClass(/element-selected/, { timeout: 6000 });
 
     // Selection count should remain the same but visual highlight should be gone
     await expect(page.locator('#elementsSelected')).toContainText('1');
@@ -364,11 +346,11 @@ test.describe('Element Selection Example', () => {
 
     // Start multiple element selection
     await page.locator('button:has-text("Select multiple elements")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click elements one by one, press Escape when done');
 
     // Click on first element
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Element 1 selected');
 
     // Status should update to show continuing selection
     const status = page.locator('#status');
@@ -376,11 +358,10 @@ test.describe('Element Selection Example', () => {
 
     // Click on second element
     await page.locator('h1').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Element 2 selected');
 
     // Press Escape to finish
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(2000);
 
     // Should have completed multiple selection
     await expect(page.locator('#elementsSelected')).toContainText('2');
@@ -394,16 +375,16 @@ test.describe('Element Selection Example', () => {
 
     // Perform some selections to generate data
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
     await page.locator('button.console-clear-btn').click();
-    await page.waitForTimeout(2000);
 
     // Statistics should reflect the current state
     await expect(page.locator('#elementsSelected')).toContainText('1');
     await expect(page.locator('#selectorsGenerated')).toContainText('1');
 
-    // Wait for periodic update interval (the code updates every 2 seconds)
-    await page.waitForTimeout(3000);
+    // The example refreshes its statistics every 2 seconds: overwrite a value
+    // and wait for the next refresh to put it back
+    await page.evaluate(() => { document.getElementById('selectorAvailable').textContent = 'stale'; });
 
     // Statistics should still be accurate
     await expect(page.locator('#selectorAvailable')).toContainText('Yes');
@@ -417,20 +398,18 @@ test.describe('Element Selection Example', () => {
 
     // Start custom callback selection to see detailed selector info
     await page.locator('button:has-text("Custom callback")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Select any element to see detailed info');
 
     // Click on an element with a clear selector
     await page.locator('h1').click();
-    await page.waitForTimeout(2000);
 
     // Console should show both CSS selector and XPath
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Selector:/i);
-    expect(consoleOutput).toMatch(/XPath:/i);
+    await agentletTest.expectTextToMatch(/Selector:/i);
+    await agentletTest.expectTextToMatch(/XPath:/i);
 
     // Should show element properties
-    expect(consoleOutput).toMatch(/Element properties/i);
-    expect(consoleOutput).toMatch(/Text content/i);
+    await agentletTest.expectTextToMatch(/Element properties/i);
+    await agentletTest.expectTextToMatch(/Text content/i);
   });
 
   test('should handle clear console functionality', async ({ page }) => {
@@ -440,9 +419,9 @@ test.describe('Element Selection Example', () => {
 
     // Create selection activity to generate output
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
     await page.locator('h1').click();
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#elementsSelected')).toContainText('1');
 
     // Verify there is output
     let consoleOutput = await page.locator('#console').textContent();
@@ -450,17 +429,16 @@ test.describe('Element Selection Example', () => {
 
     // Clear console
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000);
 
-    // Console should be cleared or contain different content
-    const consoleOutputAfterClear = await page.locator('#console').textContent();
-
-    // Check that either console is cleared OR content has changed
-    const isCleared = consoleOutputAfterClear.trim() === '' ||
-                     consoleOutputAfterClear !== consoleOutput ||
-                     consoleOutputAfterClear.includes('cleared') ||
-                     consoleOutputAfterClear.includes('Console cleared');
-    expect(isCleared).toBe(true);
+    // Console should be cleared or contain different content: check that
+    // either console is cleared OR content has changed
+    await expect.poll(async () => {
+      const consoleOutputAfterClear = await page.locator('#console').textContent();
+      return consoleOutputAfterClear.trim() === '' ||
+             consoleOutputAfterClear !== consoleOutput ||
+             consoleOutputAfterClear.includes('cleared') ||
+             consoleOutputAfterClear.includes('Console cleared');
+    }).toBe(true);
   });
 
   test('should handle selection edge cases', async ({ page }) => {
@@ -470,11 +448,10 @@ test.describe('Element Selection Example', () => {
 
     // Try to cancel when no selection is active
     await page.locator('button:has-text("Cancel selection")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Selection cancelled');
 
     // Should handle gracefully (no error)
-    const consoleOutput = await page.locator('#console').textContent();
-    expect(consoleOutput).toMatch(/Selection.*cancelled|Canceling.*selection/i);
+    await agentletTest.expectTextToMatch(/Selection.*cancelled|Canceling.*selection/i);
   });
 
   test('should maintain selection state across different modes', async ({ page }) => {
@@ -484,9 +461,8 @@ test.describe('Element Selection Example', () => {
 
     // Perform selections in different modes
     await page.locator('button:has-text("Select single element")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on any element to select it');
     await page.locator('h1').click();
-    await page.waitForTimeout(2000);
 
     // Check state after first selection
     await expect(page.locator('#elementsSelected')).toContainText('1');
@@ -494,9 +470,8 @@ test.describe('Element Selection Example', () => {
 
     // Switch to button selection mode
     await page.locator('button:has-text("Select buttons only")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Click on buttons only');
     await page.locator('button:has-text("Initialize agentlet")').click();
-    await page.waitForTimeout(2000);
 
     // State should accumulate
     await expect(page.locator('#elementsSelected')).toContainText('2');
@@ -513,24 +488,20 @@ test.describe('Element Selection Example', () => {
 
     // Start custom callback selection
     await page.locator('button:has-text("Custom callback")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#status')).toContainText('Select any element to see detailed info');
 
     // Click on a button element to get detailed analysis
     await page.locator('button:has-text("Initialize agentlet")').click();
-    await page.waitForTimeout(2000);
 
-    // Console should show comprehensive analysis
-    const consoleOutput = await page.locator('#console').textContent();
-
-    // Should include all the detailed properties
-    expect(consoleOutput).toMatch(/Element analyzed.*button/i);
-    expect(consoleOutput).toMatch(/Element properties/i);
-    expect(consoleOutput).toMatch(/ID:/i);
-    expect(consoleOutput).toMatch(/Classes:/i);
-    expect(consoleOutput).toMatch(/Text content:/i);
-    expect(consoleOutput).toMatch(/Children count:/i);
-    expect(consoleOutput).toMatch(/XPath:/i);
-    expect(consoleOutput).toMatch(/Visible:/i);
+    // Console should show comprehensive analysis, including all the detailed properties
+    await agentletTest.expectTextToMatch(/Element analyzed.*button/i);
+    await agentletTest.expectTextToMatch(/Element properties/i);
+    await agentletTest.expectTextToMatch(/ID:/i);
+    await agentletTest.expectTextToMatch(/Classes:/i);
+    await agentletTest.expectTextToMatch(/Text content:/i);
+    await agentletTest.expectTextToMatch(/Children count:/i);
+    await agentletTest.expectTextToMatch(/XPath:/i);
+    await agentletTest.expectTextToMatch(/Visible:/i);
 
     // Should show the analyzed element in status
     const status = page.locator('#status');

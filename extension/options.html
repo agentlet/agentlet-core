@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Agentlet Core Options</title>
+    <title>Agentlet Core options</title>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
@@ -69,6 +69,11 @@
             font-size: 14px;
             transition: all 0.2s ease;
         }
+        .hint {
+            color: #555;
+            font-size: 13px;
+            margin: 6px 0 0 0;
+        }
         button:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
@@ -77,18 +82,32 @@
 </head>
 <body>
     <div class="header">
-        <img src="icons/logo-64.png" alt="Agentlet Logo" class="logo" id="logo">
-        <h1>Agentlet Core Options</h1>
+        <img src="icons/logo-64.png" alt="Agentlet logo" class="logo" id="logo">
+        <h1>Agentlet Core options</h1>
     </div>
     
     <div class="content">
         <div class="option">
-            <label><input type="checkbox" id="enabled"> 🚀 Enable Agentlet Core</label>
+            <label><input type="checkbox" id="debugMode"> Debug mode</label>
+            <p class="hint">Turns on the debug helpers and console logging of agentlet core.</p>
         </div>
         <div class="option">
-            <button id="save">💾 Save Settings</button>
+            <label><input type="checkbox" id="startMinimized"> Start with the panel minimized</label>
+        </div>
+        <div class="option">
+            <button id="save">Save settings</button>
+            <span id="saved" class="hint" role="status"></span>
+        </div>
+        <div class="option">
+            <strong>Bundled modules</strong>
+            <p class="hint" id="modules">None.</p>
+            <p class="hint">Only modules shipped inside the extension package can run. The extension never loads a module from a URL.</p>
+        </div>
+        <div class="option">
+            <strong>Access</strong>
+            <p class="hint">The extension has no access to any site until you click "Activate on this page" in the popup or press the keyboard shortcut. Access is limited to that tab until you navigate away.</p>
         </div>
     </div>
-    <script src="options.js"></script>
+    <script type="module" src="options.js"></script>
 </body>
 </html>
