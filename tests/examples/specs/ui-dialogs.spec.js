@@ -66,8 +66,8 @@ test.describe('Dialogs Example', () => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
 
-    // Wait for state to update
-    await page.waitForTimeout(2000);
+    // Wait for the example to refresh its dialog stats
+    await expect(page.locator('#dialogAvailable')).toHaveText('Yes');
 
     // Check that dialog API is now available
     const dialogActivity = await page.locator('#dialogStats').textContent();
@@ -96,7 +96,7 @@ test.describe('Dialogs Example', () => {
 
     // Close dialog
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show success dialog', async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe('Dialogs Example', () => {
 
     // Close dialog
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show warning dialog', async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe('Dialogs Example', () => {
 
     // Close dialog
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show error dialog', async ({ page }) => {
@@ -156,7 +156,7 @@ test.describe('Dialogs Example', () => {
 
     // Close dialog
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show fullscreen dialog', async ({ page }) => {
@@ -179,7 +179,7 @@ test.describe('Dialogs Example', () => {
 
     // Close dialog
     await dialog.locator('button:has-text("Close")').click();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show custom HTML dialog', async ({ page }) => {
@@ -200,7 +200,7 @@ test.describe('Dialogs Example', () => {
     // Custom HTML dialog might have specific content or styling
     // Close dialog
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
   });
 
   test('should show multiple buttons dialog', async ({ page }) => {
@@ -223,9 +223,9 @@ test.describe('Dialogs Example', () => {
     const buttonCount = await buttons.count();
     expect(buttonCount).toBeGreaterThan(1);
 
-    // Close dialog using the test utility method
+    // Close dialog using the test utility method (this dialog has no OK/Close
+    // button, so it is not guaranteed to be removed: nothing to wait for)
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
   });
 
   test('should show message bubbles', async ({ page }) => {
@@ -235,19 +235,19 @@ test.describe('Dialogs Example', () => {
 
     // Test info bubble
     await page.locator('button:has-text("Info bubble")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Info message bubble shown');
 
     // Test success bubble
     await page.locator('button:has-text("Success bubble")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Success message bubble shown');
 
     // Test warning bubble
     await page.locator('button:has-text("Warning bubble")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Warning message bubble shown');
 
     // Test error bubble
     await page.locator('button:has-text("Error bubble")').click();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#console')).toContainText('Error message bubble shown');
 
     // Message bubbles typically auto-dismiss, so we just verify they don't crash
     // and that the console shows activity
@@ -264,14 +264,15 @@ test.describe('Dialogs Example', () => {
     await page.locator('button:has-text("Info dialog")').click();
     await agentletTest.waitForDialog();
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
 
     await page.locator('button:has-text("Success dialog")').click();
     await agentletTest.waitForDialog();
     await agentletTest.closeDialog();
-    await page.waitForTimeout(500);
+    await agentletTest.waitForDialogClosed();
 
     // Check that dialog activity statistics updated
+    await expect(page.locator('#dialogStats')).toContainText(/Dialogs shown:\s*[1-9]/);
     const dialogActivity = await page.locator('#dialogStats').textContent();
     if (dialogActivity) {
       // Dialogs shown should be > 0
@@ -312,7 +313,6 @@ test.describe('Dialogs Example', () => {
 
       // Close first dialog which might trigger the next
       await agentletTest.closeDialog();
-      await page.waitForTimeout(1000);
 
       // There might be a second dialog, try to close it if present
       const secondDialog = page.locator('.agentlet-info-dialog, .agentlet-dialog, [class*="dialog"]');
@@ -338,17 +338,16 @@ test.describe('Dialogs Example', () => {
 
     // Clear console - force click since it might be overlapped by agentlet panel
     await page.locator('button.console-clear-btn').click({ force: true });
-    await page.waitForTimeout(1000);
 
-    // Console should be cleared or contain different content
-    const consoleOutputAfterClear = await page.locator('#console').textContent();
-
-    // Check that either console is cleared OR content has changed (clearing might add a message)
-    const isCleared = consoleOutputAfterClear.trim() === '' ||
-                     consoleOutputAfterClear !== consoleOutput ||
-                     consoleOutputAfterClear.includes('cleared') ||
-                     consoleOutputAfterClear.includes('Console cleared') ||
-                     consoleOutputAfterClear.includes('Output cleared');
-    expect(isCleared).toBe(true);
+    // Console should be cleared or contain different content: check that
+    // either console is cleared OR content has changed (clearing might add a message)
+    await expect.poll(async () => {
+      const consoleOutputAfterClear = await page.locator('#console').textContent();
+      return consoleOutputAfterClear.trim() === '' ||
+             consoleOutputAfterClear !== consoleOutput ||
+             consoleOutputAfterClear.includes('cleared') ||
+             consoleOutputAfterClear.includes('Console cleared') ||
+             consoleOutputAfterClear.includes('Output cleared');
+    }).toBe(true);
   });
 });
