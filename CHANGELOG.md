@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   substring matching; an unrecognized value other than the old scaffold ones
   logs a warning.
 
+### Security
+
+- The default `Module.getContent()` escapes the module name (and the page URL
+  shown when there is no description) before putting it in the panel markup,
+  so a module name containing HTML renders as text.
+
 ### Deprecated
 
 - Substring matching of plain string patterns. Host matching becomes the

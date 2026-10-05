@@ -34,6 +34,16 @@ function globPatternToRegExp(pattern: string): RegExp {
     return new RegExp(escaped);
 }
 
+/** Minimal HTML escape for text interpolated into the default `getContent()` markup. */
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 /**
  * Values the scaffold templates wrote as `matchMode` before the option
  * existed (it was ignored). They keep meaning "default matching", silently.
@@ -417,8 +427,8 @@ class Module {
     getContent(): string {
         return `
             <div class="agentlet-module-content">
-                <h3>${this.name}</h3>
-                <p>${this.description || `Active for: ${  window.location.href}`}</p>
+                <h3>${escapeHtml(String(this.name))}</h3>
+                <p>${this.description || `Active for: ${escapeHtml(window.location.href)}`}</p>
             </div>
         `;
     }

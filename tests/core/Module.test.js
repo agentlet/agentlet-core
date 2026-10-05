@@ -361,5 +361,33 @@ describe('Module', () => {
             expect(content).toContain('test-module');
             expect(content).toContain('agentlet-module-content');
         });
+
+        test('escapes the module name in the default content', async () => {
+            const payload = '"><img src=x onerror=alert(1)>';
+            const hostile = new Module({ name: payload, patterns: ['test.com'] });
+
+            const content = hostile.getContent();
+            expect(content).not.toContain('<img');
+            expect(content).toContain('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
+
+            // The suite mocks `document`, so use a plain object as the container.
+            const container = { innerHTML: '' };
+            await hostile.mount(container, { root: document.body, trigger: 'init' });
+
+            expect(container.innerHTML).not.toContain('<img');
+            expect(container.innerHTML).toContain('<h3>&quot;&gt;&lt;img src=x onerror=alert(1)&gt;</h3>');
+        });
+
+        test('escapes the page URL shown when there is no description', () => {
+            const previous = window.location.href;
+            window.history.pushState({}, '', "/page?q='x'&a=1");
+            try {
+                const content = new Module({ name: 'plain', patterns: ['test.com'] }).getContent();
+                expect(content).toContain('q=%27x%27&amp;a=1');
+                expect(content).not.toContain('&a=1');
+            } finally {
+                window.history.pushState({}, '', previous);
+            }
+        });
     });
 });
