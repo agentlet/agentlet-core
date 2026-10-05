@@ -4,12 +4,14 @@
  */
 import type {
     ModuleConfig,
+    ModuleMatchMode,
     ModuleActivationContext,
     ModuleMetadata,
     ModuleMountContext,
     ModulePatternMatcher,
     EventBusAPI
 } from '../types/public-api';
+import { matchesHostPattern, warnSubstringHostPattern } from './hostMatching.js';
 
 /** A single local event-listener callback, matching `AgentletModule.on`/`off`. */
 type ModuleEventListener = (data: unknown) => void;
@@ -32,6 +34,46 @@ function globPatternToRegExp(pattern: string): RegExp {
     return new RegExp(escaped);
 }
 
+/** Minimal HTML escape for text interpolated into the default `getContent()` markup. */
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Values the scaffold templates wrote as `matchMode` before the option
+ * existed (it was ignored). They keep meaning "default matching", silently.
+ */
+const LEGACY_MATCH_MODES: readonly string[] = ['includes', 'exact', 'regex'];
+
+/**
+ * Resolves the `matchMode` option. Only `'host'` changes behaviour. Because
+ * projects scaffolded by earlier versions pass `matchMode: 'includes'`,
+ * which was ignored, unknown values must not throw: they fall back to
+ * substring matching. A value that is neither valid nor one of those legacy
+ * ones is most likely a typo for `'host'`, so it is reported (not gated by
+ * debug mode: it is a configuration error and affects what the module matches).
+ */
+function resolveMatchMode(value: unknown, moduleName: string): ModuleMatchMode {
+    if (value === undefined || value === 'substring') {
+        return 'substring';
+    }
+    if (value === 'host') {
+        return 'host';
+    }
+    if (typeof value !== 'string' || !LEGACY_MATCH_MODES.includes(value)) {
+        console.warn(
+            `[${moduleName}] Unknown matchMode ${JSON.stringify(value)}; expected 'substring' or 'host'. ` +
+            'Falling back to substring matching.'
+        );
+    }
+    return 'substring';
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- see the `interface Module` block below the class for why this merge is safe.
 class Module {
     // Core properties
@@ -41,6 +83,8 @@ class Module {
 
     // Pattern matching - simplified
     patterns: ModulePatternMatcher[];
+    /** How plain string patterns are matched: `'substring'` (default in 2.x) or `'host'`. */
+    matchMode: ModuleMatchMode;
 
     // State management
     isActive: boolean;
@@ -77,6 +121,7 @@ class Module {
 
         // Pattern matching - simplified
         this.patterns = Array.isArray(config.patterns) ? config.patterns : [config.patterns].filter(Boolean);
+        this.matchMode = resolveMatchMode(config.matchMode, config.name);
 
         // State management
         this.isActive = false;
@@ -127,8 +172,15 @@ class Module {
      * in a glob pattern is escaped and matched literally. A string with no
      * `*` at all matches by plain substring.
      *
+     * With `matchMode: 'host'`, plain string patterns instead match the
+     * parsed URL host (see `matchesHostPattern()` in `./hostMatching.ts`):
+     * the pattern host or any subdomain of it, case-insensitive, with an
+     * optional `scheme://`, `:port` and `/path-prefix`. `'*'` alone still
+     * matches any non-empty URL; other `*` globs are not supported in host
+     * mode and never match.
+     *
      * Object patterns (`{ type: 'includes' | 'exact' | 'regex', value }`)
-     * are unaffected by any of this.
+     * are unaffected by `matchMode` and by any of the above.
      * @param url - URL to check
      * @returns Whether module matches
      */
@@ -140,6 +192,10 @@ class Module {
                 if (pattern === '*') {
                     return true;
                 }
+                if (this.matchMode === 'host') {
+                    return matchesHostPattern(pattern, url);
+                }
+                warnSubstringHostPattern(this.name, pattern);
                 if (pattern.includes('*')) {
                     return globPatternToRegExp(pattern).test(url);
                 }
@@ -371,8 +427,8 @@ class Module {
     getContent(): string {
         return `
             <div class="agentlet-module-content">
-                <h3>${this.name}</h3>
-                <p>${this.description || `Active for: ${  window.location.href}`}</p>
+                <h3>${escapeHtml(String(this.name))}</h3>
+                <p>${this.description || `Active for: ${escapeHtml(window.location.href)}`}</p>
             </div>
         `;
     }

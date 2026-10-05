@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Module option `matchMode: 'host'`: string `patterns` are compared with the
+  parsed URL host instead of the full URL text. `'example.com'` matches
+  `example.com` and any subdomain, case-insensitively and for internationalized
+  names, and no longer matches `https://example.com.evil.test/`,
+  `https://notexample.com/` or `https://evil.test/?q=example.com`. A pattern
+  may add a `scheme://`, a `:port` (ignored otherwise) and a `/path-prefix`
+  that matches whole segments. `'*'` and the `{ type, value }` object patterns
+  behave as before. `ModuleMatchMode` is exported from the public types and
+  `AgentletModule.matchMode` exposes the resolved value.
+- With `debugMode` on, a host-looking string pattern used in the default
+  substring mode logs a one-time warning that points to `matchMode: 'host'`.
+  It is gated by `debugMode` because the default is unchanged in 2.x and a
+  warning on every page of every existing deployment would be noise.
+
 ### Changed
 
 - The default OpenAI model is now `gpt-6-luna` (was `gpt-4o-mini`), OpenAI's
@@ -42,6 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests for the extension's background worker (mocked `chrome` API) and a
   check that `extension/` contains no `fetch(`, `eval(`, `new Function` or
   `importScripts(` and requests no host access.
+- The scaffold templates now declare `matchMode: 'host'` (the full and React
+  templates previously declared `matchMode: 'includes'`, which was ignored).
+  A core that predates the option ignores it, so scaffolded projects keep
+  working. Unknown values, including that old `'includes'`, fall back to
+  substring matching; an unrecognized value other than the old scaffold ones
+  logs a warning.
+
+### Deprecated
+
+- Substring matching of plain string patterns. Host matching becomes the
+  default in agentlet-core 3.0. Set `matchMode: 'host'` now, or
+  `matchMode: 'substring'` to keep the current behaviour after 3.0.
 
 ### Fixed
 
@@ -83,6 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SECURITY.md` now lists the APIs that accept HTML by contract (module
   `getContent()`, `allowHtml` dialogs, `MessageBubble` with `allowHtml`,
   `showModal()` content) and what still blocks Trusted Types.
+- The default `Module.getContent()` escapes the module name (and the page URL
+  shown when there is no description) before putting it in the panel markup,
+  so a module name containing HTML renders as text.
 
 ## [2.3.0] - 2026-10-01
 
