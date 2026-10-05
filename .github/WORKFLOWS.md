@@ -23,12 +23,12 @@ The nightly-only `nightly-release-scan` job downloads the SBOM attached to the l
 
 ### Shared actions
 
-The scanner is not part of this repository. `security.yml` and `release.yml` call two composite actions from the organization repository [agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan), pinned by commit SHA (the trailing comment names the tag):
+The scanner is not part of this repository. `security.yml` and `release.yml` call two composite actions from the organization repository [agentlet/.github](https://github.com/agentlet/.github/tree/main/actions/dependency-scan), pinned by commit SHA like every other action (the trailing comment names the tag):
 
 - `agentlet/.github/actions/sbom-from-esbuild` builds the SBOM from the metafiles. `metafiles` takes an explicit newline or comma separated list (no glob), so the five files written by `tools/build.js` are listed in the workflows. Add a new build target there when `tools/build.js` gains one.
 - `agentlet/.github/actions/dependency-scan` installs the pinned `osv-scanner`, applies the gate, uploads the SARIF (skipped on fork pull requests), uploads the reports and optionally opens a tracking issue. Its README documents every input. It only supports Linux x64 runners.
 
-Bump the pin deliberately when a new action tag is released. The `osv-scanner-version` input controls the scanner version.
+Bump the pin deliberately when a new action tag is released: the tags are named `dependency-scan-v1` and not semver, so Dependabot may not propose them. The `osv-scanner-version` input controls the scanner version.
 
 ### Why the SBOM is built from esbuild metafiles
 
@@ -113,9 +113,23 @@ The job needs `id-token: write` so that npm can attach a signed provenance attes
 
 Publishing authenticates with an npm automation token stored as the repository secret `NPM_TOKEN` (Settings, Secrets and variables, Actions). Create the token on npmjs.com under Access tokens, with the Automation type, using an account that can publish `agentlet-core`. Without the secret, a tag push runs the tests and build and then fails at the publish step.
 
-## Dependabot
+## Action pinning and Dependabot
 
-`.github/dependabot.yml.disabled` holds a Dependabot configuration that is not active. Rename it to `dependabot.yml` to enable it. Note that SheetJS is pinned to a tarball URL on `cdn.sheetjs.com`, which Dependabot does not track, see CONTRIBUTING.md.
+Every action in `.github/workflows/` is pinned by the full 40-character commit SHA, with the release tag in a trailing comment, for example `actions/checkout@<sha> # v7.0.1`. A tag can be moved to different code after the fact, a commit SHA cannot, so a compromised upstream release cannot change what the workflows run. The shared actions from `agentlet/.github` follow the same style.
+
+To pin a new action or bump a pin by hand, resolve the tag to a commit (dereference annotated tags, whose object type is `tag`, with a second call):
+
+```bash
+gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq '.object.type + " " + .object.sha'
+gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'   # only for annotated tags
+```
+
+`.github/dependabot.yml` keeps the pins and the npm dependencies current, weekly on Monday at 09:00 UTC. No reviewers or assignees are set.
+
+- `npm`: minor and patch updates are grouped into one pull request (`npm-minor-patch`), major updates arrive individually. `xlsx` is ignored, because SheetJS is pinned to a tarball URL on `cdn.sheetjs.com`, which Dependabot does not track, see SECURITY.md and CONTRIBUTING.md. Commits use the `chore` prefix.
+- `github-actions`: all action updates are grouped into one pull request. Dependabot rewrites both the SHA and the trailing tag comment. Commits use the `ci` prefix.
+
+Review a Dependabot pull request like any other change: the checks in `test.yml` and `security.yml` run on it.
 
 ## Running the checks locally
 
