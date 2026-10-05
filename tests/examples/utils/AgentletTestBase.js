@@ -16,10 +16,12 @@ export class AgentletTestBase {
    */
   async navigateToExample(examplePath) {
     const fullPath = `/examples/${examplePath}`;
+    // goto() resolves on the load event: the example's scripts (including the
+    // blocking CDN ones) have run and its DOMContentLoaded handlers are done.
+    // No networkidle wait on top: it adds a 500 ms quiet period to every test
+    // and nothing in the examples fetches anything after load until a test
+    // clicks "Initialize".
     await this.page.goto(fullPath);
-
-    // Wait for the page to load
-    await this.page.waitForLoadState('networkidle');
 
     // Verify basic page structure
     await expect(this.page.locator('h1')).toBeVisible();
