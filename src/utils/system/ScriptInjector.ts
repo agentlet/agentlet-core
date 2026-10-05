@@ -19,7 +19,6 @@ interface ChromeScriptingExecuteOptions {
     func?: (...args: unknown[]) => unknown;
     args?: unknown[];
     files?: string[];
-    function?: (...args: unknown[]) => unknown;
 }
 
 interface ChromeScripting {
@@ -86,7 +85,8 @@ class ScriptInjector implements ScriptInjectorAPI {
     /**
      * Inject JavaScript code into the current page or specified tab
      * @param options - Injection options
-     * @param options.code - JavaScript code to inject
+     * @param options.code - JavaScript code to inject. Not supported together with `tabId`
+     *   in an extension (`chrome.scripting` cannot run a code string): pass `file` or `func`
      * @param [options.file] - File path to inject (alternative to code)
      * @param [options.tabId] - Tab ID for extension environment
      * @param [options.target='main'] - Target world ('main' or 'isolated')
@@ -133,6 +133,17 @@ class ScriptInjector implements ScriptInjectorAPI {
     async _injectViaExtensionAPI(options: ScriptInjectOptions): Promise<unknown> {
         const { code, file, tabId, target, allFrames, func, args } = options;
 
+        // chrome.scripting.executeScript() has no option that runs a code
+        // string: it takes `func` (a function, with `args`) or `files`.
+        // Building a function from the string with `new Function()` is not an
+        // alternative: it is blocked in MV3 service workers.
+        if (!func && !file && code) {
+            throw new Error(
+                'ScriptInjector: code strings cannot be injected with chrome.scripting. ' +
+                'Pass a file (options.file, an extension-relative path) or a function (options.func with options.args) instead.'
+            );
+        }
+
         const executeOptions: ChromeScriptingExecuteOptions = {
             target: {
                 tabId: tabId,
@@ -146,9 +157,6 @@ class ScriptInjector implements ScriptInjectorAPI {
             executeOptions.args = args;
         } else if (file) {
             executeOptions.files = [file];
-        } else if (code) {
-            // eslint-disable-next-line no-new-func
-            executeOptions.function = new Function(code) as (...args: unknown[]) => unknown;
         }
 
         const chromeGlobal = getChromeGlobal();
@@ -269,6 +277,8 @@ class ScriptInjector implements ScriptInjectorAPI {
 
     /**
      * Inject a module
+     * Passing `tabId` in an extension environment rejects, because the module
+     * is injected as a code string (see `inject()`).
      * @param options - Module injection options
      * @param options.moduleCode - Module source code
      * @param options.moduleUrl - Module URL/identifier

@@ -138,9 +138,51 @@ export class BaseAIProvider implements AIProviderHandle {
 /** Shape of the body `OpenAIProvider` posts to `/chat/completions`. */
 interface OpenAIChatCompletionRequest {
     model: string;
-    max_tokens: number;
-    temperature: number;
+    /** Sent to classic chat models (gpt-4o, gpt-4, gpt-3.5 and OpenAI-compatible servers). */
+    max_tokens?: number;
+    /** Sent instead of `max_tokens` to the gpt-5, gpt-6 and o-series models. */
+    max_completion_tokens?: number;
+    /** Omitted for reasoning models that reject it (see {@link buildChatRequest}). */
+    temperature?: number;
+    /** Sent as `'none'` to the gpt-6 models that support it, so they answer without reasoning. */
+    reasoning_effort?: 'none';
     messages: Array<{ role: string; content: OpenAIMessageContentPart[] }>;
+}
+
+/** Model used when neither `options.model` nor `OPENAI_MODEL` is set. */
+const DEFAULT_OPENAI_MODEL = 'gpt-6-luna';
+
+/** gpt-5, gpt-6 and o-series models: they take `max_completion_tokens`, not `max_tokens`. */
+const REASONING_FAMILY = /^(gpt-5|gpt-6|o\d)/i;
+
+/** gpt-6 models that accept `reasoning_effort: 'none'` (and `temperature` while it is `none`). */
+const REASONING_NONE_MODELS = /^gpt-6-(luna|sol)(-|$)/i;
+
+/**
+ * Builds the `/chat/completions` body for `model`.
+ *
+ * - Classic models (gpt-4o, gpt-4, gpt-3.5, other OpenAI-compatible models) get
+ *   `max_tokens` and `temperature`, as before.
+ * - gpt-5, gpt-6 and o-series models reject `max_tokens`, so they get
+ *   `max_completion_tokens`, and `temperature` is left out because they reject
+ *   it whenever reasoning is on.
+ * - gpt-6-luna and gpt-6-sol default to medium reasoning, which would spend
+ *   the token budget before answering. They are sent `reasoning_effort: 'none'`,
+ *   which also keeps `temperature` valid.
+ */
+function buildChatRequest(
+    model: string,
+    maxTokens: number,
+    temperature: number,
+    messages: OpenAIChatCompletionRequest['messages']
+): OpenAIChatCompletionRequest {
+    if (!REASONING_FAMILY.test(model)) {
+        return { model, max_tokens: maxTokens, temperature, messages };
+    }
+    if (REASONING_NONE_MODELS.test(model)) {
+        return { model, max_completion_tokens: maxTokens, temperature, reasoning_effort: 'none', messages };
+    }
+    return { model, max_completion_tokens: maxTokens, messages };
 }
 
 type OpenAIMessageContentPart =
@@ -171,7 +213,7 @@ export class OpenAIProvider extends BaseAIProvider {
         super(apiKey, options);
 
         this.baseUrl = options.baseUrl || 'https://api.openai.com/v1';
-        this.model = options.model || 'gpt-4o-mini';
+        this.model = options.model || DEFAULT_OPENAI_MODEL;
         this.maxTokens = options.maxTokens || 4000;
         this.temperature = options.temperature || 0.7;
     }
@@ -181,12 +223,12 @@ export class OpenAIProvider extends BaseAIProvider {
             throw new Error('Prompt must be a non-empty string');
         }
 
-        const requestOptions: OpenAIChatCompletionRequest = {
-            model: (options.model as string) || this.model,
-            max_tokens: (options.maxTokens as number) || this.maxTokens,
-            temperature: (options.temperature as number) ?? this.temperature,
-            messages: []
-        };
+        const requestOptions = buildChatRequest(
+            (options.model as string) || this.model,
+            (options.maxTokens as number) || this.maxTokens,
+            (options.temperature as number) ?? this.temperature,
+            []
+        );
 
         // Build message content
         const messageContent: OpenAIMessageContentPart[] = [];
@@ -290,15 +332,10 @@ export class OpenAIProvider extends BaseAIProvider {
         try {
             // Make a simple test request to validate API key and connectivity
             const testPrompt = 'Hello';
-            const requestOptions: OpenAIChatCompletionRequest = {
-                model: this.model,
-                max_tokens: 5,
-                temperature: 0,
-                messages: [{
-                    role: 'user',
-                    content: [{ type: 'text', text: testPrompt }]
-                }]
-            };
+            const requestOptions = buildChatRequest(this.model, 5, 0, [{
+                role: 'user',
+                content: [{ type: 'text', text: testPrompt }]
+            }]);
 
             const startTime = Date.now();
             const response = await this.makeRequest('/chat/completions', {
@@ -405,7 +442,7 @@ export class AIManager implements AIManagerAPI {
         const openaiKey = this.envManager.get('OPENAI_API_KEY');
         if (openaiKey) {
             const openaiOptions: AIProviderOptions = {
-                model: this.envManager.get('OPENAI_MODEL') || 'gpt-4o-mini',
+                model: this.envManager.get('OPENAI_MODEL') || DEFAULT_OPENAI_MODEL,
                 baseUrl: this.envManager.get('OPENAI_BASE_URL'),
                 maxTokens: parseInt(this.envManager.get('OPENAI_MAX_TOKENS') as string) || 4000,
                 temperature: parseFloat(this.envManager.get('OPENAI_TEMPERATURE') as string) || 0.7
