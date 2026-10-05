@@ -4,7 +4,7 @@ This repository has three workflows in `.github/workflows/`: `test.yml`, `securi
 
 ## `test.yml`: tests
 
-**Trigger**: pushes to `main` and pull requests to `main`.
+**Trigger**: pushes to `main`, pull requests to `main`, and `workflow_call`. `release.yml` calls this workflow so that a release runs exactly the same checks, see below.
 
 Two jobs run in parallel, with no dependency between them:
 
@@ -93,13 +93,19 @@ Findings are enriched with EPSS scores (`api.first.org`) and the CISA KEV catalo
 
 **Trigger**: pushing a tag that matches `v*`.
 
-Steps, in order:
+Three jobs run in this order, each one starting only if the previous one succeeded:
 
-1. Check that the tag (without the leading `v`) equals the `version` in `package.json`, and fail early if not. npm versions are immutable, so a mismatch is not recoverable after publishing.
-2. `npm ci`, `npm test`, `npm run build`.
-3. Generate the SBOM (the shared `sbom-from-esbuild` action) and scan it (the shared `dependency-scan` action) before publishing, so a blocking vulnerability or a failure stops the job before anything is published.
-4. `npm publish --provenance --access public`.
-5. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
+1. `verify-tag` checks that the tag (without the leading `v`) equals the `version` in `package.json`, and fails early if not. npm versions are immutable, so a mismatch is not recoverable after publishing. It runs first and takes seconds, so a mistyped tag does not wait for the e2e suite.
+2. `checks` calls `test.yml` as a reusable workflow (`uses: ./.github/workflows/test.yml`) on the tagged commit: Jest, `npm run lint`, `npm run typecheck`, `npm run build`, and the e2e suite on chromium, firefox and webkit, including the Playwright browser cache. There is no copy of these steps in `release.yml`, so the release gate cannot drift from what pull requests must pass. It only needs `contents: read`.
+3. `release` (needs `verify-tag` and `checks`) does the following steps, in order:
+   1. `npm ci`, `npm test`, `npm run build`. The build runs again here because this job has its own runner and checkout, and the SBOM and the package are built from it.
+   2. Generate the SBOM (the shared `sbom-from-esbuild` action) and scan it (the shared `dependency-scan` action) before publishing, so a blocking vulnerability or a failure stops the job before anything is published.
+   3. `npm publish --provenance --access public`.
+   4. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
+
+A tag on a commit that fails any check therefore never reaches `npm publish`. If a check fails, fix the problem on `main`, delete the failed tag (`git push origin :refs/tags/<tag>` and `git tag -d <tag>`) and tag the fixed commit again. Nothing was published, so reusing the version is safe.
+
+Because `test.yml` is also called from here, its checks and e2e jobs show up in the release run as `checks / checks` and `checks / e2e (<project>)`. The check names reported on pull requests do not change, so branch protection is unaffected.
 
 The job needs `id-token: write` so that npm can attach a signed provenance attestation, and `contents: write` to create the release.
 
