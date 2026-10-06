@@ -5,7 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.0] - 2026-10-06
+
+Upgrade notes:
+
+- `window.XLSX`, `window.html2canvas` and `window.pdfjsLib` are now defined on
+  first use, not after `init()`. Code that reads them directly should call the
+  feature first, list them in `preloadLibraries`, or load
+  `agentlet-core.full.min.js`, which keeps the previous behaviour.
+- If you host the script builds yourself, serve the new files next to the core
+  script: `agentlet-xlsx.min.js`, `agentlet-html2canvas.min.js`,
+  `agentlet-pdfjs.min.js`, `pdf.worker.min.mjs`, `cmaps/` and
+  `standard_fonts/`, or point `libraryBaseUrl` and the PDF options at them.
+  The pdf.js worker is now looked up next to the core script first.
+- Text that used to be parsed as HTML is now shown as text: the panel title,
+  module names, and the login button text and icon. The internal
+  `window.addEnvVar` and `window.removeEnvVar` globals are removed.
+- The default OpenAI model is `gpt-6-luna`. Its id and request parameters were
+  checked against OpenAI's documentation, not against the live API. Set
+  `OPENAI_MODEL` to keep a model you have already validated.
+- `ScriptInjector` rejects a code string sent to another tab through
+  `chrome.scripting`. Pass a `file` or a `func` instead.
 
 ### Added
 
@@ -153,6 +173,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The default `Module.getContent()` escapes the module name (and the page URL
   shown when there is no description) before putting it in the panel markup,
   so a module name containing HTML renders as text.
+- Releases are published with npm trusted publishing (OIDC) and staged
+  publishing: the release workflow holds no npm token, and a maintainer
+  approves each version with 2FA before it becomes public. Packages keep their
+  provenance attestation, and the release only runs after lint, typecheck,
+  unit tests and the end-to-end suite pass on the tagged commit.
 - PDF conversion no longer fetches pdf.js character maps and standard fonts
   from cdnjs.cloudflare.com (which also served version 3.11 files to a 5.4
   library). They ship in `dist/cmaps/` and `dist/standard_fonts/`, from the
@@ -518,6 +543,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.4.0]: https://github.com/agentlet/agentlet-core/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/agentlet/agentlet-core/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/agentlet/agentlet-core/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/agentlet/agentlet-core/compare/v2.1.0...v2.1.1
