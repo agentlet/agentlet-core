@@ -8,7 +8,31 @@
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { spawnSync } = require('child_process');
+
+/**
+ * How each build obtains SheetJS, pdf.js and html2canvas (see
+ * src/libraries/embeddedLibraries.ts): 'script' = separate chunk files,
+ * 'split' = ES module chunks, 'inline' = inlined in the output file.
+ */
+function libsDefine(mode) {
+    return { __AGENTLET_LIBS__: JSON.stringify(mode) };
+}
+
+/** On-demand library chunks: source entry (under src/libraries/chunks/) and output name (without .js). */
+const LIBRARY_CHUNKS = {
+    xlsx: { entry: 'xlsx.ts', out: 'agentlet-xlsx.min' },
+    html2canvas: { entry: 'html2canvas.ts', out: 'agentlet-html2canvas.min' },
+    pdfjs: { entry: 'pdfjs.ts', out: 'agentlet-pdfjs.min' }
+};
+
+/** "123.45 KB (gzip 45.67 KB)" for a built file, KB being 1024 bytes like the other size lines, gzip at the default level like `gzip -c`. */
+function describeSize(file) {
+    const bytes = fs.readFileSync(file);
+    const gzipped = zlib.gzipSync(bytes).length;
+    return `${(bytes.length / 1024).toFixed(2)} KB (gzip ${(gzipped / 1024).toFixed(2)} KB)`;
+}
 
 class AgentletCoreBuilder {
     constructor() {
@@ -30,6 +54,9 @@ class AgentletCoreBuilder {
                 minify: false,
                 sourcemap: true,
                 metafile: true,
+                // SheetJS, pdf.js and html2canvas are not part of this file:
+                // each is a chunk loaded on first use (see buildChunks()).
+                define: libsDefine('script'),
                 // esbuild's iife+globalName output only assigns to the global
                 // variable. Since package.json's "require"/"default" exports
                 // condition resolves to this file, also assign module.exports
@@ -51,20 +78,72 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                define: libsDefine('script'),
                 footer: {
                     js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
                 }
             },
 
+            // The same core with SheetJS, pdf.js and html2canvas inlined, for
+            // consumers that want one self-contained file.
+            coreFull: {
+                entryPoints: [this.entryPoint],
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outfile: path.join(this.distDir, 'agentlet-core.full.min.js'),
+                globalName: 'AgentletCore',
+                minify: true,
+                sourcemap: false,
+                metafile: true,
+                define: libsDefine('inline'),
+                footer: {
+                    js: 'if (typeof module === "object" && module.exports) { module.exports = AgentletCore; }'
+                }
+            },
+
+            // One classic-script file per on-demand library, built as
+            // minified IIFEs that set window.XLSX / window.pdfjsLib /
+            // window.html2canvas. `outdir` + `out` names keep the files
+            // next to the core bundle.
+            chunks: {
+                entryPoints: Object.entries(LIBRARY_CHUNKS).map(([, chunk]) => ({
+                    in: path.join(this.srcDir, 'libraries', 'chunks', chunk.entry),
+                    out: chunk.out
+                })),
+                bundle: true,
+                format: 'iife',
+                target: 'es2020',
+                outdir: this.distDir,
+                minify: true,
+                sourcemap: false,
+                metafile: true,
+                legalComments: 'eof'
+            },
+
+            // Code splitting turns the three dynamic imports in
+            // src/libraries/embeddedLibraries.ts into ES module chunks under
+            // dist/chunks/. A bundler consuming the package makes them its own
+            // lazy chunks; a plain <script type="module"> fetches them
+            // relative to the module URL.
             coreEsm: {
                 entryPoints: [this.entryPoint],
                 bundle: true,
                 format: 'esm',
                 target: 'es2020',
-                outfile: path.join(this.distDir, 'agentlet-core.esm.js'),
+                outdir: this.distDir,
+                entryNames: 'agentlet-core.esm',
+                chunkNames: 'chunks/[name]-[hash]',
+                splitting: true,
                 minify: false,
                 sourcemap: true,
-                metafile: true
+                metafile: true,
+                define: libsDefine('split'),
+                // The only way an ES module can learn its own URL; read by
+                // src/libraries/LibraryUrls.ts.
+                banner: {
+                    js: 'const __AGENTLET_MODULE_URL__ = import.meta.url;'
+                }
             },
 
             bookmarklet: {
@@ -77,6 +156,9 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                // A javascript: URL has no script URL to resolve chunks
+                // against, so the bookmarklet carries everything.
+                define: libsDefine('inline'),
                 banner: {
                     js: 'javascript:(function(){'
                 },
@@ -95,6 +177,9 @@ class AgentletCoreBuilder {
                 minify: true,
                 sourcemap: false,
                 metafile: true,
+                // Content scripts run in an isolated world: a chunk loaded
+                // through a page script tag would not be visible to them.
+                define: libsDefine('inline'),
                 external: ['chrome']
             }
         };
@@ -205,21 +290,117 @@ class AgentletCoreBuilder {
      * `pdfWorkerUrl` resolution and to keep a host's copy of this file
      * indistinguishable from the one it could take directly from its own
      * `node_modules/pdfjs-dist/build/`.
+     *
+     * Also copies the `cmaps/` and `standard_fonts/` folders of the installed
+     * pdfjs-dist (same version as the bundled library), which PDFProcessor
+     * passes to pdf.js so it never fetches them from a third-party host.
      */
-    copyPDFJSWorker() {
+    copyPDFJSWorker(destDir = this.distDir) {
+        // buildAll() reaches this from several targets; copy once per folder.
+        this.copiedPdfAssets = this.copiedPdfAssets || new Set();
+        if (this.copiedPdfAssets.has(destDir)) {
+            return;
+        }
+        this.copiedPdfAssets.add(destDir);
+
         try {
-            const workerSrcPath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
-            const workerDestPath = path.join(this.distDir, 'pdf.worker.min.mjs');
+            const pdfjsDir = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist');
+            const workerSrcPath = path.join(pdfjsDir, 'build', 'pdf.worker.min.mjs');
+            const workerDestPath = path.join(destDir, 'pdf.worker.min.mjs');
 
             if (fs.existsSync(workerSrcPath)) {
+                fs.mkdirSync(destDir, { recursive: true });
                 fs.copyFileSync(workerSrcPath, workerDestPath);
                 console.log(`📄 PDF.js worker copied to: ${workerDestPath}`);
             } else {
                 console.warn('⚠️ PDF.js worker not found in node_modules, skipping copy');
             }
+
+            for (const folder of ['cmaps', 'standard_fonts']) {
+                const folderSrcPath = path.join(pdfjsDir, folder);
+                const folderDestPath = path.join(destDir, folder);
+                if (fs.existsSync(folderSrcPath)) {
+                    fs.rmSync(folderDestPath, { recursive: true, force: true });
+                    this.copyDirectoryRecursive(folderSrcPath, folderDestPath);
+                    console.log(`📄 PDF.js ${folder} copied to: ${folderDestPath}`);
+                } else {
+                    console.warn(`⚠️ PDF.js ${folder} not found in node_modules, skipping copy`);
+                }
+            }
         } catch (error) {
-            console.warn(`⚠️ Failed to copy PDF.js worker: ${error.message}`);
+            console.warn(`⚠️ Failed to copy PDF.js worker and assets: ${error.message}`);
         }
+    }
+
+    /**
+     * Build the on-demand library chunks (agentlet-xlsx.min.js,
+     * agentlet-html2canvas.min.js, agentlet-pdfjs.min.js): classic scripts
+     * the script builds of the core load on first use.
+     */
+    async buildChunks() {
+        console.log('🔨 Building on-demand library chunks...');
+        this.ensureDistDir();
+
+        try {
+            const result = await esbuild.build(this.configs.chunks);
+            this.writeMetafile('chunks', result.metafile);
+
+            const outputs = Object.values(LIBRARY_CHUNKS).map(chunk => {
+                const outputFile = path.join(this.distDir, `${chunk.out}.js`);
+                const size = fs.statSync(outputFile).size;
+                console.log(`   📦 ${path.basename(outputFile)}: ${describeSize(outputFile)}`);
+                return { outputFile, size };
+            });
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputs, size: outputs.reduce((sum, output) => sum + output.size, 0) };
+        } catch (error) {
+            console.error('❌ Chunk build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Build the single-file core (agentlet-core.full.min.js), which inlines
+     * SheetJS, pdf.js and html2canvas.
+     */
+    async buildCoreFull() {
+        console.log('🔨 Building Agentlet Core (single file, libraries inlined)...');
+        this.ensureDistDir();
+
+        const config = this.configs.coreFull;
+        try {
+            const result = await esbuild.build(config);
+            this.writeMetafile('agentlet-core.full.min', result.metafile);
+
+            const stats = fs.statSync(config.outfile);
+            console.log(`✅ Core (single file) built successfully`);
+            console.log(`   📦 Output: ${config.outfile}`);
+            console.log(`   📏 Size: ${describeSize(config.outfile)}`);
+
+            if (result.warnings && result.warnings.length > 0) {
+                console.warn('⚠️  Warnings:', result.warnings);
+            }
+
+            return { success: true, outputFile: config.outfile, size: stats.size };
+        } catch (error) {
+            console.error('❌ Single-file build failed:', error);
+            return { success: false, error };
+        }
+    }
+
+    /**
+     * Guard rail for the on-demand layout of dist/: the script builds of the
+     * core must not contain the libraries any more, and every file they load
+     * on demand must exist. See tools/verify-dist-chunks.mjs.
+     */
+    verifyDistChunks() {
+        const scriptPath = path.join(__dirname, 'verify-dist-chunks.mjs');
+        const result = spawnSync(process.execPath, [scriptPath], { stdio: 'inherit' });
+        return { success: result.status === 0 };
     }
 
     /**
@@ -272,7 +453,7 @@ class AgentletCoreBuilder {
             
             console.log(`✅ Core built successfully`);
             console.log(`   📦 Output: ${outputFile}`);
-            console.log(`   📏 Size: ${sizeKB} KB`);
+            console.log(`   📏 Size: ${minified ? describeSize(outputFile) : `${sizeKB} KB`}`);
             
             if (result.warnings && result.warnings.length > 0) {
                 console.warn('⚠️  Warnings:', result.warnings);
@@ -304,10 +485,13 @@ class AgentletCoreBuilder {
         const config = this.configs.coreEsm;
 
         try {
+            // Chunk names carry a content hash, so drop the previous build's.
+            fs.rmSync(path.join(this.distDir, 'chunks'), { recursive: true, force: true });
+
             const result = await esbuild.build(config);
             this.writeMetafile('agentlet-core.esm', result.metafile);
 
-            const outputFile = config.outfile;
+            const outputFile = path.join(this.distDir, 'agentlet-core.esm.js');
             const stats = fs.statSync(outputFile);
             const sizeKB = (stats.size / 1024).toFixed(2);
 
@@ -780,6 +964,8 @@ MIT
         
         try {
             const extensionDir = path.join(this.distDir, 'extension');
+            // Start clean so files from older builds never end up in the package
+            fs.rmSync(extensionDir, { recursive: true, force: true });
             this.ensureDir(extensionDir);
             
             // Build core library for extension
@@ -789,7 +975,7 @@ MIT
             // Copy extension files
             await this.copyExtensionFiles(extensionDir);
             
-            // Copy modules
+            // Copy the bundled modules (the only modules the extension can inject)
             await this.copyModules(extensionDir);
             
             // Generate extension package info
@@ -814,576 +1000,106 @@ MIT
 
     /**
      * Copy extension files
+     *
+     * The extension is least-privilege: everything it can ever inject is
+     * copied here from the repository, nothing is generated from templates
+     * and nothing is downloaded at runtime.
      */
     async copyExtensionFiles(extensionDir) {
         const extensionSrcDir = path.join(__dirname, '..', 'extension');
-        
-        // Files to copy
+
+        // Source files copied verbatim
         const filesToCopy = [
-            'manifest.json',
             'background.js',
-            'content.js'
+            'bootstrap.js',
+            'bundled-modules.js',
+            'popup.html',
+            'popup.js',
+            'options.html',
+            'options.js',
+            'welcome.html',
+            'welcome.js'
         ];
-        
+
         for (const file of filesToCopy) {
             const srcPath = path.join(extensionSrcDir, file);
-            const destPath = path.join(extensionDir, file);
-            
-            if (fs.existsSync(srcPath)) {
-                fs.copyFileSync(srcPath, destPath);
-                console.log(`   📄 Copied ${file}`);
+            if (!fs.existsSync(srcPath)) {
+                throw new Error(`Missing extension file: extension/${file}`);
             }
+            fs.copyFileSync(srcPath, path.join(extensionDir, file));
+            console.log(`   📄 Copied ${file}`);
         }
-        
-        // Copy PDF.js worker to extension directory
-        try {
-            const workerSrcPath = path.join(__dirname, '..', 'node_modules', 'pdfjs-dist', 'build', 'pdf.worker.min.mjs');
-            const workerDestPath = path.join(extensionDir, 'pdf.worker.min.mjs');
-            
-            if (fs.existsSync(workerSrcPath)) {
-                fs.copyFileSync(workerSrcPath, workerDestPath);
-                console.log(`   📄 Copied PDF.js worker`);
-            }
-        } catch (error) {
-            console.warn(`   ⚠️ Failed to copy PDF.js worker to extension: ${error.message}`);
+
+        // The manifest version always follows package.json
+        const manifest = JSON.parse(fs.readFileSync(path.join(extensionSrcDir, 'manifest.json'), 'utf8'));
+        const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+        manifest.version = packageJson.version;
+        fs.writeFileSync(path.join(extensionDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+        console.log(`   📄 Wrote manifest.json (version ${manifest.version})`);
+
+        // Icons
+        const iconsSrc = path.join(extensionSrcDir, 'icons');
+        const iconsDest = path.join(extensionDir, 'icons');
+        this.ensureDir(iconsDest);
+        for (const icon of fs.readdirSync(iconsSrc)) {
+            fs.copyFileSync(path.join(iconsSrc, icon), path.join(iconsDest, icon));
         }
-        
-        // Create additional extension files
-        await this.createExtensionUI(extensionDir);
-        await this.createExtensionIcons(extensionDir);
+        console.log('   🎨 Copied icons');
     }
 
     /**
-     * Copy modules to extension
+     * Read the list of bundled modules from extension/bundled-modules.js.
+     * The file is plain ES module source; it is evaluated here as data
+     * (an array of file names) with a regular expression, not executed.
+     */
+    readBundledModuleList() {
+        const listPath = path.join(__dirname, '..', 'extension', 'bundled-modules.js');
+        const source = fs.readFileSync(listPath, 'utf8');
+        const match = source.match(/export const BUNDLED_MODULES = \[([^\]]*)\];/);
+        if (!match) {
+            throw new Error('extension/bundled-modules.js must contain: export const BUNDLED_MODULES = [ ... ];');
+        }
+        const names = [...match[1].matchAll(/'([^']*)'|"([^"]*)"/g)].map(m => m[1] !== undefined ? m[1] : m[2]);
+        const stripped = match[1].replace(/'[^']*'|"[^"]*"|\/\/[^\n]*|\/\*[\s\S]*?\*\/|[\s,]/g, '');
+        if (stripped !== '') {
+            throw new Error('extension/bundled-modules.js: BUNDLED_MODULES may only contain string literals');
+        }
+        return names;
+    }
+
+    /**
+     * Copy the bundled modules into the extension. The list in
+     * extension/bundled-modules.js and the files in extension/modules/ must
+     * match exactly, so nothing unlisted is ever packaged.
      */
     async copyModules(extensionDir) {
+        const modulesSrc = path.join(__dirname, '..', 'extension', 'modules');
         const modulesDir = path.join(extensionDir, 'modules');
         this.ensureDir(modulesDir);
-        
-        // Copy example module
-        const exampleModuleSrc = path.join(__dirname, '..', 'examples', 'simple-test-module.js');
-        const exampleModuleDest = path.join(modulesDir, 'simple-test-module.js');
-        
-        if (fs.existsSync(exampleModuleSrc)) {
-            fs.copyFileSync(exampleModuleSrc, exampleModuleDest);
-            console.log('   📦 Copied simple-test-module.js');
-        }
-    }
 
-    /**
-     * Create extension UI files
-     */
-    async createExtensionUI(extensionDir) {
-        // Create popup.html
-        const popupHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            width: 300px;
-            height: 400px;
-            margin: 0;
-            padding: 15px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .logo {
-            font-size: 20px;
-            margin-right: 10px;
-        }
-        .title {
-            font-weight: 600;
-            color: #333;
-        }
-        .status {
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 6px;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-        }
-        .status.active {
-            background: #d4edda;
-            border-color: #c3e6cb;
-            color: #155724;
-        }
-        .actions {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .btn {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #0056b3;
-        }
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #545b62;
-        }
-        .footer {
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #e0e0e0;
-            font-size: 12px;
-            color: #6c757d;
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">🤖</div>
-        <div class="title">Agentlet Core</div>
-    </div>
-    
-    <div id="status" class="status">
-        <div id="status-text">Checking status...</div>
-    </div>
-    
-    <div class="actions">
-        <button id="toggle-btn" class="btn btn-primary">Activate on Page</button>
-        <button id="ai-assistant-btn" class="btn btn-secondary">AI Assistant</button>
-        <button id="settings-btn" class="btn btn-secondary">Settings</button>
-    </div>
-    
-    <div class="footer">
-        <div>Version 1.0.0</div>
-    </div>
-    
-    <script src="popup.js"></script>
-</body>
-</html>`;
-        
-        fs.writeFileSync(path.join(extensionDir, 'popup.html'), popupHtml.trim());
-        
-        // Create popup.js
-        const popupJs = `
-// Extension popup script
-class AgentletPopup {
-    constructor() {
-        this.currentTab = null;
-        this.init();
-    }
+        const listed = this.readBundledModuleList();
+        const onDisk = fs.existsSync(modulesSrc)
+            ? fs.readdirSync(modulesSrc).filter(name => !name.startsWith('.'))
+            : [];
 
-    async init() {
-        await this.getCurrentTab();
-        await this.updateStatus();
-        this.setupEventListeners();
-    }
-
-    async getCurrentTab() {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        this.currentTab = tab;
-    }
-
-    async updateStatus() {
-        const statusEl = document.getElementById('status');
-        const statusTextEl = document.getElementById('status-text');
-        const toggleBtn = document.getElementById('toggle-btn');
-
-        try {
-            const response = await chrome.runtime.sendMessage({ type: 'GET_TAB_STATE' });
-            const isActive = response.data?.agentletActive || false;
-
-            if (isActive) {
-                statusEl.classList.add('active');
-                statusTextEl.textContent = 'Active on this page';
-                toggleBtn.textContent = 'Deactivate';
-                toggleBtn.className = 'btn btn-secondary';
-            } else {
-                statusEl.classList.remove('active');
-                statusTextEl.textContent = 'Not active on this page';
-                toggleBtn.textContent = 'Activate on Page';
-                toggleBtn.className = 'btn btn-primary';
+        for (const name of listed) {
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.test(name)) {
+                throw new Error(`Invalid bundled module name: ${name}`);
             }
-        } catch (error) {
-            statusTextEl.textContent = 'Status unknown';
-            console.error('Failed to get tab state:', error);
+            if (!onDisk.includes(name)) {
+                throw new Error(`Bundled module listed but missing: extension/modules/${name}`);
+            }
         }
-    }
-
-    setupEventListeners() {
-        document.getElementById('toggle-btn').addEventListener('click', () => {
-            this.toggleAgentlet();
-        });
-
-        document.getElementById('ai-assistant-btn').addEventListener('click', () => {
-            this.activateAIAssistant();
-        });
-
-        document.getElementById('settings-btn').addEventListener('click', () => {
-            this.openSettings();
-        });
-    }
-
-    async toggleAgentlet() {
-        try {
-            await chrome.tabs.sendMessage(this.currentTab.id, { type: 'TOGGLE_AGENTLET' });
-            await this.updateStatus();
-        } catch (error) {
-            // Try injection through background script
-            await chrome.runtime.sendMessage({ 
-                type: 'TOGGLE_AGENTLET',
-                tabId: this.currentTab.id 
-            });
-            setTimeout(() => this.updateStatus(), 1000);
+        for (const name of onDisk) {
+            if (!listed.includes(name)) {
+                throw new Error(`extension/modules/${name} is not listed in extension/bundled-modules.js`);
+            }
+            fs.copyFileSync(path.join(modulesSrc, name), path.join(modulesDir, name));
+            console.log(`   📦 Copied module ${name}`);
         }
-    }
-
-    async activateAIAssistant() {
-        try {
-            await chrome.tabs.sendMessage(this.currentTab.id, { type: 'ACTIVATE_AI_ASSISTANT' });
-            window.close();
-        } catch (error) {
-            console.error('Failed to activate AI assistant:', error);
+        if (listed.length === 0) {
+            console.log('   📦 No bundled modules');
         }
-    }
-
-    async openSettings() {
-        await chrome.tabs.create({ 
-            url: chrome.runtime.getURL('options.html') 
-        });
-        window.close();
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    new AgentletPopup();
-});`;
-        
-        fs.writeFileSync(path.join(extensionDir, 'popup.js'), popupJs.trim());
-        
-        // Create options.html
-        const optionsHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Agentlet Core Settings</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        .logo {
-            font-size: 32px;
-            margin-right: 15px;
-        }
-        .section {
-            margin-bottom: 30px;
-            padding: 20px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-        }
-        .section h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        input, select, textarea {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            margin-right: 10px;
-        }
-        .btn-primary {
-            background: #007bff;
-            color: white;
-        }
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        .saved-notification {
-            padding: 10px;
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            border-radius: 4px;
-            color: #155724;
-            margin-bottom: 20px;
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="logo">🤖</div>
-        <div>
-            <h1>Agentlet Core Settings</h1>
-            <p>Configure your AI-powered web automation experience</p>
-        </div>
-    </div>
-
-    <div id="saved-notification" class="saved-notification">
-        Settings saved successfully!
-    </div>
-
-    <form id="settings-form">
-        <div class="section">
-            <h3>General Settings</h3>
-            
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="enabled"> Enable Agentlet Core
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="auto-activate"> Auto-activate on compatible pages
-                </label>
-            </div>
-            
-            
-            <div class="form-group">
-                <label for="theme">Theme:</label>
-                <select id="theme">
-                    <option value="default">Default</option>
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Advanced Settings</h3>
-            
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="debug-mode"> Enable debug mode
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <label for="trusted-domains">Trusted Domains (one per line):</label>
-                <textarea id="trusted-domains" rows="4" placeholder="example.com
-another-domain.com"></textarea>
-            </div>
-        </div>
-
-        <div class="section">
-            <h3>Modules</h3>
-            <p>Manage additional modules for enhanced functionality</p>
-            <div id="modules-list">
-                <!-- Modules will be populated here -->
-            </div>
-        </div>
-
-        <div>
-            <button type="submit" class="btn btn-primary">Save Settings</button>
-            <button type="button" id="reset-btn" class="btn btn-secondary">Reset to Defaults</button>
-        </div>
-    </form>
-
-    <script src="options.js"></script>
-</body>
-</html>`;
-        
-        fs.writeFileSync(path.join(extensionDir, 'options.html'), optionsHtml.trim());
-        
-        // Create options.js
-        const optionsJs = `
-// Extension options script
-class AgentletOptions {
-    constructor() {
-        this.form = document.getElementById('settings-form');
-        this.init();
-    }
-
-    async init() {
-        await this.loadSettings();
-        this.setupEventListeners();
-    }
-
-    async loadSettings() {
-        try {
-            const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-            const settings = response.data || {};
-
-            // Populate form fields
-            document.getElementById('enabled').checked = settings.enabled !== false;
-            document.getElementById('auto-activate').checked = settings.autoActivate !== false;
-            document.getElementById('theme').value = settings.theme || 'default';
-            document.getElementById('debug-mode').checked = settings.debugMode || false;
-            
-            const trustedDomains = settings.trustedDomains || [];
-            document.getElementById('trusted-domains').value = trustedDomains.join('\\n');
-
-            this.loadModules(settings.moduleRegistry || []);
-        } catch (error) {
-            console.error('Failed to load settings:', error);
-        }
-    }
-
-    loadModules(modules) {
-        const modulesList = document.getElementById('modules-list');
-        modulesList.innerHTML = '';
-
-        modules.forEach(module => {
-            const moduleDiv = document.createElement('div');
-            moduleDiv.style.cssText = 'padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;';
-            
-            moduleDiv.innerHTML = \`
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>\\\${module.name}</strong>
-                        \\\${module.builtin ? '<span style="color: #28a745;">(Built-in)</span>' : ''}
-                        <br>
-                        <small style="color: #666;">\\\${module.url}</small>
-                    </div>
-                    <label>
-                        <input type="checkbox" \\\${module.enabled !== false ? 'checked' : ''} 
-                               onchange="agentletOptions.toggleModule('\\\${module.name}', this.checked)">
-                        Enabled
-                    </label>
-                </div>
-            \`;
-            
-            modulesList.appendChild(moduleDiv);
-        });
-    }
-
-    setupEventListeners() {
-        this.form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveSettings();
-        });
-
-        document.getElementById('reset-btn').addEventListener('click', () => {
-            this.resetSettings();
-        });
-    }
-
-    async saveSettings() {
-        const settings = {
-            enabled: document.getElementById('enabled').checked,
-            autoActivate: document.getElementById('auto-activate').checked,
-            theme: document.getElementById('theme').value,
-            debugMode: document.getElementById('debug-mode').checked,
-            trustedDomains: document.getElementById('trusted-domains').value
-                .split('\\n')
-                .map(domain => domain.trim())
-                .filter(domain => domain.length > 0)
-        };
-
-        try {
-            await chrome.runtime.sendMessage({ 
-                type: 'UPDATE_SETTINGS', 
-                settings: settings 
-            });
-            
-            this.showSavedNotification();
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            alert('Failed to save settings');
-        }
-    }
-
-    async toggleModule(moduleName, enabled) {
-        // Implementation for toggling modules
-        console.log('Toggle module:', moduleName, enabled);
-    }
-
-    async resetSettings() {
-        if (confirm('Are you sure you want to reset all settings to defaults?')) {
-            await chrome.storage.sync.clear();
-            location.reload();
-        }
-    }
-
-    showSavedNotification() {
-        const notification = document.getElementById('saved-notification');
-        notification.style.display = 'block';
-        setTimeout(() => {
-            notification.style.display = 'none';
-        }, 3000);
-    }
-}
-
-// Global reference for inline event handlers
-let agentletOptions;
-
-document.addEventListener('DOMContentLoaded', () => {
-    agentletOptions = new AgentletOptions();
-});`;
-        
-        fs.writeFileSync(path.join(extensionDir, 'options.js'), optionsJs.trim());
-        
-        console.log('   📄 Created extension UI files');
-    }
-
-    /**
-     * Create extension icons
-     */
-    async createExtensionIcons(extensionDir) {
-        const iconsDir = path.join(extensionDir, 'icons');
-        this.ensureDir(iconsDir);
-        
-        // Create simple SVG icons (in a real project, you'd use proper PNG icons)
-        const iconSizes = [16, 32, 48, 128];
-        
-        iconSizes.forEach(size => {
-            const svg = `
-<svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <rect width="24" height="24" rx="4" fill="#007bff"/>
-    <text x="12" y="16" text-anchor="middle" fill="white" font-size="14" font-family="Arial">🤖</text>
-</svg>`;
-            
-            // For now, save as SVG (should be converted to PNG in production)
-            fs.writeFileSync(path.join(iconsDir, `icon-${size}.svg`), svg.trim());
-        });
-        
-        console.log('   🎨 Created extension icons (SVG placeholders)');
     }
 
     /**
@@ -1491,6 +1207,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const results = {
             core: await this.buildCore(false),
             coreMinified: await this.buildCore(true),
+            coreFull: await this.buildCoreFull(),
+            chunks: await this.buildChunks(),
             coreEsm: await this.buildCoreEsm(),
             bookmarklet: await this.buildBookmarklet(),
             extension: await this.buildExtension()
@@ -1504,6 +1222,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Guard rail: make sure the just-built dist/agentlet-core.js and
         // dist/agentlet-core.esm.js still load under plain Node (no jsdom).
         results.nodeImport = this.verifyNodeImport();
+
+        // Guard rail: the script builds must not contain the on-demand
+        // libraries, and every file they load on demand must exist.
+        results.distChunks = this.verifyDistChunks();
 
         console.log('\n📋 Build Summary:');
         Object.entries(results).forEach(([target, result]) => {
@@ -1539,7 +1261,7 @@ Usage:
   node build.js [options]
 
 Options:
-  --target=<target>     Build specific target (core, bookmarklet, extension, all)
+  --target=<target>     Build specific target (core, esm, full, chunks, bookmarklet, extension, all)
   --minified           Build minified version
   --module=<name>      Generate module template
   --package            Package extension for distribution
@@ -1547,8 +1269,11 @@ Options:
 
 Examples:
   node build.js                           # Build all targets
-  node build.js --target=core             # Build core only
-  node build.js --target=core --minified  # Build minified core
+  node build.js --target=core             # Build core and its on-demand library chunks
+  node build.js --target=core --minified  # Build minified core and its chunks
+  node build.js --target=esm              # Build the ES module core and its dist/chunks/
+  node build.js --target=full             # Build the single-file core (libraries inlined)
+  node build.js --target=chunks           # Build the on-demand library chunks only
   node build.js --target=bookmarklet      # Build bookmarklet
   node build.js --target=extension        # Build Chrome extension
   node build.js --target=extension --package  # Build and package extension
@@ -1569,14 +1294,30 @@ Examples:
             switch (target) {
                 case 'core':
                     await builder.buildCore(minified);
+                    await builder.buildChunks();
+                    break;
+                case 'esm':
+                    await builder.buildCoreEsm();
+                    break;
+                case 'full':
+                    await builder.buildCoreFull();
+                    break;
+                case 'chunks':
+                    await builder.buildChunks();
                     break;
                 case 'bookmarklet':
                     await builder.buildBookmarklet();
                     break;
                 case 'extension':
                     const result = await builder.buildExtension();
-                    if (result.success && packageExtension) {
-                        await builder.packageExtension();
+                    if (!result.success) {
+                        process.exit(1);
+                    }
+                    if (packageExtension) {
+                        const packaged = await builder.packageExtension();
+                        if (!packaged.success) {
+                            process.exit(1);
+                        }
                     }
                     break;
                 case 'all':

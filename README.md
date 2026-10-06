@@ -31,7 +31,7 @@ There is nothing to deploy on the server side, apart from a backend or proxy for
 - Module architecture with a predictable lifecycle (`initModule`, `activateModule`, `cleanupModule`) plus optional `mount`/`unmount` hooks for mounting a UI framework root
 - Optional authentication through an identity provider
 - Scaffolding tools for new agentlets
-- One large bundle: html2canvas, pdf.js and SheetJS are included (see [Size](#size))
+- Large optional libraries: html2canvas, pdf.js and SheetJS are separate files, downloaded the first time a screenshot, a PDF or an Excel export needs them (see [Size](#size))
 
 ## The agentlet ecosystem
 
@@ -199,7 +199,8 @@ class MyModule extends Module {
     constructor() {
         super({
             name: 'my-module',
-            patterns: 'example.com' // matches any URL containing this string
+            patterns: 'example.com', // example.com and its subdomains
+            matchMode: 'host'
         });
     }
 
@@ -212,6 +213,22 @@ const agentlet = new AgentletCore();
 await agentlet.init();
 agentlet.modules.register(new MyModule());
 ```
+
+### Matching URLs
+
+`patterns` decides on which pages a module is active. With `matchMode: 'host'`, a string pattern is compared with the host of the page URL:
+
+| Pattern | Matches | Does not match |
+|---|---|---|
+| `'example.com'` | `https://example.com/`, `https://app.example.com/x` | `https://example.com.evil.test/`, `https://notexample.com/`, `https://evil.test/?q=example.com` |
+| `'localhost:3000'` | `http://localhost:3000/` | `http://localhost:3001/` |
+| `'example.com/app'` | `https://example.com/app/users` | `https://example.com/apple` |
+| `'https://example.com'` | `https://example.com/` | `http://example.com/` |
+| `'file://'` | any `file:` URL | |
+
+Matching is case-insensitive and internationalized names work in either form. The port is ignored unless the pattern names one. `'*'` still matches every page. Object patterns (`{ type: 'includes' | 'exact' | 'regex', value }`) are not affected by `matchMode`, so `{ type: 'includes', value: '/internal/' }` is the way to match a fragment of the URL.
+
+The default, `matchMode: 'substring'`, is unchanged in 2.x: a string pattern matches any URL that contains it, so `'example.com'` also matches `https://evil.test/?q=example.com` and `https://example.com.evil.test/`. **Host matching becomes the default in agentlet-core 3.0.** Set `matchMode: 'host'` now, or `matchMode: 'substring'` to keep today's behaviour after 3.0. With `debugMode` on, a string pattern that looks like a host and is used in substring mode logs a one-time warning that points to this option.
 
 ## Getting started
 
@@ -233,20 +250,50 @@ Full documentation lives at **[agentlet.io/docs](https://agentlet.io/docs/)**, i
 
 An agentlet runs inside the host page, with the page's privileges, and is not sandboxed. Any other script on that page can read `window.agentlet` and the environment variables it keeps in `localStorage`, including `OPENAI_API_KEY`. For anything beyond local experiments, point `OPENAI_BASE_URL` at a proxy on your backend so the real provider key never reaches the browser. [SECURITY.md](SECURITY.md) describes the threat model, what data leaves the page, and how to report a vulnerability.
 
-The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package.
+The browser extension in `extension/` is an unpublished experiment. It is not on any extension store and is not part of the npm package. It is built to need little trust: it asks for `activeTab`, `scripting` and `storage` only, has no host permissions and no content script, injects the bundled core into a tab only when you click or press its shortcut, and runs only modules shipped inside the package, never code fetched from a URL.
 
 ## Size
 
-The package ships built files in `dist/`: `agentlet-core.js` (IIFE global, also used by `require`), `agentlet-core.esm.js` (ES module), `agentlet-core.min.js` (minified IIFE), `agentlet-core.d.ts` (TypeScript declarations) and `pdf.worker.min.mjs` (the pdf.js worker). There are no sourcemaps, no browser extension bundle and no bookmarklet HTML in the package. A bundler only needs to resolve and include it as-is.
+The package ships built files in `dist/`:
 
-Measured on version 2.2.0:
+- `agentlet-core.js` (IIFE global, also used by `require`), `agentlet-core.min.js` (minified IIFE) and `agentlet-core.esm.js` (ES module): the core alone. SheetJS, html2canvas and pdf.js are not inlined in them. Each one is loaded the first time a feature needs it: the first Excel export, screenshot or PDF conversion.
+- `agentlet-xlsx.min.js`, `agentlet-html2canvas.min.js` and `agentlet-pdfjs.min.js`: those three libraries as separate files, which the two IIFE builds load next to the core script. The ES module build reaches them through the ES modules in `dist/chunks/` instead, which a bundler turns into its own lazy chunks.
+- `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/`: the files pdf.js fetches while it converts a PDF, from the same `pdfjs-dist` version as the bundled library. Nothing is requested from a third-party host.
+- `agentlet-core.full.min.js`: the core with all three libraries inlined, as one self-contained file for hosts that cannot serve several files. It registers them while `init()` runs, like the single `agentlet-core.min.js` did before on-demand loading.
+- `agentlet-core.d.ts`: the TypeScript declarations.
 
-| File | Size | Gzip |
-|---|---|---|
-| `dist/agentlet-core.min.js` | 1.30 MB | 378 KB |
-| `dist/pdf.worker.min.mjs` (separate file, only needed for PDFs) | 1.04 MB | 286 KB |
+There are no sourcemaps, no browser extension bundle and no bookmarklet HTML in the package.
 
-The npm tarball is 1.8 MB (7.9 MB unpacked, because it also holds the unminified IIFE and ESM builds). In `agentlet-core.min.js`, by minified bytes, SheetJS is about 33%, pdf.js 29%, agentlet's own code 21% and html2canvas 16%. Every dependency is bundled into one file and none is loaded on demand, so a bookmarklet pays the full download on each page where it is used, and the browser may cache it between pages.
+Measured on the build that introduced on-demand loading, with SheetJS 0.20.3 (minified, size in bytes divided by 1000, gzip from `gzip -c file | wc -c`). Before it, `agentlet-core.min.js` was 1.38 MB, 398 KB gzipped (version 2.3.0), and every page paid for all of it.
+
+| File | Size | Gzip | Downloaded |
+|---|---|---|---|
+| `dist/agentlet-core.min.js` (the core alone) | 292 KB | 76 KB | always |
+| `dist/agentlet-xlsx.min.js` (SheetJS) | 503 KB | 162 KB | first Excel export |
+| `dist/agentlet-html2canvas.min.js` | 205 KB | 48 KB | first screenshot |
+| `dist/agentlet-pdfjs.min.js` (pdf.js) | 381 KB | 113 KB | first PDF conversion |
+| `dist/pdf.worker.min.mjs` | 1.04 MB | 286 KB | first PDF conversion |
+| `dist/cmaps/`, 169 files | 1.17 MB in total | | only the character maps a PDF needs |
+| `dist/standard_fonts/`, 16 files | 0.78 MB in total | | only the standard fonts a PDF needs |
+| `dist/agentlet-core.full.min.js` (everything inlined) | 1.39 MB | 401 KB | always |
+
+A page that never exports to Excel, captures or converts a PDF downloads 76 KB gzipped instead of 398 KB. The npm tarball is 3.2 MB (9.1 MB unpacked, because it also holds the unminified IIFE and ESM builds, and the character maps and fonts).
+
+### Where the files are loaded from
+
+The IIFE builds resolve every on-demand file relative to the core script's own URL, so a host that serves the files of `dist/` together needs no setting, whether it loads the core from a CDN with a `<script>` tag or from its own server. The script tag the loader injects has no `crossorigin` attribute, so the server needs no CORS headers beyond what the core script itself needs. Set these `AgentletCore` options when the files live elsewhere:
+
+| Option | Use |
+|---|---|
+| `libraryBaseUrl` | Folder URL that serves the chunk files, `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/`. Needed when the core is evaluated without a script URL (a `fetch()` plus `eval()` loader), is bundled into the host's own script, or the files are served from another place. Falls back to the folder of `registryUrl`, and to the extension root inside a browser extension. |
+| `libraryUrls` | Per-library chunk URL, for example `{ xlsx: 'https://static.example.com/sheetjs.js' }`. |
+| `pdfWorkerUrl` | URL of `pdf.worker.min.mjs`. |
+| `pdfCMapUrl`, `pdfStandardFontsUrl` | URL of the folder with the character maps or the standard fonts. |
+| `preloadLibraries` | `['xlsx', 'html2canvas', 'pdfjs']`, or a subset: load them while `init()` runs instead of on first use, so `window.XLSX`, `window.html2canvas` and `window.pdfjsLib` exist once it resolves. |
+
+A failed load rejects with the URL it tried and the option to change. The ES module build needs none of the first two options: `import()` of its chunks resolves relative to the module, and a bundler (webpack, Vite, Rollup) handles them like any other lazy import. The PDF files are plain files, not modules: copy `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/` to where the app serves its assets and point `pdfWorkerUrl`, `pdfCMapUrl` and `pdfStandardFontsUrl` at them (a bundler rewrites the module URL, so there is nothing to derive them from; a page that loads `agentlet-core.esm.js` directly from the folder that serves them needs no option). The bookmarklet build (`dist/bookmarklet.js`, generated by `npm run build`) and the browser extension bundle carry all three libraries inline, as `agentlet-core.full.min.js` does.
+
+`window.XLSX`, `window.html2canvas` and `window.pdfjsLib` are no longer defined right after `init()` unless you list them in `preloadLibraries` (or use `agentlet-core.full.min.js`). The asynchronous APIs (`tables.download()`, `ScreenCapture`, `ai.convertPDFToImages()` and the others) load what they need themselves. `TableExtractor.createExcelWorkbook()` is synchronous: call `await window.agentlet.tables.extractor.ensureXLSX()` first, or preload `xlsx`.
 
 ## Credits and acknowledgments
 

@@ -6,7 +6,20 @@
 
 import { LibraryLoader } from './LibraryLoader.js';
 import type { LibraryRegistryConfig } from './LibraryLoader.js';
-import type { LibrarySetupAPI } from '../types/public-api';
+import { getEmbeddedImporters, getLibraryMode } from './embeddedLibraries.js';
+import {
+    LIBRARY_CHUNK_FILES,
+    ON_DEMAND_LIBRARIES,
+    PDF_CMAPS_DIR,
+    PDF_STANDARD_FONTS_DIR,
+    PDF_WORKER_FILE,
+    getLibraryBaseUrl,
+    resolveAgainstPage,
+    resolveLibraryChunkUrl,
+    resolveLibraryFileUrl
+} from './LibraryUrls.js';
+import type { OnDemandLibraryName } from './LibraryUrls.js';
+import type { LibrarySetupAPI, PDFAssetUrls } from '../types/public-api';
 import { logger } from '../utils/system/Logger.js';
 
 /** Constructor config. A subset of `AgentletCoreConfig` (see `src/types/public-api.d.ts`), which is what `src/index.ts` actually passes in. */
@@ -16,15 +29,35 @@ export interface LibrarySetupConfig {
     /**
      * URL of the `pdf.worker.min.mjs` file matching the bundled `pdfjs-dist`
      * version. Applied to `pdfjsLib.GlobalWorkerOptions.workerSrc` every time
-     * `setupPDFJS()` runs, including when `window.pdfjsLib` was already set
-     * before this runs (the common case in a bundled build - see
-     * `setupPDFJS()`). Without it, the worker resolves to the default
-     * `'./pdf.worker.min.mjs'`, relative to the *page's* URL - set this
-     * explicitly whenever the page is not served from the same path as the
-     * core bundle and the `dist/pdf.worker.min.mjs` copied next to it.
+     * `setupPDFJS()` runs. Without it the worker is looked up next to the core
+     * script (or in `libraryBaseUrl`), see `resolvePDFWorkerSrc()`.
      */
     pdfWorkerUrl?: string;
     registryUrl?: string;
+    /**
+     * Folder URL holding the on-demand library files: `agentlet-xlsx.min.js`,
+     * `agentlet-html2canvas.min.js`, `agentlet-pdfjs.min.js`,
+     * `pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/`. Defaults to the
+     * folder the core script was loaded from (see `LibraryUrls.ts`).
+     */
+    libraryBaseUrl?: string;
+    /** Per-library chunk URL, overriding `libraryBaseUrl` for that one file. */
+    libraryUrls?: Partial<Record<OnDemandLibraryName, string>>;
+    /** URL of the folder with the PDF.js character maps (`cmaps/`). */
+    pdfCMapUrl?: string;
+    /** URL of the folder with the PDF.js standard fonts (`standard_fonts/`). */
+    pdfStandardFontsUrl?: string;
+    /** Libraries to load while `init()` runs instead of on first use, so `window.XLSX` and friends exist once it resolves. */
+    preloadLibraries?: OnDemandLibraryName[];
+}
+
+function isOnDemandLibrary(name: string): name is OnDemandLibraryName {
+    return (ON_DEMAND_LIBRARIES as readonly string[]).includes(name);
+}
+
+/** Message of anything thrown, for log lines. */
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -109,11 +142,14 @@ function getLibraryGlobals(): LibraryGlobalsWindow {
 export class LibrarySetup implements LibrarySetupAPI {
     config: LibrarySetupConfig;
     libraryLoader: LibraryLoader | null;
+    /** Loader for the on-demand libraries of a non-registry setup, created on first use. */
+    onDemandLoader: LibraryLoader | null;
     loadingMode: 'bundled' | 'registry';
 
     constructor(config: LibrarySetupConfig = {}) {
         this.config = config;
         this.libraryLoader = null;
+        this.onDemandLoader = null;
         this.loadingMode = config.loadingMode || 'bundled'; // 'bundled' or 'registry'
     }
 
@@ -123,7 +159,10 @@ export class LibrarySetup implements LibrarySetupAPI {
      */
     initializeRegistryLoader(registryConfig: LibraryRegistryConfig = {}): void {
         if (this.loadingMode === 'registry') {
-            this.libraryLoader = new LibraryLoader(registryConfig);
+            this.libraryLoader = new LibraryLoader({
+                ...registryConfig,
+                onLoaded: registryConfig.onLoaded || ((name, library) => this.handleLibraryLoaded(name, library))
+            });
             logger.log('📚 Registry-based library loading enabled');
         }
     }
@@ -194,43 +233,62 @@ export class LibrarySetup implements LibrarySetupAPI {
     }
 
     /**
-     * Resolve the PDF.js worker URL: an explicit `config.pdfWorkerUrl` wins,
-     * then one derived from `config.registryUrl` (replacing its last path
-     * segment), then the default `'./pdf.worker.min.mjs'` - the module
-     * worker file pdfjs-dist 5.x ships, which `tools/build.js` copies next to
-     * the built core bundle in `dist/` (and into the npm package's `files`).
-     * That default resolves relative to the *page's* URL, not to wherever
-     * the core script itself is served from, so a host serving its page from
-     * a different path must set `pdfWorkerUrl` explicitly.
+     * Resolve the PDF.js worker URL, first match wins:
+     *
+     * 1. `config.pdfWorkerUrl`.
+     * 2. The registry loader's `pdfjs-worker` entry (registry mode).
+     * 3. `pdf.worker.min.mjs` inside the library folder: `config.libraryBaseUrl`,
+     *    else the folder the core script was loaded from, else the folder of
+     *    `config.registryUrl` (see `LibraryUrls.ts`). The npm package and the
+     *    release assets ship the file next to the core bundle, so a host that
+     *    serves the whole `dist/` folder needs no configuration.
+     * 4. `'./pdf.worker.min.mjs'`, which resolves relative to the *page's* URL
+     *    and is only a last resort.
+     *
+     * A relative `registryUrl` (e.g. '/cdn/v1/agentlets-registry.js', as
+     * agentlet.io configures) is resolved against the page, so it derives an
+     * absolute worker URL instead of throwing.
      */
     resolvePDFWorkerSrc(): string {
         if (this.config.pdfWorkerUrl) {
             return this.config.pdfWorkerUrl;
         }
 
-        if (this.config.registryUrl) {
-            // Resolved against the page's URL (falling back to an absolute
-            // parse when there is no `window`, e.g. this module evaluated
-            // outside a DOM) so a *relative* registryUrl - e.g.
-            // '/cdn/v1/agentlets-registry.js', as agentlet.io configures -
-            // derives an absolute worker URL instead of `new URL()` throwing
-            // on it. A host that serves its registry next to the core script
-            // and the worker then needs no `pdfWorkerUrl` at all.
-            // e.g. (absolute) https://example.com/static/agentlets-registry.json -> https://example.com/static/pdf.worker.min.mjs
-            // e.g. (relative, resolved against the page) /cdn/v1/agentlets-registry.js -> https://agentlet.io/cdn/v1/pdf.worker.min.mjs
-            try {
-                const pageUrl = typeof window !== 'undefined' && window.location ? window.location.href : undefined;
-                const registryUrl = pageUrl
-                    ? new URL(this.config.registryUrl, pageUrl)
-                    : new URL(this.config.registryUrl);
-                registryUrl.pathname = registryUrl.pathname.replace(/[^/]+$/, 'pdf.worker.min.mjs');
-                return registryUrl.toString();
-            } catch (error) {
-                console.warn('Failed to derive PDF worker URL from registry URL:', error);
-            }
+        const registryWorkerUrl = this.libraryLoader?.getLibraryUrl('pdfjs-worker');
+        if (registryWorkerUrl) {
+            return registryWorkerUrl;
         }
 
-        return './pdf.worker.min.mjs';
+        const derived = resolveLibraryFileUrl(PDF_WORKER_FILE, this.config);
+        if (derived) {
+            return derived;
+        }
+
+        return `./${PDF_WORKER_FILE}`;
+    }
+
+    /**
+     * Absolute URLs of the PDF.js character maps and standard fonts, which
+     * ship next to the core bundle as `cmaps/` and `standard_fonts/` and are
+     * resolved like the worker. Absolute because pdf.js hands them to its
+     * worker, where a relative URL would resolve against the worker file
+     * instead of the page. A value is undefined when no location can be
+     * determined; PDF conversion then runs without it (only PDFs that rely on
+     * non-embedded CJK fonts or standard fonts are affected) and there is
+     * never a request to a third-party host.
+     */
+    getPDFAssetUrls(): PDFAssetUrls {
+        const folder = (override: string | undefined, dir: string): string | undefined => {
+            const url = override ? resolveAgainstPage(override) ?? override : resolveLibraryFileUrl(dir, this.config);
+            if (!url) {
+                return undefined;
+            }
+            return url.endsWith('/') ? url : `${url}/`;
+        };
+        return {
+            cMapUrl: folder(this.config.pdfCMapUrl, PDF_CMAPS_DIR),
+            standardFontDataUrl: folder(this.config.pdfStandardFontsUrl, PDF_STANDARD_FONTS_DIR)
+        };
     }
 
     /**
@@ -294,13 +352,22 @@ export class LibrarySetup implements LibrarySetupAPI {
     }
 
     /**
-     * Load a library dynamically (for registry mode)
+     * Load a library dynamically. In registry mode this goes through the
+     * registry loader. Otherwise only the on-demand libraries (`xlsx`,
+     * `html2canvas`, `pdfjs`) can be loaded; anything else resolves to
+     * whether it is already available.
      * @param name - Library name
      */
     async loadLibrary(name: string): Promise<boolean> {
         if (this.loadingMode === 'bundled') {
-            // In bundled mode, libraries should already be available
-            return this.isLibraryAvailable(name);
+            if (this.isLibraryAvailable(name)) {
+                return true;
+            }
+            if (isOnDemandLibrary(name)) {
+                await this.loadOnDemand(name);
+                return true;
+            }
+            return false;
         }
 
         if (!this.libraryLoader) {
@@ -331,7 +398,30 @@ export class LibrarySetup implements LibrarySetupAPI {
     }
 
     /**
-     * Ensure a library is available (load if needed)
+     * Whether a library is loaded or can be loaded on demand: true when it is
+     * already available, is part of this build, or a URL for it is known.
+     * Synchronous feature checks (`isExcelExportAvailable()`, ...) use this.
+     * @param name - Library name
+     */
+    canLoadLibrary(name: string): boolean {
+        if (this.isLibraryAvailable(name)) {
+            return true;
+        }
+        if (this.loadingMode === 'registry') {
+            const loader = this.libraryLoader;
+            return !!loader && (!!loader.importers[name] || loader.getLibraryUrl(name) !== null);
+        }
+        if (!isOnDemandLibrary(name)) {
+            return false;
+        }
+        return !!getEmbeddedImporters()[name] || !!resolveLibraryChunkUrl(name, this.config);
+    }
+
+    /**
+     * Ensure a library is available (load if needed). Rejects with an error
+     * that names the URL and how to change it when an on-demand library cannot
+     * be loaded; resolves false for a library that is neither available nor
+     * loadable here (`hotkeys`, unknown names).
      * @param name - Library name
      */
     async ensureLibrary(name: string): Promise<boolean> {
@@ -339,10 +429,126 @@ export class LibrarySetup implements LibrarySetupAPI {
             return true;
         }
 
-        if (this.loadingMode === 'registry' && this.libraryLoader) {
-            return await this.libraryLoader.loadLibrary(name);
+        if (this.loadingMode === 'registry') {
+            if (this.libraryLoader) {
+                return await this.libraryLoader.loadLibrary(name);
+            }
+            return false;
+        }
+
+        if (isOnDemandLibrary(name)) {
+            await this.loadOnDemand(name);
+            return true;
         }
 
         return false;
+    }
+
+    /**
+     * Load the given libraries now instead of on first use (default: the
+     * `preloadLibraries` config, which in a single-file build is every
+     * on-demand library). Use it before calling an API that cannot wait for a
+     * load, such as the synchronous `TableExtractor.createExcelWorkbook()`.
+     * Never rejects: a failure is logged and surfaces again when the library
+     * is actually used.
+     */
+    async preloadLibraries(names?: string[]): Promise<void> {
+        const requested = names ?? this.getDefaultPreload();
+        await Promise.all(requested.map(async (name) => {
+            if (!isOnDemandLibrary(name)) {
+                console.warn(`Cannot preload unknown library '${name}'. Known libraries: ${ON_DEMAND_LIBRARIES.join(', ')}.`);
+                return;
+            }
+            try {
+                await this.ensureLibrary(name);
+            } catch (error) {
+                console.warn(`Could not preload library '${name}':`, messageOf(error));
+            }
+        }));
+    }
+
+    private getDefaultPreload(): string[] {
+        if (this.config.preloadLibraries) {
+            return this.config.preloadLibraries;
+        }
+        // A single-file build always carried every library and registered it
+        // during init(), so window.XLSX etc. exist once init() resolves. Keep
+        // that there; the script and ES module builds load on first use.
+        return this.loadingMode === 'bundled' && getLibraryMode() === 'inline' ? [...ON_DEMAND_LIBRARIES] : [];
+    }
+
+    /**
+     * Load an on-demand library with the loader of this setup: the embedded
+     * module in an ES module or single-file build, the chunk script in a script
+     * build.
+     */
+    private async loadOnDemand(name: OnDemandLibraryName): Promise<void> {
+        const loader = this.getOnDemandLoader();
+        if (!loader.importers[name] && !loader.getLibraryUrl(name)) {
+            throw new Error(
+                `Cannot load '${name}' on demand: the location of ${LIBRARY_CHUNK_FILES[name]} is unknown ` +
+                '(the core script URL could not be detected). Set `libraryBaseUrl` in the AgentletCore config to the folder that ' +
+                `serves the files of dist/, or \`libraryUrls.${name}\` to the file itself.`
+            );
+        }
+
+        await loader.loadLibrary(name);
+
+        if (!this.isLibraryAvailable(name)) {
+            throw new Error(
+                `Library '${name}' was loaded from ${loader.getLibraryUrl(name) ?? 'its module'} but did not define its global. ` +
+                `Check that the file is ${LIBRARY_CHUNK_FILES[name]} from the same agentlet-core version.`
+            );
+        }
+    }
+
+    private getOnDemandLoader(): LibraryLoader {
+        if (!this.onDemandLoader) {
+            const importers = getEmbeddedImporters();
+            const libraries: Record<string, string> = {};
+            for (const name of ON_DEMAND_LIBRARIES) {
+                const url = importers[name] ? undefined : resolveLibraryChunkUrl(name, this.config);
+                if (url) {
+                    libraries[name] = url;
+                }
+            }
+            const baseUrl = getLibraryBaseUrl(this.config);
+            this.onDemandLoader = new LibraryLoader({
+                libraries,
+                importers: importers as Record<string, () => Promise<unknown>>,
+                // A plain script tag, like the one that loaded the core: a
+                // crossorigin attribute would demand CORS headers from hosts
+                // that serve the core without them.
+                crossOrigin: null,
+                loadFailureHint: baseUrl
+                    ? `The library files are looked up in ${baseUrl}; set \`libraryBaseUrl\` (or \`libraryUrls\`) in the AgentletCore config if they are served elsewhere.`
+                    : 'Set `libraryBaseUrl` (or `libraryUrls`) in the AgentletCore config to where the files of dist/ are served.',
+                onLoaded: (name, library) => this.handleLibraryLoaded(name, library)
+            });
+        }
+        return this.onDemandLoader;
+    }
+
+    /**
+     * Run the same setup a bundled library gets once a loader has produced it
+     * (the global assignment, and the worker URL for pdf.js).
+     */
+    private handleLibraryLoaded(name: string, library: unknown): void {
+        const globals = getLibraryGlobals();
+        switch (name) {
+        case 'xlsx':
+            if (library !== undefined) this.setupXLSX(library);
+            break;
+        case 'html2canvas':
+            if (library !== undefined) this.setupHTML2Canvas(library);
+            break;
+        case 'pdfjs': {
+            const pdfjsLib = (library as PdfjsLibModule | undefined) ?? globals.pdfjsLib;
+            if (pdfjsLib) this.setupPDFJS(pdfjsLib);
+            break;
+        }
+        default:
+            break;
+        }
     }
 }

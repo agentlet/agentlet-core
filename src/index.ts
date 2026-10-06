@@ -15,6 +15,7 @@ import { LocalStorageEnvironmentVariablesManager } from './utils/config-persiste
 import CookieManager from './utils/config-persistence/CookieManager.js';
 import StorageManager from './utils/config-persistence/StorageManager.js';
 import { Z_INDEX } from './utils/ui/ZIndex.js';
+import { escapeHtml, sanitizeUrl } from './utils/ui/safeHtml.js';
 import AuthManager from './utils/system/AuthManager.js';
 import FormExtractor from './utils/data-processing/FormExtractor.js';
 import FormFiller from './utils/data-processing/FormFiller.js';
@@ -32,23 +33,13 @@ import { UIManager } from './ui/UIManager.js';
 import { PanelManager } from './ui/PanelManager.js';
 import { GlobalAPI } from './core/GlobalAPI.js';
 
-// External libraries
-import * as XLSX from 'xlsx';
-import html2canvas from 'html2canvas';
+// External libraries. Only hotkeys-js is inlined: SheetJS, html2canvas and
+// pdfjs-dist are loaded on demand by LibrarySetup (see
+// src/libraries/embeddedLibraries.ts for how each build obtains them), so
+// none of them is imported here. Evaluating pdfjs-dist touches browser globals
+// (`DOMMatrix`, ...), so it must never be statically imported: a plain
+// `require('agentlet-core')` under Node (SSR, tooling, tests) would crash.
 import hotkeys from 'hotkeys-js';
-// `pdfjs-dist` is intentionally NOT statically imported here (unlike the
-// libraries above): evaluating it touches browser globals (`DOMMatrix`, ...)
-// as a side effect of the module body itself, before any of its exports are
-// even used. A static `import * as pdfjsLib from 'pdfjs-dist'` therefore
-// crashes a plain `require('agentlet-core')`/`import('agentlet-core')` under
-// Node (SSR, tooling, tests) with `ReferenceError: DOMMatrix is not defined`,
-// even though nothing browser-specific has happened yet - only
-// `new AgentletCore().init()` (which requires a browser) actually needs
-// PDF.js. It's loaded lazily via `await import('pdfjs-dist')` inside init()
-// instead, right before `librarySetup.initializeAll(...)`. In the single-file
-// esbuild bundles (no code splitting - see tools/build.js) this compiles to a
-// lazily-evaluated module inlined in the same output file: pdf.js is part of
-// dist/, its code just isn't executed until init() runs.
 
 import type {
     AgentletAPI,
@@ -86,22 +77,6 @@ type ModuleWithInternalMountHooks = AgentletModule & {
     _beforeMount?(container: HTMLElement, context: ModuleMountContext): void;
     _afterUnmount?(): void;
 };
-
-/**
- * `showEnvVarsDialog()` below stashes two short-lived callbacks on `window`
- * for the inline `onclick="addEnvVar()"`/`onclick="removeEnvVar('key')"`
- * handlers in the dialog's HTML (see `generateEnvVarsListHTML()`), then
- * removes them again once the dialog closes. These are internal
- * implementation details of that one dialog, not part of the public
- * `window.agentlet` surface documented in `AgentletAPI`, so they are
- * declared here instead of in `src/types/public-api.d.ts`.
- */
-declare global {
-    interface Window {
-        removeEnvVar?: (key: string) => void;
-        addEnvVar?: () => void;
-    }
-}
 
 /**
  * Main Agentlet Core application class
@@ -146,22 +121,16 @@ class AgentletCore {
      */
     shortcutManager: ShortcutManager | null;
     /**
-     * Definite assignment assertion (`!`). `librarySetup` is assigned further
-     * down the constructor than `tableExtractor`/`aiManager`/`shortcutManager`,
-     * all three of which receive it as a constructor argument - so at that
-     * point `this.librarySetup` is still `undefined`, and each of those
-     * constructors' own `= null` default parameter kicks in instead (passing
-     * `undefined` explicitly triggers a default parameter the same as
-     * omitting the argument). TypeScript's "used before being assigned"
-     * check flags this ordering; the assertion keeps the statement order as
-     * it is.
+     * Created before `tableExtractor`, `aiManager` and `shortcutManager`, which
+     * receive it as a constructor argument and use it to load SheetJS, PDF.js
+     * and hotkeys-js on demand.
      *
      * Typed as the concrete class (not the narrower, agentlet-author-facing
      * `LibrarySetupAPI` from public-api.d.ts) because `init()` calls
      * `initializeAll()`, framework-internal wiring `LibrarySetupAPI`
      * intentionally omits.
      */
-    librarySetup!: LibrarySetup;
+    librarySetup: LibrarySetup;
     isMinimized: boolean;
     themeManager: ThemeManagerAPI;
     /**
@@ -200,6 +169,21 @@ class AgentletCore {
      */
     boundEnvChangeListener: ((key: string, newValue: string | undefined, oldValue: string | undefined) => void) | null;
 
+    /**
+     * Validates the `minimizeWithImage` URL: only http(s), `data:image/...`
+     * and relative URLs are kept, anything else (e.g. `javascript:`) is
+     * dropped with a warning, as if the option was not set.
+     */
+    static safeMinimizeImage(value: unknown): string | null {
+        if (!value) return null;
+        if (typeof value !== 'string') return value as string;
+        const safe = sanitizeUrl(value, { allowDataImage: true });
+        if (safe === null) {
+            console.warn('minimizeWithImage ignored: only http(s), data:image and relative URLs are allowed');
+        }
+        return safe;
+    }
+
     constructor(config: AgentletCoreConfig = {}) {
         this.initialized = false;
 
@@ -223,6 +207,10 @@ class AgentletCore {
             shadowDom: config.shadowDom !== false, // Mount the panel UI inside an open shadow root (isolates host page/agentlet CSS)
             ...config
         };
+
+        // `...config` above wins over the defaults, so validate afterwards:
+        // only http(s), data:image and relative URLs are kept.
+        this.config.minimizeWithImage = AgentletCore.safeMinimizeImage(this.config.minimizeWithImage);
 
         // Gate every `logger.log()`/`logger.info()` call across the codebase
         // (see src/utils/system/Logger.ts) for the lifetime of this instance,
@@ -255,6 +243,9 @@ class AgentletCore {
         this.formExtractor = new FormExtractor();
         this.formFiller = new FormFiller(); // Uses native DOM methods
 
+        // Initialize library setup (before the managers that load libraries on demand)
+        this.librarySetup = new LibrarySetup(this.config);
+
         // Initialize table extractor
         this.tableExtractor = new TableExtractor(this.librarySetup);
 
@@ -283,9 +274,6 @@ class AgentletCore {
 
         // Initialize shortcut manager
         this.shortcutManager = new ShortcutManager(this.librarySetup);
-
-        // Initialize library setup
-        this.librarySetup = new LibrarySetup(this.config);
 
         // UI references (must be initialized before UIManager)
         this.ui = {
@@ -404,20 +392,11 @@ class AgentletCore {
         try {
             logger.log('🚀 Initializing Agentlet Core 📎...');
 
-            // Load PDF.js lazily (see the comment on the removed static
-            // import above) right before it's handed to librarySetup - this
-            // is the earliest point evaluating pdf.js's module body is safe,
-            // and the latest point at which window.pdfjsLib must be set for
-            // existing consumers (PDFProcessor, ai.convertPDFToImages,
-            // ai.sendPromptWithPDF, the scaffold template) to see it in the
-            // same place they always have: available once init() resolves.
-            const pdfjsLib = await import('pdfjs-dist');
-
-            // Set up all libraries
-            this.librarySetup.initializeAll(
-                { XLSX, html2canvas, pdfjsLib, hotkeys },
-                this.shortcutManager
-            );
+            // Set up the inlined libraries. SheetJS, html2canvas and PDF.js are
+            // loaded on demand; `preloadLibraries` (or a single-file build)
+            // loads them here, so they are on `window` once init() resolves.
+            this.librarySetup.initializeAll({ hotkeys }, this.shortcutManager);
+            await this.librarySetup.preloadLibraries();
 
             // Set up event listeners
             this.setupEventListeners();
@@ -599,7 +578,7 @@ class AgentletCore {
         const closeButton = document.createElement('button');
         closeButton.className = 'agentlet-action-btn';
         closeButton.id = 'agentlet-close-btn';
-        closeButton.innerHTML = '╳';
+        closeButton.textContent = '╳';
         closeButton.title = 'Close Agentlet';
 
         // Click handler to cleanup and close
@@ -622,7 +601,7 @@ class AgentletCore {
         const button = document.createElement('button');
         button.className = 'agentlet-action-btn';
         button.title = title;
-        button.innerHTML = icon;
+        button.textContent = icon;
         button.onclick = onClick;
 
         return button;
@@ -655,26 +634,39 @@ class AgentletCore {
         // Use provided activeModule parameter, fallback to moduleLoader's activeModule
         const activeModule = this.moduleRegistry.activeModule;
 
+        // Built with textContent: the title and module name come from the
+        // module (and a module's title can be derived from page data).
+        const setAppName = (text: string): void => {
+            if (!appNameElement) return;
+            const label = document.createElement('strong');
+            label.textContent = 'Agentlet:';
+            const name = document.createElement('span');
+            name.id = 'agentlet-app-name';
+            name.textContent = text;
+            appNameElement.textContent = '';
+            appNameElement.appendChild(label);
+            appNameElement.appendChild(document.createTextNode(' '));
+            appNameElement.appendChild(name);
+        };
+
         if (appNameElement && activeModule) {
             // Check if module has a custom title
             if (activeModule.getPanelTitle && typeof activeModule.getPanelTitle === 'function') {
                 const customTitle = activeModule.getPanelTitle();
                 if (customTitle) {
-                    appNameElement.innerHTML = `<strong>Agentlet:</strong> <span id="agentlet-app-name">${customTitle}</span>`;
+                    setAppName(String(customTitle));
                 } else {
                     // Fallback to default behavior
                     const appName = activeModule.name;
-                    const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);
-                    appNameElement.innerHTML = `<strong>Agentlet:</strong> <span id="agentlet-app-name">${displayText}</span>`;
+                    setAppName(appName.charAt(0).toUpperCase() + appName.slice(1));
                 }
             } else {
                 // Default behavior
                 const appName = activeModule.name;
-                const displayText = appName.charAt(0).toUpperCase() + appName.slice(1);
-                appNameElement.innerHTML = `<strong>Agentlet:</strong> <span id="agentlet-app-name">${displayText}</span>`;
+                setAppName(appName.charAt(0).toUpperCase() + appName.slice(1));
             }
         } else if (appNameElement) {
-            appNameElement.innerHTML = '<strong>Agentlet:</strong> <span id="agentlet-app-name">No application detected</span>';
+            setAppName('No application detected');
         }
 
         // Status indicator removed for cleaner interface
@@ -709,7 +701,7 @@ class AgentletCore {
         }
 
         // Clear existing content
-        content.innerHTML = '';
+        content.textContent = '';
 
         const activeModule = this.moduleRegistry.activeModule;
 
@@ -733,15 +725,16 @@ class AgentletCore {
                     await activeModule.mount(content, context);
                     this.mountedModule = activeModule;
                 } else if (typeof activeModule.getContent === 'function') {
-                    // Duck-typed module (doesn't extend Module, so it has no mount/unmount)
+                    // Duck-typed module (doesn't extend Module, so it has no mount/unmount).
+                    // getContent() returns HTML by contract: the module owns that markup.
                     const moduleContent = activeModule.getContent();
                     content.innerHTML = moduleContent;
                 } else {
                     // Fallback content
                     content.innerHTML = `
                         <div class="agentlet-module-placeholder">
-                            <h3>${activeModule.name}</h3>
-                            <p>Module loaded for: ${window.location.href}</p>
+                            <h3>${escapeHtml(activeModule.name)}</h3>
+                            <p>Module loaded for: ${escapeHtml(window.location.href)}</p>
                         </div>
                     `;
                 }
@@ -900,7 +893,7 @@ class AgentletCore {
                 icon: '',
                 message: `
                     <h4>Configuration</h4>
-                    <p><strong>Theme:</strong> ${this.themeManager.getTheme().primaryColor}</p>
+                    <p><strong>Theme:</strong> ${escapeHtml(this.themeManager.getTheme().primaryColor)}</p>
                     <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
                     <p><strong>Debug mode:</strong> ${this.config.debugMode ? 'Enabled' : 'Disabled'}</p>
 
@@ -911,12 +904,12 @@ class AgentletCore {
 
                     <h4>AI Configuration</h4>
                     <p><strong>Status:</strong> ${this.aiManager.isAvailable() ? '✅ Available' : '❌ Not configured'}</p>
-                    <p><strong>Current provider:</strong> ${this.aiManager.getStatus().currentProvider || 'None'}</p>
-                    <p><strong>Available providers:</strong> ${this.aiManager.getAvailableProviders().join(', ') || 'None'}</p>
+                    <p><strong>Current provider:</strong> ${escapeHtml(this.aiManager.getStatus().currentProvider || 'None')}</p>
+                    <p><strong>Available providers:</strong> ${escapeHtml(this.aiManager.getAvailableProviders().join(', ') || 'None')}</p>
 
                     <h4>Active Module</h4>
-                    <p><strong>Current:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
-                    <p><strong>URL:</strong> ${window.location.href}</p>
+                    <p><strong>Current:</strong> ${escapeHtml(this.moduleRegistry.activeModule?.name || 'None')}</p>
+                    <p><strong>URL:</strong> ${escapeHtml(window.location.href)}</p>
                 `,
                 allowHtml: true,
                 buttons: [
@@ -957,7 +950,7 @@ class AgentletCore {
                     <h4>About Agentlet</h4>
                     <p><strong>Version:</strong> 1.0.0</p>
                     <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
-                    <p><strong>Active module:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
+                    <p><strong>Active module:</strong> ${escapeHtml(this.moduleRegistry.activeModule?.name || 'None')}</p>
 
                     <h4>Core Features</h4>
                     <ul>
@@ -1004,13 +997,13 @@ class AgentletCore {
                         title: 'Debug Information',
                         message: `
                             <h4>Performance Metrics</h4>
-                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.metrics, null, 2)}</pre>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${escapeHtml(JSON.stringify(debugInfo.metrics, null, 2))}</pre>
 
                             <h4>Configuration</h4>
-                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.config, null, 2)}</pre>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${escapeHtml(JSON.stringify(debugInfo.config, null, 2))}</pre>
 
                             <h4>Module Statistics</h4>
-                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${JSON.stringify(debugInfo.statistics, null, 2)}</pre>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 11px; overflow-x: auto;">${escapeHtml(JSON.stringify(debugInfo.statistics, null, 2))}</pre>
                         `,
                         icon: '🔧',
                         allowHtml: true,
@@ -1032,7 +1025,7 @@ class AgentletCore {
                 <h3>Agentlet 📎 help</h3>
                 <p><strong>Version:</strong> 1.0.0</p>
                 <p><strong>Modules loaded:</strong> ${this.moduleRegistry.modules.size}</p>
-                <p><strong>Active module:</strong> ${this.moduleRegistry.activeModule?.name || 'None'}</p>
+                <p><strong>Active module:</strong> ${escapeHtml(this.moduleRegistry.activeModule?.name || 'None')}</p>
                 <hr>
                 <p><strong>Debug commands (console):</strong></p>
                 <ul>
@@ -1075,28 +1068,46 @@ class AgentletCore {
             position: relative;
         `;
 
-        dialog.innerHTML = `
-            <h3 style="margin-top: 0;">${title}</h3>
-            <div>${content}</div>
-            <button onclick="this.closest('.modal').remove()" style="
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                background: none;
-                border: none;
-                font-size: 18px;
-                cursor: pointer;
-            ">×</button>
-            <button onclick="this.closest('.modal').remove()" style="
-                margin-top: 15px;
-                padding: 8px 16px;
-                background: #007bff;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            ">Close</button>
+        // The title is plain text. `content` is HTML by contract (callers
+        // pass markup such as `<p>...</p>`), so escape any value you
+        // interpolate into it.
+        const heading = document.createElement('h3');
+        heading.style.cssText = 'margin-top: 0;';
+        heading.textContent = title;
+
+        const body = document.createElement('div');
+        body.innerHTML = content;
+
+        const closeIcon = document.createElement('button');
+        closeIcon.textContent = '×';
+        closeIcon.style.cssText = `
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
         `;
+        closeIcon.addEventListener('click', () => modal.remove());
+
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+        closeButton.style.cssText = `
+            margin-top: 15px;
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        `;
+        closeButton.addEventListener('click', () => modal.remove());
+
+        dialog.appendChild(heading);
+        dialog.appendChild(body);
+        dialog.appendChild(closeIcon);
+        dialog.appendChild(closeButton);
 
         modal.className = 'modal';
         modal.appendChild(dialog);
@@ -1363,12 +1374,11 @@ class AgentletCore {
 
         // Get storage type for header using the mandatory name() method
         //
-        // this.envManager is read fresh at each of the three sites below
-        // (here, and inside window.removeEnvVar/addEnvVar further down)
-        // rather than being captured once into a local. The cast only
-        // satisfies TypeScript's non-null narrowing, which does not persist
-        // through the window.removeEnvVar/addEnvVar closures defined later in
-        // this method.
+        // this.envManager is read fresh at each of the sites below (here, and
+        // inside the add/remove handlers further down) rather than being
+        // captured once into a local. The cast only satisfies TypeScript's
+        // non-null narrowing, which does not persist through the handler
+        // closures defined later in this method.
         const storageType = (this.envManager as EnvAPI).name();
 
         const content = `
@@ -1377,7 +1387,7 @@ class AgentletCore {
                     ${varsList}
                 </div>
                 <div class="storage-info" style="text-align: center; padding: 10px; color: #666; font-size: 12px;">
-                    stored in ${storageType}
+                    stored in ${escapeHtml(storageType)}
                 </div>
             </div>
 
@@ -1540,13 +1550,15 @@ class AgentletCore {
             </style>
         `;
 
-        // Add global functions for the dialog
-        window.removeEnvVar = (key: string): void => {
+        // Handlers for the dialog's buttons, wired with a delegated listener
+        // once the dialog is mounted (see below). No inline `onclick` and no
+        // `window` globals are involved.
+        const removeEnvVar = (key: string): void => {
             (this.envManager as EnvAPI).remove(key);
             this.refreshEnvVarsDialog();
         };
 
-        window.addEnvVar = (): void => {
+        const addEnvVar = (): void => {
             // These inputs live inside the fullscreen Dialog content, itself
             // mounted in the UI root (shadow root in shadowDom mode), hence
             // this.ui.query() rather than document.getElementById(). Queried
@@ -1581,17 +1593,27 @@ class AgentletCore {
                 { text: 'Close', value: 'close', primary: true }
             ]
         }, (_result) => {
-            // Clean up global functions
-            //
-            // See the comment in cleanup() above for why
-            // Reflect.deleteProperty() is used instead of the `delete`
-            // operator here. `clearEnvVars` is never assigned anywhere, so
-            // deleting it is a no-op.
-            Reflect.deleteProperty(window, 'removeEnvVar');
-            Reflect.deleteProperty(window, 'addEnvVar');
-            Reflect.deleteProperty(window, 'clearEnvVars');
             this.currentEnvVarsDialog = null;
         });
+
+        // One delegated listener on the list container: refreshEnvVarsDialog()
+        // only replaces the container's children, so it stays valid across
+        // refreshes. Buttons are identified by data attributes (the variable
+        // name is read back from `data-env-key`, never parsed from markup).
+        const list = this.ui.query('.env-vars-list');
+        if (list) {
+            list.addEventListener('click', (event: Event) => {
+                const target = event.target as Element | null;
+                const button = target?.closest?.('[data-env-action]');
+                if (!button || !list.contains(button)) return;
+                const action = button.getAttribute('data-env-action');
+                if (action === 'add') {
+                    addEnvVar();
+                } else if (action === 'remove') {
+                    removeEnvVar(button.getAttribute('data-env-key') || '');
+                }
+            });
+        }
     }
 
     /**
@@ -1623,7 +1645,7 @@ class AgentletCore {
                     <input type="text" id="env-var-key" placeholder="Variable name" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 14px;">
                     <input type="text" id="env-var-value" placeholder="Variable value" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 14px;">
                 </div>
-                <button onclick="addEnvVar()" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">
+                <button type="button" data-env-action="add" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">
                     Add/Update
                 </button>
             </div>
@@ -1638,10 +1660,10 @@ class AgentletCore {
             html += Object.entries(currentVars).map(([key, value]) => `
                 <div class="env-var-item" style="display: flex; align-items: center; padding: 8px 20px; border-bottom: 1px solid #e0e0e0;">
                     <div style="flex: 1; margin-right: 10px;">
-                        <strong style="color: #333; display: block; margin-bottom: 2px;">${key}</strong>
-                        <span style="color: #666; font-size: 14px; word-break: break-all;">${formatValue(value)}</span>
+                        <strong style="color: #333; display: block; margin-bottom: 2px;">${escapeHtml(key)}</strong>
+                        <span style="color: #666; font-size: 14px; word-break: break-all;">${escapeHtml(formatValue(value))}</span>
                     </div>
-                    <button onclick="removeEnvVar('${key}')"
+                    <button type="button" data-env-action="remove" data-env-key="${escapeHtml(key)}"
                             style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">
                         Delete
                     </button>

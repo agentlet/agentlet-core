@@ -15,6 +15,8 @@ import type {
     AgentletAPI,
     AgentletModule,
     ModuleActivationContext,
+    ModuleConfig,
+    ModuleMatchMode,
     ModuleMountContext,
     ModuleMountTrigger,
     EventBusAPI,
@@ -137,6 +139,21 @@ void queriedAll;
 
 const shadowConfig: import('../../src/types/public-api').AgentletCoreConfig = { shadowDom: false };
 void shadowConfig;
+
+// On-demand library loading options (SheetJS, html2canvas and pdf.js are fetched on first use).
+const onDemandConfig: import('../../src/types/public-api').AgentletCoreConfig = {
+    libraryBaseUrl: '/dist/',
+    libraryUrls: { xlsx: '/dist/agentlet-xlsx.min.js' },
+    pdfCMapUrl: '/dist/cmaps/',
+    pdfStandardFontsUrl: '/dist/standard_fonts/',
+    preloadLibraries: ['xlsx', 'html2canvas', 'pdfjs']
+};
+// @ts-expect-error only xlsx, html2canvas and pdfjs load on demand
+const unknownPreload: import('../../src/types/public-api').AgentletCoreConfig = { preloadLibraries: ['hotkeys'] };
+const preloadResult: Promise<void> = new LibrarySetup().preloadLibraries(['xlsx']);
+const pdfAssetUrlsCheck: import('../../src/types/public-api').PDFAssetUrls = new LibrarySetup().getPDFAssetUrls();
+const canLoadCheck: boolean = new LibrarySetup().canLoadLibrary('xlsx');
+void [onDemandConfig, unknownPreload, preloadResult, pdfAssetUrlsCheck, canLoadCheck];
 
 /* -------------------------------------------------------------- */
 /* Forms                                                           */
@@ -720,3 +737,19 @@ const wrongAiReply: Promise<number> = window.agentlet.ai.sendPrompt('hi');
 void wrongAiReply;
 
 export {};
+
+/* Module matchMode (host matching) */
+
+const hostMatchedAgentlet = new Module({
+    name: 'host-matched',
+    patterns: ['example.com', 'localhost:3000', { type: 'regex', value: 'evil' }],
+    matchMode: 'host'
+});
+const hostMode: ModuleMatchMode = hostMatchedAgentlet.matchMode;
+void hostMode;
+new window.agentlet.Module({ name: 'substring-matched', patterns: 'example.com', matchMode: 'substring' });
+const hostConfig: ModuleConfig = { name: 'cfg', patterns: 'example.com', matchMode: 'host' };
+void hostConfig;
+
+// @ts-expect-error matchMode only accepts 'substring' or 'host'
+new window.agentlet.Module({ name: 'bad-mode', patterns: 'example.com', matchMode: 'hostname' });

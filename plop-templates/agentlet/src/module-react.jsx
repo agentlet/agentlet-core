@@ -53,7 +53,7 @@ import { createRoot } from 'react-dom/client';
             super({
                 name: '{{kebabCase name}}',
                 patterns: ['localhost', '127.0.0.1', 'file://'],
-                matchMode: 'includes',
+                matchMode: 'host',
                 description: 'A sample React agentlet for {{name}}',
                 version: '1.0.0'
             });

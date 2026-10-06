@@ -177,28 +177,25 @@
     <div class="container">
         <div class="hero">
             <h1>Agentlet core extension</h1>
-            <p>An experimental extension that injects agentlet core into the pages you choose. It is not published on any extension store.</p>
-            <a href="#" id="get-started-btn" class="cta-button">Get started</a>
+            <p>An experimental extension that runs agentlet core on the tab you choose, only when you ask. It is not published on any extension store.</p>
         </div>
-
         <div class="features">
             <h2>What it does</h2>
             <div class="feature-grid">
                 <div class="feature">
-                    <h3>Injects agentlet core</h3>
+                    <h3>Runs agentlet core on one tab</h3>
                     <p>Loads the same side panel and APIs as the bookmarklet, on the current tab, when you activate it.</p>
                 </div>
                 <div class="feature">
-                    <h3>Runs your modules</h3>
-                    <p>Modules register for URL patterns and appear in the panel on matching pages.</p>
+                    <h3>No standing access to sites</h3>
+                    <p>The extension has no host permissions and no script running on your pages. It can touch a tab only after you click or press the shortcut, and only until you navigate away.</p>
                 </div>
                 <div class="feature">
-                    <h3>Optional AI assistant</h3>
-                    <p>Sends your prompt to the AI provider you configure with OPENAI_API_KEY. Nothing is sent otherwise.</p>
+                    <h3>Only bundled modules</h3>
+                    <p>Modules run only if they ship inside the extension package. The extension never downloads or runs code from a URL.</p>
                 </div>
             </div>
         </div>
-
         <div class="getting-started">
             <h2>Getting started</h2>
             <div class="steps">
@@ -209,31 +206,28 @@
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
-                    <h3>Click the extension icon</h3>
-                    <p>Click the extension icon in the browser toolbar, or press Ctrl+Shift+A.</p>
+                    <h3>Open the popup</h3>
+                    <p>Click the extension icon in the browser toolbar, or press Ctrl+Shift+A (Command+Shift+A on a Mac) to skip the popup.</p>
                 </div>
                 <div class="step">
                     <div class="step-number">3</div>
-                    <h3>Activate on the page</h3>
-                    <p>Click "Activate on page" to inject agentlet core into the current tab.</p>
+                    <h3>Activate on this page</h3>
+                    <p>Click "Activate on this page" to start agentlet core in the current tab. Click it again to show or hide the panel.</p>
                 </div>
                 <div class="step">
                     <div class="step-number">4</div>
-                    <h3>Use your modules</h3>
-                    <p>Use the modules that match the page, and the AI assistant if you configured a provider.</p>
+                    <h3>Activate again after a reload</h3>
+                    <p>Agentlet core does not start by itself. After you navigate or reload, activate it again.</p>
                 </div>
             </div>
         </div>
-        
         <div class="settings-link">
-            <a href="#" id="settings-btn" class="btn-secondary">Settings</a>
+            <a href="#" id="settings-btn" class="btn-secondary">Options</a>
         </div>
-        
         <div class="footer">
             <p>Experimental, unpublished. Documentation at <a href="https://agentlet.io/docs/" style="color: inherit;">agentlet.io/docs</a>.</p>
         </div>
     </div>
-    
     <script src="welcome.js"></script>
 </body>
 </html>

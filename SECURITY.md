@@ -39,7 +39,7 @@ Do not put a long-lived provider key in the browser on any page that loads third
 
 Agentlet sends no page data on its own and has no telemetry. A module sends what it passes to `window.agentlet.ai`: prompts, form structures, table data or screenshots of page elements. Review what your module captures before pointing it at pages with personal or customer data.
 
-The only third-party request the core makes by itself is during PDF conversion, which downloads pdf.js character maps and standard fonts from cdnjs.cloudflare.com. The PDF content is not sent.
+The core makes no third-party request by itself. SheetJS, html2canvas and pdf.js are loaded on demand from the folder the core script was served from, and during PDF conversion pdf.js reads its worker, character maps and standard fonts from that same folder (`pdf.worker.min.mjs`, `cmaps/` and `standard_fonts/` in `dist/`). Earlier releases fetched the character maps and fonts from cdnjs.cloudflare.com. Set `libraryBaseUrl` (or `pdfWorkerUrl`, `pdfCMapUrl` and `pdfStandardFontsUrl`) to serve these files from your own origin; with a `script-src` or `connect-src` that allows only that origin, allow the folder the core is loaded from.
 
 Form extraction reports `type="password"` fields with a `null` value and without their `value` attribute, so a password does not reach a prompt by accident. Pass `includePasswordValues: true` to override this when the extraction stays on the page. Other fields, including hidden ones when `includeHidden` is set, are reported as they are.
 
@@ -49,7 +49,32 @@ Form extraction reports `type="password"` fields with a `null` value and without
 
 ### Content Security Policy
 
-A page with a strict Content Security Policy can block the bookmarklet from loading its script. Host the agentlet on an origin the page's `script-src` allows, or use the extension or native integration modes. Agentlet's panel still writes markup with `innerHTML`, so it does not run on pages that enforce Trusted Types.
+A page with a strict Content Security Policy can block the bookmarklet from loading its script. Host the agentlet on an origin the page's `script-src` allows, or use the extension or native integration modes.
+
+#### HTML escaping in the panel
+
+Values the core renders itself (the panel title and module name, the page URL, environment variable names and values, user initials from an identity provider, the `minimizeWithImage` URL, keyboard shortcut descriptions, the title of `showModal()`) are written as text or escaped before they reach the HTML parser, and the core's own buttons use `addEventListener`, not inline `on*` attributes. `minimizeWithImage` accepts only `http:`, `https:`, `data:image/...` and relative URLs; anything else is ignored with a console warning.
+
+#### APIs that accept HTML by contract
+
+These APIs insert caller-provided markup as HTML on purpose. The core does not sanitize it: the caller owns that markup and must escape any value that comes from the page, a user or a server before putting it in.
+
+- A module's `getContent()` (rendered by the default `mount()`, and by the core for modules that do not extend `Module`).
+- The `info`, `fullscreen` and `command` dialogs (`Dialog.show()`, `showInfo()`, `showFullscreen()`, `showCommandPrompt()`) when `allowHtml: true` is set (`message`, and `customContent` for the fullscreen dialog). Without it the text is rendered with `textContent`. `Dialog.escapeHtml()` is available for the interpolated parts.
+- `MessageBubble.show()` and `updateMessage()` with `allowHtml: true`, and the `icon` of a bubble (an emoji or an HTML snippet).
+- The `content` argument of `agentlet.showModal(title, content)` (the title is text).
+
+A module that renders untrusted data (page text, records, server responses) in `getContent()`, in `mount()` or in an `allowHtml` dialog is responsible for escaping it, or for building nodes with `textContent`.
+
+#### Trusted Types
+
+The panel is still not compatible with pages that enforce Trusted Types (`require-trusted-types-for 'script'`). What blocks it:
+
+- The HTML-by-contract sinks above, plus the core's own template-based dialogs (settings, help, environment variables, keyboard shortcuts, the records preview), assign strings to `innerHTML`. Without a Trusted Types policy the browser rejects those assignments.
+- `ScriptInjector` and the module loader create `<script>` elements and set their `src` or text.
+- Bundled libraries (html2canvas, PDF.js, SheetJS, hotkeys-js) are not audited for Trusted Types.
+
+Escaping removes the injection risk in the core's own markup, but does not make these sinks Trusted Types safe.
 
 ## Dependency scanning
 

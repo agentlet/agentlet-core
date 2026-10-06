@@ -16,10 +16,12 @@ export class AgentletTestBase {
    */
   async navigateToExample(examplePath) {
     const fullPath = `/examples/${examplePath}`;
+    // goto() resolves on the load event: the example's scripts (including the
+    // blocking CDN ones) have run and its DOMContentLoaded handlers are done.
+    // No networkidle wait on top: it adds a 500 ms quiet period to every test
+    // and nothing in the examples fetches anything after load until a test
+    // clicks "Initialize".
     await this.page.goto(fullPath);
-
-    // Wait for the page to load
-    await this.page.waitForLoadState('networkidle');
 
     // Verify basic page structure
     await expect(this.page.locator('h1')).toBeVisible();
@@ -34,8 +36,18 @@ export class AgentletTestBase {
     const initButton = this.page.locator('button:has-text("Initialize agentlet"), button:has-text("🚀 Initialize Agentlet"), button:has-text("Initialize Agentlet")');
     await initButton.first().click();
 
-    // Wait for initialization to complete
-    await this.page.waitForTimeout(3000);
+    // Wait for initialization to complete (the example loads the bundle, then
+    // calls init(), which flips window.agentlet.initialized)
+    await this.waitForAgentletCore();
+
+    // The example reports completion in its own status line right after
+    // init() resolves ("Loading Agentlet Core..." is replaced by a ready
+    // message), so wait for that too: whatever a test reads or clicks next
+    // must not race the example's own post-init handlers.
+    const status = this.page.locator('#status');
+    if (await status.count() > 0) {
+      await expect(status).not.toContainText('Loading Agentlet Core');
+    }
   }
 
   /**
@@ -94,6 +106,21 @@ export class AgentletTestBase {
       message,
       { timeout }
     );
+  }
+
+  /**
+   * Retry until the text of an element matches a regular expression. Same
+   * semantics as reading textContent() and calling toMatch() (the regex is
+   * tested against the raw text, line by line stays line by line), but it
+   * waits for the example to log the message instead of racing it.
+   * @param {RegExp} regex - Pattern the text must match
+   * @param {string} selector - Element to read (default: the example console)
+   */
+  async expectTextToMatch(regex, selector = '#console') {
+    await expect.poll(
+      () => this.page.locator(selector).first().textContent(),
+      { message: `${selector} text should match ${regex}` }
+    ).toMatch(regex);
   }
 
   /**
@@ -177,43 +204,46 @@ export class AgentletTestBase {
    * Wait for dialog to appear
    */
   async waitForDialog() {
-    // Try multiple possible dialog selectors
-    const selectors = [
+    // Any of the possible dialog selectors will do: one combined locator
+    // instead of probing each selector in turn with its own timeout.
+    const dialog = this.page.locator([
       '.agentlet-dialog',
       '.agentlet-info-dialog',
       '.agentlet-dialog-overlay',
       '[class*="dialog"]',
       '[class*="modal"]'
-    ];
+    ].join(', '));
 
-    for (const selector of selectors) {
-      try {
-        await this.page.waitForSelector(selector, { timeout: 1000 });
-        console.log(`Dialog found with selector: ${selector}`);
-        return;
-      } catch (e) {
-        // Continue to next selector
-      }
+    try {
+      await expect(dialog.filter({ visible: true }).first()).toBeVisible({ timeout: 5000 });
+    } catch (e) {
+      // If none found, log what's actually in the DOM
+      const allElements = await this.page.evaluate(() => {
+        const queryAllUi = (sel) => (window.agentlet?.ui?.queryAll ? window.agentlet.ui.queryAll(sel) : document.querySelectorAll(sel));
+        const elements = Array.from(queryAllUi('*')).filter(el =>
+          el.className && (el.className.includes('dialog') || el.className.includes('modal'))
+        );
+        return elements.map(el => ({
+          tagName: el.tagName,
+          className: el.className,
+          id: el.id,
+          display: window.getComputedStyle(el).display,
+          visibility: window.getComputedStyle(el).visibility
+        }));
+      });
+      console.log('Available dialog/modal elements:', allElements);
+      throw e;
     }
+  }
 
-    // If none found, log what's actually in the DOM
-    const allElements = await this.page.evaluate(() => {
-      const queryAllUi = (sel) => (window.agentlet?.ui?.queryAll ? window.agentlet.ui.queryAll(sel) : document.querySelectorAll(sel));
-      const elements = Array.from(queryAllUi('*')).filter(el =>
-        el.className && (el.className.includes('dialog') || el.className.includes('modal'))
-      );
-      return elements.map(el => ({
-        tagName: el.tagName,
-        className: el.className,
-        id: el.id,
-        display: window.getComputedStyle(el).display,
-        visibility: window.getComputedStyle(el).visibility
-      }));
-    });
-    console.log('Available dialog/modal elements:', allElements);
-
-    // Fall back to original selector
-    await this.page.waitForSelector('.agentlet-dialog', { timeout: 5000 });
+  /**
+   * Wait until every agentlet dialog (info, overlay-based or fullscreen) has
+   * been removed from the DOM.
+   */
+  async waitForDialogClosed() {
+    await expect(
+      this.page.locator('.agentlet-info-dialog, .agentlet-dialog, .agentlet-fullscreen-dialog, .agentlet-dialog-overlay')
+    ).toHaveCount(0);
   }
 
   /**

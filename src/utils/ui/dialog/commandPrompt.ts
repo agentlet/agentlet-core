@@ -106,6 +106,7 @@ export function buildCommandPromptDialog(theme: DialogTheme, config: ResolvedCom
             margin-bottom: 10px;
         `;
 
+        // HTML by documented contract (`allowHtml: true`): the caller owns this markup.
         if (config.allowHtml) {
             message.innerHTML = config.message;
         } else {

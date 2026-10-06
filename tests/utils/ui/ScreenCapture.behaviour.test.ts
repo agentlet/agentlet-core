@@ -26,6 +26,7 @@ interface ScreenCaptureTestInstance extends ScreenCaptureAPI {
     isCapturing: boolean;
     defaultOptions: Html2CanvasOptions;
     librarySetup: LibrarySetupStub | null;
+    isHTML2CanvasLoaded(): boolean;
 }
 
 /** Minimal shape of `src/libraries/LibrarySetup.js` actually used by ScreenCapture. */
@@ -95,6 +96,31 @@ describe('ScreenCapture behaviour characterization', () => {
             expect(screenCapture.isScreenCaptureAvailable()).toBe(true);
             delete (window as unknown as { html2canvas?: Html2CanvasMock }).html2canvas;
             expect(screenCapture.isScreenCaptureAvailable()).toBe(false);
+        });
+    });
+
+    describe('isScreenCaptureAvailable() with on-demand loading', () => {
+        test('is true while html2canvas is not loaded yet but the library setup can load it', () => {
+            delete (window as unknown as { html2canvas?: Html2CanvasMock }).html2canvas;
+            const librarySetup = { ensureLibrary: jest.fn(), canLoadLibrary: jest.fn(() => true) };
+            const withLibrarySetup = new ScreenCapture(librarySetup);
+
+            expect(withLibrarySetup.isScreenCaptureAvailable()).toBe(true);
+            expect(withLibrarySetup.isHTML2CanvasLoaded()).toBe(false);
+            expect(librarySetup.canLoadLibrary).toHaveBeenCalledWith('html2canvas');
+        });
+
+        test('a capture loads html2canvas first, and a load failure message reaches the thrown error', async () => {
+            delete (window as unknown as { html2canvas?: Html2CanvasMock }).html2canvas;
+            const librarySetup = {
+                ensureLibrary: jest.fn(() => Promise.reject(new Error("Failed to load library 'html2canvas' from https://cdn.example.com/agentlet-html2canvas.min.js.")))
+            };
+            const withLibrarySetup = new ScreenCapture(librarySetup);
+
+            await expect(withLibrarySetup.capturePage()).rejects.toThrow(
+                "html2canvas library not available. Screenshots are disabled. Failed to load library 'html2canvas' from https://cdn.example.com/agentlet-html2canvas.min.js."
+            );
+            expect(librarySetup.ensureLibrary).toHaveBeenCalledWith('html2canvas');
         });
     });
 

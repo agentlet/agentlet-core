@@ -439,9 +439,16 @@ describe('LibrarySetup characterization', () => {
             await expect(setup.ensureLibrary('xlsx')).resolves.toBe(false);
         });
 
-        test('bundled mode: resolves false when unavailable, without consulting any library loader', async () => {
+        test('bundled mode: resolves false for a library that is not loaded on demand, without consulting any library loader', async () => {
             const setup = makeSetup();
-            await expect(setup.ensureLibrary('xlsx')).resolves.toBe(false);
+            await expect(setup.ensureLibrary('hotkeys')).resolves.toBe(false);
+            await expect(setup.ensureLibrary('unknown-lib')).resolves.toBe(false);
+            expect(setup.getLibraryLoader()).toBeNull();
+        });
+
+        test('bundled mode: an on-demand library with no known location rejects with how to configure one (see OnDemandLibraries.test.ts)', async () => {
+            const setup = makeSetup();
+            await expect(setup.ensureLibrary('xlsx')).rejects.toThrow(/libraryBaseUrl/);
         });
     });
 });
