@@ -113,33 +113,48 @@ jobs:
         artifact-name: release-scan-reports
         fail-on-gate: 'true'
 
-    - name: Upgrade npm for trusted publishing
-      # Trusted publishing (OIDC) needs npm 11.5.1 or later and Node 22.14.0
-      # or later. The npm bundled with Node 22 is older, so upgrade it here,
-      # right before it is needed, and fail clearly if the result is too old.
+    - name: Upgrade npm for staged trusted publishing
+      # Staged publishing needs npm 11.15.0 or later, trusted publishing
+      # (OIDC) needs npm 11.5.1 or later, and both need Node 22.14.0 or later.
+      # The npm bundled with Node 22 is older, so upgrade it here, right
+      # before it is needed, and fail clearly if the result is too old.
       run: |
-        npm install -g 'npm@^11.5.1'
+        npm install -g 'npm@^11.15.0'
         npm_version="$(npm --version)"
         echo "npm ${npm_version}, node $(node --version)"
-        if [ "$(printf '%s\n' 11.5.1 "$npm_version" | sort -V | head -n 1)" != "11.5.1" ]; then
-          echo "npm ${npm_version} is older than 11.5.1, trusted publishing is not available." >&2
+        if [ "$(printf '%s\n' 11.15.0 "$npm_version" | sort -V | head -n 1)" != "11.15.0" ]; then
+          echo "npm ${npm_version} is older than 11.15.0, staged publishing is not available." >&2
           exit 1
         fi
 
-    - name: Publish to npm
+    - name: Stage the package on npm
       # No NODE_AUTH_TOKEN and no NPM_TOKEN: npm exchanges the job's OIDC
-      # identity for a short-lived publish token, using the trusted publisher
+      # identity for a short-lived token, using the trusted publisher
       # configured on npmjs.com (organization agentlet, repository
-      # agentlet-core, workflow release.yml). Provenance is generated
-      # automatically in that case; --provenance stays so that the publish
-      # fails instead of silently going out without an attestation.
-      run: npm publish --provenance --access public
+      # agentlet-core, workflow release.yml). That trusted publisher may only
+      # stage: the version becomes public once a maintainer approves it with
+      # 2FA. --provenance stays so that staging fails instead of silently
+      # going out without an attestation.
+      run: |
+        set -euo pipefail
+        npm stage publish --provenance --access public | tee stage-output.txt
+        {
+          echo "### ${GITHUB_REF_NAME} is staged on npm, not yet public"
+          echo
+          echo "Approve it with 2FA on npmjs.com (package agentlet-core, Staged Packages tab),"
+          echo "or with \`npm stage list agentlet-core\` then \`npm stage approve <stage-id>\`."
+          echo
+          echo '```'
+          cat stage-output.txt
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Attach SBOM to the GitHub release
-      # Runs after the npm publish succeeds: if creating/uploading to the
-      # GitHub release fails, the package is already published (the
+      # Runs after the package is staged: if creating/uploading to the
+      # GitHub release fails, the package is already staged (the
       # important, hard-to-undo step) and this step can simply be re-run
-      # (gh release upload --clobber) without re-publishing to npm.
+      # (gh release upload --clobber) without staging it again. The GitHub
+      # release can therefore appear before the npm version is approved.
       # security.yml's nightly job downloads this asset to rescan the
       # published version against newly disclosed CVEs.
       env:

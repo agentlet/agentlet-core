@@ -100,18 +100,19 @@ Three jobs run in this order, each one starting only if the previous one succeed
 3. `release` (needs `verify-tag` and `checks`) does the following steps, in order:
    1. `npm ci`, `npm test`, `npm run build`. The build runs again here because this job has its own runner and checkout, and the SBOM and the package are built from it.
    2. Generate the SBOM (the shared `sbom-from-esbuild` action) and scan it (the shared `dependency-scan` action) before publishing, so a blocking vulnerability or a failure stops the job before anything is published.
-   3. `npm publish --provenance --access public`.
-   4. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after publishing, so a failure here never leaves npm half-published. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
+   3. `npm stage publish --provenance --access public`: the version is staged on npm, not public yet. The step writes the stage id and the approval instructions to the job summary.
+   4. Create the GitHub release for the tag, or update it, and attach `sbom-bundle.cdx.json`. This happens after staging, so a failure here never leaves npm half-staged. The GitHub release can appear before the npm version is approved.
+4. A maintainer approves the staged version with 2FA, on npmjs.com (package `agentlet-core`, Staged Packages tab) or with `npm stage list agentlet-core` then `npm stage approve <stage-id>`. Only then does it become public. `npm stage reject <stage-id>` discards it. Retry it alone with `gh release upload <tag> reports/security/sbom-bundle.cdx.json --clobber`.
 
 A tag on a commit that fails any check therefore never reaches `npm publish`. If a check fails, fix the problem on `main`, delete the failed tag (`git push origin :refs/tags/<tag>` and `git tag -d <tag>`) and tag the fixed commit again. Nothing was published, so reusing the version is safe.
 
 Because `test.yml` is also called from here, its checks and e2e jobs show up in the release run as `checks / checks` and `checks / e2e (<project>)`. The check names reported on pull requests do not change, so branch protection is unaffected.
 
-The job needs `id-token: write` so that npm can authenticate to the registry with a short-lived OIDC token (see below) and attach a signed provenance attestation, and `contents: write` to create the release. Right before publishing, a step upgrades npm to 11.5.1 or later, which trusted publishing requires, and fails if the result is older. Trusted publishing also requires Node.js 22.14.0 or later, which `22.x` provides, and a GitHub-hosted runner.
+The job needs `id-token: write` so that npm can authenticate to the registry with a short-lived OIDC token (see below) and attach a signed provenance attestation, and `contents: write` to create the release. Right before staging, a step upgrades npm to 11.15.0 or later, which staged publishing requires (trusted publishing alone needs 11.5.1), and fails if the result is older. Trusted publishing also requires Node.js 22.14.0 or later, which `22.x` provides, and a GitHub-hosted runner.
 
-### Authentication: npm trusted publishing (OIDC)
+### Authentication: npm trusted publishing (OIDC) with staged publishing
 
-`npm publish` authenticates with the job's OIDC identity ([npm documentation](https://docs.npmjs.com/trusted-publishers)), not with a stored token: no `NPM_TOKEN` secret and no `NODE_AUTH_TOKEN` are used. npm exchanges the identity for a short-lived publish token, only if the workflow run matches the trusted publisher configured for the package on npmjs.com. Provenance is then generated automatically. `--provenance` stays in the command so that the publish fails instead of going out without an attestation. `registry-url` stays on `actions/setup-node` because npm needs it.
+`npm stage publish` authenticates with the job's OIDC identity ([npm documentation](https://docs.npmjs.com/trusted-publishers)), not with a stored token: no `NPM_TOKEN` secret and no `NODE_AUTH_TOKEN` are used. npm exchanges the identity for a short-lived publish token, only if the workflow run matches the trusted publisher configured for the package on npmjs.com. Provenance is then generated automatically. `--provenance` stays in the command so that the publish fails instead of going out without an attestation. `registry-url` stays on `actions/setup-node` because npm needs it.
 
 The trusted publisher is configured once, by a package maintainer, on npmjs.com: package `agentlet-core`, Settings, Trusted Publisher, GitHub Actions, with these values (all case-sensitive, nothing is verified when saving, a mistake only shows up at publish time):
 
@@ -121,10 +122,13 @@ The trusted publisher is configured once, by a package maintainer, on npmjs.com:
 | Repository | `agentlet-core` |
 | Workflow filename | `release.yml` |
 | Environment name | empty (the workflow does not use a GitHub environment) |
+| Allowed actions | `npm stage publish` only: "Allow npm publish" and "Allow npm dist-tag" stay unchecked |
+
+With only staging allowed, even a compromised workflow or action cannot make a version public: a maintainer must approve each staged version with 2FA ([staged publishing](https://docs.npmjs.com/staged-publishing/)). npm marks a new trusted publisher as pending validation until its first use, within a deadline shown on npmjs.com.
 
 The `repository.url` in `package.json` must match the GitHub repository, and does (`git+https://github.com/agentlet/agentlet-core.git`). If the workflow file is renamed, the trusted publisher must be updated to the new filename. The setting lives in the settings of an existing package, and `agentlet-core` already exists on npm.
 
-Once a release has been published through OIDC:
+Once a release has been staged through OIDC and approved:
 
 1. On npmjs.com, open the package Settings, Publishing access, select "Require two-factor authentication and disallow tokens" and save. This blocks token-based publishes.
 2. Revoke the automation token that was used as `NPM_TOKEN` (npmjs.com, Access tokens).
