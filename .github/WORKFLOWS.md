@@ -149,7 +149,7 @@ gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'   # only for annot
 
 `.github/dependabot.yml` keeps the pins and the npm dependencies current, weekly on Monday at 09:00 UTC. No reviewers or assignees are set.
 
-- `npm`: minor and patch updates are grouped into one pull request (`npm-minor-patch`), major updates arrive individually. `xlsx` is ignored, because SheetJS is pinned to a tarball URL on `cdn.sheetjs.com`, which Dependabot does not track, see SECURITY.md and CONTRIBUTING.md. Commits use the `chore` prefix.
+- `npm`: minor and patch updates are grouped into one pull request (`npm-minor-patch`). Major updates are ignored: they are upgraded one at a time, with their migration. The ignore rule only applies to version updates, so a Dependabot security update still opens for a vulnerable dependency even when the fix is a major version. `xlsx` is ignored, because SheetJS is pinned to a tarball URL on `cdn.sheetjs.com`, which Dependabot does not track, see SECURITY.md and CONTRIBUTING.md. Commits use the `chore` prefix.
 - `github-actions`: all action updates are grouped into one pull request. Dependabot rewrites both the SHA and the trailing tag comment. Commits use the `ci` prefix.
 
 Review a Dependabot pull request like any other change: the checks in `test.yml` and `security.yml` run on it.
