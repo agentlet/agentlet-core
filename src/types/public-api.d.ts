@@ -555,6 +555,8 @@ export interface ZIndexConstants {
     readonly PANEL: number;
     readonly PANEL_CONTENT: number;
     readonly PANEL_HEADER: number;
+    /** Panel collapse handle; above the panel levels, below DIALOG_OVERLAY and every dialog. */
+    readonly PANEL_TOGGLE: number;
     readonly DIALOG: number;
     /** Intentionally the same value as MODAL_BACKDROP. */
     readonly DIALOG_OVERLAY: number;
@@ -565,7 +567,7 @@ export interface ZIndexConstants {
     readonly LOADING_OVERLAY: number;
     readonly ERROR_OVERLAY: number;
     readonly IMAGE_OVERLAY: number;
-    /** Always-on-top layer (e.g. the panel toggle button); stays above every other overlay. */
+    /** Always-on-top layer, above every other overlay. The panel toggle does not use it (see PANEL_TOGGLE). */
     readonly CRITICAL_OVERLAY: number;
 }
 

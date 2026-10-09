@@ -163,7 +163,7 @@ describe('StyleInjector behaviour characterization', () => {
         test('generatePanelStyles() and generateDialogStyles() embed the real Z_INDEX constants, not hardcoded numbers', () => {
             const injector = createStyleInjector();
             expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.PANEL};`);
-            expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.CRITICAL_OVERLAY};`);
+            expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.PANEL_TOGGLE};`);
             expect(injector.generateDialogStyles()).toContain(`z-index: ${Z_INDEX.DIALOG_OVERLAY};`);
         });
 

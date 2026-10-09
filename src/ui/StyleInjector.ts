@@ -175,7 +175,7 @@ export class StyleInjector implements StyleInjectorAPI {
                 height: 40px;
                 line-height: 1;
                 transition: all var(--agentlet-transition-duration) ease;
-                z-index: ${Z_INDEX.CRITICAL_OVERLAY};
+                z-index: ${Z_INDEX.PANEL_TOGGLE};
             }
 
             /* Resize Handle */

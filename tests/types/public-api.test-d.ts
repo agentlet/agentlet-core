@@ -227,6 +227,9 @@ void storedValue;
 const baseZIndex: number = window.agentlet.utils.zIndex.constants.BASE;
 void baseZIndex;
 
+const panelToggleZIndex: number = window.agentlet.utils.zIndex.constants.PANEL_TOGGLE;
+void panelToggleZIndex;
+
 /* -------------------------------------------------------------- */
 /* Module subclassing                                               */
 /* -------------------------------------------------------------- */

@@ -488,7 +488,7 @@ exports[`StyleInjector behaviour characterization generate*Styles() snapshots (b
                 height: 40px;
                 line-height: 1;
                 transition: all var(--agentlet-transition-duration) ease;
-                z-index: 100450;
+                z-index: 100103;
             }
 
             /* Resize Handle */

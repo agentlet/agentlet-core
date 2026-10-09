@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The panel toggle handle no longer draws above dialogs. It used
+  `Z_INDEX.CRITICAL_OVERLAY`, which is above every dialog layer, so it showed
+  on top of the fullscreen dialog and its overlay. It now uses the new
+  `Z_INDEX.PANEL_TOGGLE` (just above the panel levels, below `DIALOG_OVERLAY`
+  and every dialog). `CRITICAL_OVERLAY` keeps its value and stays the topmost
+  layer, but nothing in the framework uses it any more.
+
 ## [2.4.0] - 2026-10-06
 
 Upgrade notes:
