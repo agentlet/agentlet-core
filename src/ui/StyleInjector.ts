@@ -77,6 +77,7 @@ export class StyleInjector implements StyleInjectorAPI {
             :root {
                 --agentlet-primary-color: ${theme.primaryColor};
                 --agentlet-secondary-color: ${theme.secondaryColor};
+                --agentlet-toggle-text-color: ${theme.toggleTextColor};
                 --agentlet-background-color: ${theme.backgroundColor};
                 --agentlet-content-background: ${theme.contentBackground};
                 --agentlet-text-color: ${theme.textColor};
@@ -168,14 +169,14 @@ export class StyleInjector implements StyleInjectorAPI {
                 box-shadow: -2px 0 5px rgba(0,0,0,0.1);
                 font-size: 12px;
                 cursor: pointer;
-                color: #FFF;
+                color: var(--agentlet-toggle-text-color);
                 padding: 8px 4px;
                 margin: 0px;
                 width: 20px;
                 height: 40px;
                 line-height: 1;
                 transition: all var(--agentlet-transition-duration) ease;
-                z-index: ${Z_INDEX.CRITICAL_OVERLAY};
+                z-index: ${Z_INDEX.PANEL_TOGGLE};
             }
 
             /* Resize Handle */

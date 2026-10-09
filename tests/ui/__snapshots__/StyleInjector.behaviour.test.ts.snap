@@ -101,6 +101,7 @@ exports[`StyleInjector behaviour characterization generate*Styles() snapshots (b
             :root {
                 --agentlet-primary-color: #1E3A8A;
                 --agentlet-secondary-color: #F97316;
+                --agentlet-toggle-text-color: #111111;
                 --agentlet-background-color: #ffffff;
                 --agentlet-content-background: #f8f9fa;
                 --agentlet-text-color: #333333;
@@ -481,14 +482,14 @@ exports[`StyleInjector behaviour characterization generate*Styles() snapshots (b
                 box-shadow: -2px 0 5px rgba(0,0,0,0.1);
                 font-size: 12px;
                 cursor: pointer;
-                color: #FFF;
+                color: var(--agentlet-toggle-text-color);
                 padding: 8px 4px;
                 margin: 0px;
                 width: 20px;
                 height: 40px;
                 line-height: 1;
                 transition: all var(--agentlet-transition-duration) ease;
-                z-index: 100450;
+                z-index: 100103;
             }
 
             /* Resize Handle */

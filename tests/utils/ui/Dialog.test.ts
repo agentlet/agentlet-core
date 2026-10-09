@@ -1180,4 +1180,237 @@ describe('Dialog', () => {
             });
         });
     });
+
+    /**
+     * Enter on a control that has its own Enter behaviour (buttons, links,
+     * textareas, ...) must reach it: the document-level handler used to call
+     * preventDefault() on every Enter, so a focused button never activated.
+     * jsdom does not click a button for a dispatched keydown, so these tests
+     * assert the part Dialog controls: the keydown is left uncancelled (the
+     * browser then activates the control) and Dialog's own Enter action does
+     * not fire. The real activation is covered by the Playwright dialog spec.
+     */
+    describe('Enter on controls with native behaviour', () => {
+        function pressEnterOn(target: EventTarget, init: KeyboardEventInit = {}): KeyboardEvent {
+            const event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                bubbles: true,
+                composed: true,
+                cancelable: true,
+                ...init
+            });
+            target.dispatchEvent(event);
+            return event;
+        }
+
+        beforeEach(() => {
+            dialog = makeDialog();
+        });
+
+        it('leaves Enter on the info dialog\'s non-primary button alone instead of clicking the primary one', () => {
+            const cb = jest.fn();
+            dialog.confirm('Sure?', 'Confirm', cb);
+            const cancelButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('.agentlet-info-buttons button'));
+            expect(cancelButton.textContent).toBe('Cancel');
+
+            const event = pressEnterOn(cancelButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+            expect(dialog.isActive).toBe(true);
+        });
+
+        it('leaves Enter on the info dialog\'s primary button alone, so the browser clicks it exactly once', () => {
+            const cb = jest.fn();
+            dialog.showInfo({}, cb);
+            const okButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('button[data-primary="true"]'));
+            const clicks = jest.fn();
+            okButton.addEventListener('click', clicks);
+
+            const event = pressEnterOn(okButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            // Dialog no longer clicks it on the browser's behalf
+            expect(clicks).not.toHaveBeenCalled();
+            // Simulate the browser's native Enter activation
+            okButton.click();
+            expect(clicks).toHaveBeenCalledTimes(1);
+            expect(cb).toHaveBeenCalledWith('ok');
+        });
+
+        it('leaves Enter on the fullscreen dialog\'s footer Close button alone', () => {
+            const cb = jest.fn();
+            dialog.showFullscreen({}, cb);
+            const closeButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('.agentlet-fullscreen-footer button'));
+
+            const event = pressEnterOn(closeButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(dialog.isActive).toBe(true);
+            closeButton.click();
+            expect(cb).toHaveBeenCalled();
+            expect(dialog.isActive).toBe(false);
+        });
+
+        it.each([
+            ['a button', () => document.createElement('button')],
+            ['a link', () => Object.assign(document.createElement('a'), { href: 'https://example.com/' })],
+            ['an element with role="button"', () => {
+                const el = document.createElement('div');
+                el.setAttribute('role', 'button');
+                el.tabIndex = 0;
+                return el;
+            }],
+            ['a summary element', () => document.createElement('summary')],
+            ['a textarea', () => document.createElement('textarea')],
+            ['a contenteditable element', () => {
+                const el = document.createElement('div');
+                el.setAttribute('contenteditable', 'true');
+                return el;
+            }],
+            ['the child of a button', () => {
+                const button = document.createElement('button');
+                const icon = document.createElement('span');
+                button.appendChild(icon);
+                return icon;
+            }]
+        ])('does not cancel Enter on %s inside a dialog', (_label, create) => {
+            const cb = jest.fn();
+            dialog.showFullscreen({}, cb);
+            const control = create();
+            // The control (or its button parent) is placed in the dialog content
+            const holder = control.parentElement ?? control;
+            dialogEl(dialog).appendChild(holder);
+
+            const event = pressEnterOn(control);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(dialog.isActive).toBe(true);
+        });
+
+        it('still cancels Enter on a non-interactive element, an anchor without href and a contenteditable="false" element', () => {
+            dialog.showFullscreen({}, jest.fn());
+            const plainDiv = document.createElement('div');
+            const anchorWithoutHref = document.createElement('a');
+            const notEditable = document.createElement('div');
+            notEditable.setAttribute('contenteditable', 'false');
+
+            for (const el of [plainDiv, anchorWithoutHref, notEditable]) {
+                dialogEl(dialog).appendChild(el);
+                expect(pressEnterOn(el).defaultPrevented).toBe(true);
+            }
+        });
+
+        it('keeps submitting an input dialog when Enter is pressed in its text field, and cancels the keydown', () => {
+            const cb = jest.fn();
+            dialog.showInput({ defaultValue: 'hello' }, cb);
+            const field = must(dialogEl(dialog).querySelector<HTMLInputElement>('input'));
+
+            const event = pressEnterOn(field);
+
+            expect(event.defaultPrevented).toBe(true);
+            expect(cb).toHaveBeenCalledWith('hello');
+            expect(dialog.isActive).toBe(false);
+        });
+
+        it('lets Enter on the input dialog\'s Cancel button through without submitting the field', () => {
+            const cb = jest.fn();
+            dialog.showInput({ defaultValue: 'hello' }, cb);
+            const cancelButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('.agentlet-input-buttons button'));
+            expect(cancelButton.textContent).toBe('Cancel');
+
+            const event = pressEnterOn(cancelButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+            expect(dialog.isActive).toBe(true);
+            cancelButton.click();
+            expect(cb).toHaveBeenCalledWith(null);
+        });
+
+        it('lets a plain Enter in an input dialog textarea insert a new line, and still submits on Ctrl or Cmd+Enter', () => {
+            const cb = jest.fn();
+            dialog.showInput({ inputType: 'textarea', defaultValue: 'hello' }, cb);
+            const area = must(dialogEl(dialog).querySelector<HTMLTextAreaElement>('textarea'));
+
+            expect(pressEnterOn(area).defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+
+            expect(pressEnterOn(area, { ctrlKey: true }).defaultPrevented).toBe(true);
+            expect(cb).toHaveBeenCalledWith('hello');
+        });
+
+        it('does not let Ctrl+Enter on a button of an input dialog submit the field', () => {
+            const cb = jest.fn();
+            dialog.showInput({ inputType: 'textarea', defaultValue: 'hello' }, cb);
+            const cancelButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('.agentlet-input-buttons button'));
+
+            const event = pressEnterOn(cancelButton, { ctrlKey: true });
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+        });
+
+        it('keeps submitting the command prompt on Enter in its field', () => {
+            const cb = jest.fn();
+            dialog.showCommandPrompt({}, cb);
+            const field = must(dialogEl(dialog).querySelector<HTMLInputElement>('input'));
+            field.value = '  go  ';
+
+            const event = pressEnterOn(field);
+
+            expect(event.defaultPrevented).toBe(true);
+            expect(cb).toHaveBeenCalledWith('go');
+        });
+
+        it('lets Enter on the command prompt\'s Cancel button through', () => {
+            const cb = jest.fn();
+            dialog.showCommandPrompt({}, cb);
+            const cancelButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('.agentlet-command-buttons button'));
+
+            const event = pressEnterOn(cancelButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+        });
+
+        it('still confirms the dialog when Enter is pressed on a page control behind the modal', () => {
+            const pageButton = document.createElement('button');
+            document.body.appendChild(pageButton);
+            const cb = jest.fn();
+            dialog.confirm('Sure?', 'Confirm', cb);
+
+            const event = pressEnterOn(pageButton);
+
+            expect(event.defaultPrevented).toBe(true);
+            expect(cb).toHaveBeenCalledWith('confirm');
+        });
+
+        it('reads the real target across a shadow root, where document sees the host', () => {
+            const host = document.createElement('div');
+            document.body.appendChild(host);
+            const shadowRoot = host.attachShadow({ mode: 'open' });
+            dialog.setRoot(shadowRoot);
+            const cb = jest.fn();
+            dialog.confirm('Sure?', 'Confirm', cb);
+            const cancelButton = must(shadowRoot.querySelector<HTMLButtonElement>('.agentlet-info-buttons button'));
+
+            const event = pressEnterOn(cancelButton);
+
+            expect(event.defaultPrevented).toBe(false);
+            expect(cb).not.toHaveBeenCalled();
+            expect(dialog.isActive).toBe(true);
+        });
+
+        it('still closes on Escape when a button is focused', () => {
+            const cb = jest.fn();
+            dialog.showInfo({}, cb);
+            const okButton = must(dialogEl(dialog).querySelector<HTMLButtonElement>('button'));
+
+            const event = pressEnterOn(okButton, { key: 'Escape' });
+
+            expect(event.defaultPrevented).toBe(true);
+            expect(cb).toHaveBeenCalledWith('cancel');
+        });
+    });
 });

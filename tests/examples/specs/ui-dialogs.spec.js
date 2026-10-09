@@ -182,6 +182,47 @@ test.describe('Dialogs Example', () => {
     await agentletTest.waitForDialogClosed();
   });
 
+  test('should close the fullscreen dialog when Enter is pressed on its Close button', async ({ page }) => {
+    await agentletTest.initializeAgentlet();
+    await agentletTest.waitForAgentletCore();
+
+    await page.locator('button:has-text("Fullscreen dialog")').click();
+    await page.waitForSelector('.agentlet-fullscreen-dialog', { timeout: 5000 });
+
+    // Enter on a focused button must activate it, not be swallowed by the dialog
+    const closeButton = page.locator('.agentlet-fullscreen-dialog button:has-text("Close")');
+    await closeButton.focus();
+    await page.keyboard.press('Enter');
+
+    await agentletTest.waitForDialogClosed();
+  });
+
+  test('should keep the panel toggle below an open fullscreen dialog', async ({ page }) => {
+    await agentletTest.initializeAgentlet();
+    await agentletTest.waitForAgentletCore();
+
+    await page.locator('button:has-text("Fullscreen dialog")').click();
+    await page.waitForSelector('.agentlet-fullscreen-dialog', { timeout: 5000 });
+
+    // Hit-test at the centre of the toggle: the overlay of the open dialog must win
+    const hit = await page.evaluate(() => {
+      const ui = window.agentlet.ui;
+      const toggle = ui.query('#agentlet-toggle');
+      const rect = toggle.getBoundingClientRect();
+      const root = ui.root && ui.root.elementFromPoint ? ui.root : document;
+      const top = root.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return {
+        isToggle: top === toggle || (top && toggle.contains(top)),
+        insideDialogOverlay: !!(top && top.closest('.agentlet-dialog-overlay'))
+      };
+    });
+    expect(hit.isToggle).toBe(false);
+    expect(hit.insideDialogOverlay).toBe(true);
+
+    await page.locator('.agentlet-fullscreen-dialog button:has-text("Close")').click();
+    await agentletTest.waitForDialogClosed();
+  });
+
   test('should show custom HTML dialog', async ({ page }) => {
     // Initialize first
     await agentletTest.initializeAgentlet();

@@ -48,6 +48,8 @@ export const Z_INDEX: ZIndexConstants = {
     PANEL: AGENTLET_BASE + 100,
     PANEL_CONTENT: AGENTLET_BASE + 101,
     PANEL_HEADER: AGENTLET_BASE + 102,
+    // Collapse handle on the panel's left edge; above the panel, below every dialog and overlay
+    PANEL_TOGGLE: AGENTLET_BASE + 103,
 
     // Dialogs and Modals
     DIALOG: AGENTLET_BASE + 200,
@@ -61,7 +63,7 @@ export const Z_INDEX: ZIndexConstants = {
     LOADING_OVERLAY: AGENTLET_BASE + 300,
     ERROR_OVERLAY: AGENTLET_BASE + 350,
     IMAGE_OVERLAY: AGENTLET_BASE + 400,
-    // Always-on-top layer (e.g. the panel toggle button); stays above every other overlay
+    // Always-on-top layer for content that must cover every other overlay (the panel toggle uses PANEL_TOGGLE instead)
     CRITICAL_OVERLAY: AGENTLET_BASE + 450
 };
 

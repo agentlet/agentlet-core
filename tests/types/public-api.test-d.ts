@@ -227,6 +227,9 @@ void storedValue;
 const baseZIndex: number = window.agentlet.utils.zIndex.constants.BASE;
 void baseZIndex;
 
+const panelToggleZIndex: number = window.agentlet.utils.zIndex.constants.PANEL_TOGGLE;
+void panelToggleZIndex;
+
 /* -------------------------------------------------------------- */
 /* Module subclassing                                               */
 /* -------------------------------------------------------------- */
@@ -321,6 +324,12 @@ const themeAfterStringUpdate: import('../../src/types/public-api').AgentletTheme
     window.agentlet.setTheme('dark');
 void themeAfterPartialUpdate;
 void themeAfterStringUpdate;
+
+// toggleTextColor is optional in a partial theme and always present on the resolved theme
+const themeWithToggleText: import('../../src/types/public-api').AgentletTheme =
+    window.agentlet.setTheme({ secondaryColor: '#f8f9fa', toggleTextColor: '#111111' });
+const resolvedToggleText: string = themeWithToggleText.toggleTextColor;
+void resolvedToggleText;
 
 // A module mounted with a UI framework subscribes to theme:changed via
 // context.eventBus in mount() and unsubscribes in unmount() (which does not

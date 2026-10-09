@@ -60,6 +60,22 @@ describe('Z_INDEX', () => {
             expect(Z_INDEX.HIGHLIGHT_BACKDROP).toBeLessThan(Z_INDEX.ELEMENT_HIGHLIGHT);
         });
 
+        test('the panel toggle sits above every panel level', () => {
+            expect(Z_INDEX.PANEL_TOGGLE).toBeGreaterThan(Z_INDEX.PANEL);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeGreaterThan(Z_INDEX.PANEL_CONTENT);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeGreaterThan(Z_INDEX.PANEL_HEADER);
+        });
+
+        test('the panel toggle sits below the dialog overlay, the modal backdrop and every dialog', () => {
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.DIALOG_OVERLAY);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.MODAL_BACKDROP);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.DIALOG);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.INFO_DIALOG);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.INPUT_DIALOG);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.PROGRESS_DIALOG);
+            expect(Z_INDEX.PANEL_TOGGLE).toBeLessThan(Z_INDEX.FULLSCREEN_DIALOG);
+        });
+
         test('the critical overlay is the topmost layer of all', () => {
             const otherValues = Object.entries(Z_INDEX)
                 .filter(([key]) => key !== 'CRITICAL_OVERLAY')

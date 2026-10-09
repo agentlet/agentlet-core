@@ -163,8 +163,26 @@ describe('StyleInjector behaviour characterization', () => {
         test('generatePanelStyles() and generateDialogStyles() embed the real Z_INDEX constants, not hardcoded numbers', () => {
             const injector = createStyleInjector();
             expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.PANEL};`);
-            expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.CRITICAL_OVERLAY};`);
+            expect(injector.generatePanelStyles()).toContain(`z-index: ${Z_INDEX.PANEL_TOGGLE};`);
             expect(injector.generateDialogStyles()).toContain(`z-index: ${Z_INDEX.DIALOG_OVERLAY};`);
+        });
+
+        test('the toggle arrow colour comes from the --agentlet-toggle-text-color variable, not a hard-coded white', () => {
+            const injector = createStyleInjector();
+            const toggleRule = /\.agentlet-toggle \{[^}]*\}/.exec(injector.generatePanelStyles());
+            expect(toggleRule).not.toBeNull();
+            expect(toggleRule![0]).toContain('color: var(--agentlet-toggle-text-color);');
+            expect(toggleRule![0]).not.toMatch(/color: #fff/i);
+        });
+
+        test('the resolved theme sets --agentlet-toggle-text-color from secondaryColor', () => {
+            const injector = createStyleInjector();
+            const light = new ThemeManager({ theme: { secondaryColor: '#f8f9fa' } }).getTheme();
+            const dark = new ThemeManager({ theme: { secondaryColor: '#0f3350' } }).getTheme();
+            const explicit = new ThemeManager({ theme: { secondaryColor: '#f8f9fa', toggleTextColor: '#aa0000' } }).getTheme();
+            expect(injector.generateCSSProperties(light)).toContain('--agentlet-toggle-text-color: #111111;');
+            expect(injector.generateCSSProperties(dark)).toContain('--agentlet-toggle-text-color: #ffffff;');
+            expect(injector.generateCSSProperties(explicit)).toContain('--agentlet-toggle-text-color: #aa0000;');
         });
 
         test('generateCSSProperties(theme) interpolates an arbitrary custom theme value verbatim', () => {
