@@ -82,6 +82,45 @@ function parseColorChannel(part: string): number | null {
     return Math.max(0, Math.min(255, value));
 }
 
+/** Near-black used when the toggle arrow needs a dark colour (not pure black, to stay softer on light fills). */
+const TOGGLE_DARK_TEXT = '#111111';
+const TOGGLE_LIGHT_TEXT = '#ffffff';
+
+/** sRGB channel (0-255) to linear light, per the WCAG 2.x relative luminance definition. */
+function linearizeChannel(channel: number): number {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/** WCAG 2.x relative luminance (0 = black, 1 = white) of an sRGB colour. */
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+    return 0.2126 * linearizeChannel(r) + 0.7152 * linearizeChannel(g) + 0.0722 * linearizeChannel(b);
+}
+
+/**
+ * Picks the readable text colour for a solid `background`: near-black
+ * (`#111111`) or white (`#ffffff`), whichever has the higher WCAG contrast
+ * ratio against it. Used to derive `toggleTextColor` from `secondaryColor`
+ * when the theme does not set one.
+ *
+ * Understands the same notations as `contrastingTextColor()` (hex `#rgb`,
+ * `#rgba`, `#rrggbb`, `#rrggbbaa`, and `rgb()`/`rgba()`; alpha is ignored).
+ * Anything it cannot parse - a CSS custom property, a named colour, `hsl()`,
+ * a gradient - returns white, the colour the toggle used before this was
+ * derived.
+ */
+export function readableToggleTextColor(background: string): string {
+    const rgb = parseRgbComponents(String(background ?? '').trim());
+    if (!rgb) {
+        return TOGGLE_LIGHT_TEXT;
+    }
+
+    const luminance = relativeLuminance(rgb);
+    const contrastWithWhite = 1.05 / (luminance + 0.05);
+    const contrastWithDark = (luminance + 0.05) / (relativeLuminance([0x11, 0x11, 0x11]) + 0.05);
+    return contrastWithDark > contrastWithWhite ? TOGGLE_DARK_TEXT : TOGGLE_LIGHT_TEXT;
+}
+
 export class ThemeManager implements ThemeManagerAPI {
     /**
      * The full `AgentletCore` config object is passed in by reference
@@ -102,6 +141,8 @@ export class ThemeManager implements ThemeManagerAPI {
             // Colors
             primaryColor: '#1E3A8A',
             secondaryColor: '#F97316',
+            // Derived from secondaryColor below; this is only the value for the default fill
+            toggleTextColor: readableToggleTextColor('#F97316'),
             backgroundColor: '#ffffff',
             contentBackground: '#f8f9fa',
             textColor: '#333333',
@@ -209,6 +250,13 @@ export class ThemeManager implements ThemeManagerAPI {
             // given: derive a readable one instead of falling through to
             // the fixed dark default.
             mergedTheme.dialogHeaderTextColor = contrastingTextColor(mergedTheme.dialogHeaderBackground);
+        }
+
+        // The toggle sits on secondaryColor, so its arrow colour follows it
+        // unless the caller picked one: without this, a light secondaryColor
+        // would leave a white arrow on a light fill.
+        if (!themeConfig.toggleTextColor) {
+            mergedTheme.toggleTextColor = readableToggleTextColor(mergedTheme.secondaryColor);
         }
 
         // Update panel width based on configuration

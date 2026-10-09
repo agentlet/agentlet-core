@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Theme key `toggleTextColor`: the colour of the arrow on the panel toggle
+  handle. When it is not set, it is derived from `secondaryColor`: near-black
+  (`#111111`) or white, whichever has the higher WCAG contrast ratio. Hex
+  (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`) and `rgb()`/`rgba()` values are
+  understood; any other value (a CSS variable, a named colour, `hsl()`) falls
+  back to white. It is exposed as the `--agentlet-toggle-text-color` custom
+  property and is always set on the resolved theme.
+- `Z_INDEX.PANEL_TOGGLE`, the stacking level of the panel toggle handle.
+
 ### Fixed
 
 - The panel toggle handle no longer draws above dialogs. It used
@@ -15,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Z_INDEX.PANEL_TOGGLE` (just above the panel levels, below `DIALOG_OVERLAY`
   and every dialog). `CRITICAL_OVERLAY` keeps its value and stays the topmost
   layer, but nothing in the framework uses it any more.
+- The panel toggle arrow was always white, so it was invisible on a light
+  `secondaryColor`. Its colour now follows the new `toggleTextColor` theme key
+  (see Added). With the default orange `secondaryColor` the arrow is now
+  near-black, which has a higher contrast than white; set `toggleTextColor:
+  '#ffffff'` to keep the previous look.
 
 ## [2.4.0] - 2026-10-06
 

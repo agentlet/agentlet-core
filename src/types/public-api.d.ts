@@ -1873,6 +1873,17 @@ export interface UIAPI {
 export interface AgentletTheme {
     primaryColor: string;
     secondaryColor: string;
+    /**
+     * Colour of the arrow on the panel toggle handle, which is filled with
+     * `secondaryColor`. Optional in the theme you pass in: when it is not
+     * set, `ThemeManager.processThemeConfig()` derives it from
+     * `secondaryColor`, picking near-black (`#111111`) or white by the higher
+     * WCAG contrast ratio. Only hex (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`)
+     * and `rgb()`/`rgba()` values are understood; anything else (a CSS custom
+     * property, a named colour, `hsl()`) falls back to white. Always set on
+     * the theme you read back.
+     */
+    toggleTextColor: string;
     backgroundColor: string;
     contentBackground: string;
     textColor: string;

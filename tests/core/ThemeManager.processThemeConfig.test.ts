@@ -12,7 +12,7 @@
  * unreadable - see src/utils/ui/dialog/*.ts and the Dialog builders that
  * read `theme.dialogHeaderBackground`/`theme.dialogHeaderTextColor`.
  */
-import { ThemeManager, contrastingTextColor } from '../../src/core/ThemeManager';
+import { ThemeManager, contrastingTextColor, readableToggleTextColor } from '../../src/core/ThemeManager';
 
 describe('ThemeManager.processThemeConfig() - dialog header pairing', () => {
     it('inherits both dialogHeaderBackground and dialogHeaderTextColor from a theme that only sets headerBackground/headerTextColor', () => {
@@ -138,5 +138,84 @@ describe('contrastingTextColor()', () => {
         expect(contrastingTextColor('rgb(15 51 80 / 50%)')).toBe('#ffffff'); // space syntax with alpha
         expect(contrastingTextColor('rgba(244, 162, 97, 0.8)')).toBe('#000000'); // orange
         expect(contrastingTextColor('rgb(0%, 0%, 0%)')).toBe('#ffffff'); // percentage channels
+    });
+});
+
+describe('readableToggleTextColor()', () => {
+    it('picks white for a dark background', () => {
+        expect(readableToggleTextColor('#0f3350')).toBe('#ffffff');
+        expect(readableToggleTextColor('#000000')).toBe('#ffffff');
+        expect(readableToggleTextColor('#1E3A8A')).toBe('#ffffff');
+    });
+
+    it('picks near-black for a light background', () => {
+        expect(readableToggleTextColor('#ffffff')).toBe('#111111');
+        expect(readableToggleTextColor('#f8f9fa')).toBe('#111111');
+        expect(readableToggleTextColor('#fde68a')).toBe('#111111');
+    });
+
+    it('chooses by WCAG contrast ratio, not by a fixed brightness cut-off', () => {
+        // The default orange has a WCAG contrast of about 2.8 with white and about 7 with near-black
+        expect(readableToggleTextColor('#F97316')).toBe('#111111');
+        // A saturated mid blue has a higher contrast with white
+        expect(readableToggleTextColor('#2563eb')).toBe('#ffffff');
+        // Pure red: 4.0 with white, 5.2 with near-black
+        expect(readableToggleTextColor('#ff0000')).toBe('#111111');
+    });
+
+    it('expands short hex and ignores the alpha digits', () => {
+        expect(readableToggleTextColor('#fff')).toBe('#111111');
+        expect(readableToggleTextColor('#000')).toBe('#ffffff');
+        expect(readableToggleTextColor('#fffa')).toBe('#111111');
+        expect(readableToggleTextColor('#0f335080')).toBe('#ffffff');
+    });
+
+    it('reads rgb() and rgba() notation', () => {
+        expect(readableToggleTextColor('rgb(255, 255, 255)')).toBe('#111111');
+        expect(readableToggleTextColor('rgba(15, 51, 80, 0.5)')).toBe('#ffffff');
+        expect(readableToggleTextColor('rgb(250 250 250 / 40%)')).toBe('#111111');
+        expect(readableToggleTextColor('  RGB(0, 0, 0)  ')).toBe('#ffffff');
+    });
+
+    it('falls back to white for values it cannot parse', () => {
+        expect(readableToggleTextColor('var(--brand-secondary)')).toBe('#ffffff');
+        expect(readableToggleTextColor('white')).toBe('#ffffff');
+        expect(readableToggleTextColor('hsl(0, 0%, 100%)')).toBe('#ffffff');
+        expect(readableToggleTextColor('linear-gradient(#fff, #eee)')).toBe('#ffffff');
+        expect(readableToggleTextColor('#12')).toBe('#ffffff');
+        expect(readableToggleTextColor('')).toBe('#ffffff');
+    });
+});
+
+describe('ThemeManager.processThemeConfig() - toggleTextColor', () => {
+    it('derives a dark arrow for the default orange secondaryColor', () => {
+        expect(new ThemeManager({}).getTheme().toggleTextColor).toBe('#111111');
+        expect(new ThemeManager({}).processThemeConfig('legacy-name').toggleTextColor).toBe('#111111');
+    });
+
+    it('derives a dark arrow when secondaryColor is light', () => {
+        const theme = new ThemeManager({ theme: { secondaryColor: '#f8f9fa' } }).getTheme();
+        expect(theme.toggleTextColor).toBe('#111111');
+    });
+
+    it('derives a white arrow when secondaryColor is dark', () => {
+        const theme = new ThemeManager({ theme: { secondaryColor: '#0f3350' } }).getTheme();
+        expect(theme.toggleTextColor).toBe('#ffffff');
+    });
+
+    it('falls back to white when secondaryColor cannot be parsed', () => {
+        const theme = new ThemeManager({ theme: { secondaryColor: 'var(--brand-secondary)' } }).getTheme();
+        expect(theme.toggleTextColor).toBe('#ffffff');
+    });
+
+    it('keeps an explicit toggleTextColor even if it would be unreadable', () => {
+        const theme = new ThemeManager({ theme: { secondaryColor: '#ffffff', toggleTextColor: '#ff00ff' } }).getTheme();
+        expect(theme.toggleTextColor).toBe('#ff00ff');
+    });
+
+    it('re-derives the colour when the theme is updated', () => {
+        const manager = new ThemeManager({ theme: { secondaryColor: '#000000' } });
+        expect(manager.getTheme().toggleTextColor).toBe('#ffffff');
+        expect(manager.updateTheme({ secondaryColor: '#ffffff' }).toggleTextColor).toBe('#111111');
     });
 });
