@@ -1,6 +1,6 @@
 {
   "name": "agentlet-core",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Side panel framework for web apps you cannot change: read and fill forms, export tables to Excel, capture the page and call an AI model, from a bookmarklet or extension",
   "main": "dist/agentlet-core.js",
   "types": "./dist/agentlet-core.d.ts",

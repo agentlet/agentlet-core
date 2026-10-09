@@ -5,7 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0] - 2026-10-09
+
+Upgrade notes:
+
+- With the default theme, the arrow on the panel toggle handle is now
+  near-black instead of white, for contrast on the default orange. Set
+  `toggleTextColor: '#ffffff'` to keep the previous look. Custom themes get an
+  arrow colour that contrasts with their `secondaryColor`.
+- In dialogs, Enter now activates the focused button instead of the primary
+  one. Agentlets that relied on Enter confirming a dialog while focus was on
+  another button should move focus or handle the key themselves.
+- The panel toggle handle now sits below dialogs and page overlays such as
+  tours, instead of above them.
 
 ### Added
 
@@ -580,6 +592,7 @@ Upgrade notes:
 [Public API reference](https://agentlet.io/docs/reference/public-api/) and the
 rest of the documentation now live at [agentlet.io/docs](https://agentlet.io/docs/).
 
+[2.5.0]: https://github.com/agentlet/agentlet-core/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/agentlet/agentlet-core/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/agentlet/agentlet-core/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/agentlet/agentlet-core/compare/v2.1.1...v2.2.0
