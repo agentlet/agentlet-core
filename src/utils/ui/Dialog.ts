@@ -41,6 +41,7 @@ import {
     renderStepProgress,
     resolveProgressConfig
 } from './dialog/progress';
+import { getKeyEventTarget, hasNativeEnterBehaviour } from './dialog/keyboard.js';
 import type { DialogTheme } from './dialog/types';
 
 /** Config accepted by the `Dialog` constructor. */
@@ -920,6 +921,26 @@ class Dialog implements DialogAPI {
                 this.hide('cancel');
             }
         } else if (event.key === 'Enter') {
+            // Enter on a control inside the dialog that has its own Enter
+            // behaviour (a button, a link, a textarea, ...) must reach that
+            // control: calling preventDefault() here would stop the browser
+            // from clicking a focused button, including the dialog's own
+            // footer buttons. Controls on the page behind the modal do not
+            // count, so Enter there still confirms the dialog. A textarea in
+            // an input or command dialog still submits on Ctrl/Cmd+Enter,
+            // handled below.
+            const target = getKeyEventTarget(event);
+            const insideDialog = !!target && !!(this.overlay?.contains(target) || this.dialog?.contains(target));
+            if (target && insideDialog && hasNativeEnterBehaviour(target)) {
+                const submitsFromTextarea =
+                    (event.ctrlKey || event.metaKey) &&
+                    (this.type === 'input' || this.type === 'command') &&
+                    target.closest('textarea') !== null;
+                if (!submitsFromTextarea) {
+                    return;
+                }
+            }
+
             event.preventDefault();
 
             if (this.type === 'input') {

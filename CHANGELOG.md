@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Z_INDEX.PANEL_TOGGLE` (just above the panel levels, below `DIALOG_OVERLAY`
   and every dialog). `CRITICAL_OVERLAY` keeps its value and stays the topmost
   layer, but nothing in the framework uses it any more.
+- Dialogs no longer swallow Enter on buttons. The document-level keydown
+  handler cancelled every Enter while a dialog was open, so Enter never
+  activated a focused button (not even the dialog's own Close button) and
+  Enter on the non-primary button of an info dialog clicked the primary one
+  instead. Enter on a button, link (`a[href]`), `[role="button"]`, `summary`,
+  textarea or contenteditable element inside the dialog now keeps its native
+  behaviour. Enter in an input or command prompt field still submits, Enter
+  with focus elsewhere still confirms an info dialog, and Ctrl or Cmd+Enter
+  in a textarea still submits an input dialog. A plain Enter in a textarea now
+  inserts a new line.
 - The panel toggle arrow was always white, so it was invisible on a light
   `secondaryColor`. Its colour now follows the new `toggleTextColor` theme key
   (see Added). With the default orange `secondaryColor` the arrow is now

@@ -182,6 +182,21 @@ test.describe('Dialogs Example', () => {
     await agentletTest.waitForDialogClosed();
   });
 
+  test('should close the fullscreen dialog when Enter is pressed on its Close button', async ({ page }) => {
+    await agentletTest.initializeAgentlet();
+    await agentletTest.waitForAgentletCore();
+
+    await page.locator('button:has-text("Fullscreen dialog")').click();
+    await page.waitForSelector('.agentlet-fullscreen-dialog', { timeout: 5000 });
+
+    // Enter on a focused button must activate it, not be swallowed by the dialog
+    const closeButton = page.locator('.agentlet-fullscreen-dialog button:has-text("Close")');
+    await closeButton.focus();
+    await page.keyboard.press('Enter');
+
+    await agentletTest.waitForDialogClosed();
+  });
+
   test('should keep the panel toggle below an open fullscreen dialog', async ({ page }) => {
     await agentletTest.initializeAgentlet();
     await agentletTest.waitForAgentletCore();
