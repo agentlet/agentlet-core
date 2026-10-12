@@ -16,7 +16,7 @@
 
 There is nothing to deploy on the server side, apart from a backend or proxy for the AI model if you use one. See [the agentlet approach](https://agentlet.io/docs/concepts/approach/) and [deployment modes](https://agentlet.io/docs/concepts/deployment-modes/) for how bookmarklets, extensions and embedding differ.
 
-![Agentlet demo](https://raw.githubusercontent.com/agentlet/agentlet-core/main/docs/img/demo-part2.gif)
+![An agentlet side panel reading four expense receipts with AI, flagging the one that does not match and pre-checking the others for the reviewer](https://raw.githubusercontent.com/agentlet/agentlet-core/main/docs/img/demo-part2.gif)
 
 > **agentlet** (n.): a small, page-specific tool injected into a web app you don't control, like a bookmarklet with a side panel, forms, tables and AI.
 
