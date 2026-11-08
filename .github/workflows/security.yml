@@ -47,7 +47,7 @@ jobs:
 
       - name: Generate shipped-inventory SBOM
         id: sbom
-        uses: agentlet/.github/actions/sbom-from-esbuild@13f8b012ab7b0e07229389ac7538bdab38cdb4e6 # dependency-scan-v1
+        uses: agentlet/.github/actions/sbom-from-esbuild@c7c279fa36c15345418b5d67a2e5faefeaa57363 # dependency-scan-v1.1
         with:
           metafiles: |
             reports/security/meta/agentlet-core.meta.json
@@ -59,7 +59,7 @@ jobs:
             reports/security/meta/extension.meta.json
 
       - name: Run vulnerability scan and gate
-        uses: agentlet/.github/actions/dependency-scan@13f8b012ab7b0e07229389ac7538bdab38cdb4e6 # dependency-scan-v1
+        uses: agentlet/.github/actions/dependency-scan@c7c279fa36c15345418b5d67a2e5faefeaa57363 # dependency-scan-v1.1
         with:
           blocking-sbom: ${{ steps.sbom.outputs.sbom-path }}
           lockfile: package-lock.json
@@ -107,7 +107,7 @@ jobs:
 
       - name: Scan the published release's SBOM
         if: steps.fetch.outputs.has_sbom == 'true'
-        uses: agentlet/.github/actions/dependency-scan@13f8b012ab7b0e07229389ac7538bdab38cdb4e6 # dependency-scan-v1
+        uses: agentlet/.github/actions/dependency-scan@c7c279fa36c15345418b5d67a2e5faefeaa57363 # dependency-scan-v1.1
         with:
           blocking-sbom: reports/security/sbom-bundle.cdx.json
           lockfile: ''
